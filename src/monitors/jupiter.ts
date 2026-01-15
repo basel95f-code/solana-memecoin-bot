@@ -5,12 +5,13 @@ import { config } from '../config';
 import { EventEmitter } from 'events';
 import { withRetry, CircuitBreaker } from '../utils/retry';
 
-const JUPITER_API_BASE = 'https://token.jup.ag';
-const JUPITER_PRICE_API = 'https://price.jup.ag/v6';
+const JUPITER_API_BASE = 'https://cache.jup.ag';
+const JUPITER_PRICE_API = 'https://api.jup.ag/price/v2';
 
 // Alternative API endpoints for fallback
 const FALLBACK_ENDPOINTS = [
-  'https://cache.jup.ag/tokens', // Jupiter CDN cache
+  'https://cache.jup.ag/tokens',
+  'https://tokens.jup.ag/tokens?tags=verified',
 ];
 
 interface JupiterToken {
@@ -131,15 +132,15 @@ export class JupiterMonitor extends EventEmitter {
     try {
       const tokens = await withRetry(
         async () => {
-          const strictResponse = await axios.get(`${JUPITER_API_BASE}/strict`, {
+          const strictResponse = await axios.get(`${JUPITER_API_BASE}/tokens`, {
             timeout: 15000,
           });
           return strictResponse.data || [];
         },
         {
-          maxRetries: 3,
-          initialDelayMs: 1000,
-          maxDelayMs: 10000,
+          maxRetries: 2,
+          initialDelayMs: 500,
+          maxDelayMs: 5000,
         }
       );
 
@@ -213,7 +214,7 @@ export class JupiterMonitor extends EventEmitter {
       const currentTokens = await this.circuitBreaker.execute(async () => {
         return await withRetry(
           async () => {
-            const response = await axios.get(`${JUPITER_API_BASE}/all`, {
+            const response = await axios.get(`${JUPITER_API_BASE}/tokens`, {
               timeout: 30000,
             });
             return response.data || [];
@@ -284,7 +285,7 @@ export class JupiterMonitor extends EventEmitter {
   ): Promise<{ price: number; liquidity: number } | null> {
     try {
       const response = await withRetry(
-        () => axios.get(`${JUPITER_PRICE_API}/price`, {
+        () => axios.get(JUPITER_PRICE_API, {
           params: { ids: mint },
           timeout: 5000,
         }),
@@ -294,8 +295,8 @@ export class JupiterMonitor extends EventEmitter {
       const data = response.data.data?.[mint];
       if (data) {
         return {
-          price: data.price || 0,
-          liquidity: data.extraInfo?.quotedPrice?.buyPrice || 0,
+          price: parseFloat(data.price) || 0,
+          liquidity: 0, // v2 API doesn't include liquidity directly
         };
       }
       return null;
@@ -307,13 +308,20 @@ export class JupiterMonitor extends EventEmitter {
   async searchToken(query: string): Promise<JupiterToken[]> {
     try {
       const response = await withRetry(
-        () => axios.get(`${JUPITER_API_BASE}/search`, {
-          params: { query },
+        () => axios.get('https://tokens.jup.ag/tokens', {
+          params: { tags: 'verified' },
           timeout: 10000,
         }),
         { maxRetries: 2, initialDelayMs: 500 }
       );
-      return response.data || [];
+      // Filter locally since cache endpoint doesn't have search
+      const tokens = response.data || [];
+      const lowerQuery = query.toLowerCase();
+      return tokens.filter((t: JupiterToken) =>
+        t.symbol?.toLowerCase().includes(lowerQuery) ||
+        t.name?.toLowerCase().includes(lowerQuery) ||
+        t.address === query
+      );
     } catch {
       return [];
     }
