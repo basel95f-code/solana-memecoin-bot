@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run build:*)",
+      "Bash(node:*)",
+      "Bash(npx ts-node:*)",
+      "Bash(dir \"C:\\\\Users\\\\User\\\\solana-memecoin-bot\" /A:D /B)",
+      "Bash(npx tsc:*)",
+      "Bash(curl:*)",
+      "Bash(timeout:*)",
+      "Bash(ping:*)",
+      "Bash(findstr:*)"
+    ]
+  }
+}
