@@ -3,26 +3,37 @@ node_modules/
 
 # Build output
 dist/
+build/
 
-# Environment variables
+# Environment variables (NEVER commit!)
 .env
 .env.local
+.env.*.local
 
-# Data files (user settings, cache)
+# Data files (user settings, database)
 data/
 
 # OS files
 .DS_Store
 Thumbs.db
-nul
 
-# IDE
-.vscode/
+# IDE (keep .vscode for shared configs)
 .idea/
 
 # Logs
+logs/
 *.log
 npm-debug.log*
 
-# Test files
-test-*.ts
+# Coverage
+coverage/
+.nyc_output/
+
+# Temporary
+tmp/
+temp/
+*.tmp
+
+# ML models (large files)
+*.h5
+*.pkl

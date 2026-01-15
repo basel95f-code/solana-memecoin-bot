@@ -1,0 +1,94 @@
+{
+  "Console Log": {
+    "prefix": "cl",
+    "body": "console.log('$1:', $1);"
+  },
+  "Logger Info": {
+    "prefix": "logi",
+    "body": "logger.info('$1', { $2 });"
+  },
+  "Logger Error": {
+    "prefix": "loge",
+    "body": "logger.error('$1', { error: $2 });"
+  },
+  "Async Function": {
+    "prefix": "afn",
+    "body": [
+      "async function ${1:name}(${2:params}): Promise<${3:void}> {",
+      "  try {",
+      "    $0",
+      "  } catch (error) {",
+      "    logger.error('${1:name} failed', { error });",
+      "    throw error;",
+      "  }",
+      "}"
+    ]
+  },
+  "Try Catch": {
+    "prefix": "tc",
+    "body": [
+      "try {",
+      "  $0",
+      "} catch (error) {",
+      "  logger.error('$1', { error });",
+      "}"
+    ]
+  },
+  "Zod Schema": {
+    "prefix": "zschema",
+    "body": [
+      "const ${1:Name}Schema = z.object({",
+      "  $0",
+      "});",
+      "",
+      "type ${1:Name} = z.infer<typeof ${1:Name}Schema>;"
+    ]
+  },
+  "Test Describe": {
+    "prefix": "desc",
+    "body": [
+      "describe('${1:subject}', () => {",
+      "  it('should $2', async () => {",
+      "    $0",
+      "  });",
+      "});"
+    ]
+  },
+  "Public Key": {
+    "prefix": "pubkey",
+    "body": "new PublicKey('${1:address}')"
+  },
+  "Send Telegram": {
+    "prefix": "tgsend",
+    "body": [
+      "await bot.telegram.sendMessage(",
+      "  config.TELEGRAM_CHAT_ID,",
+      "  ${1:message},",
+      "  { parse_mode: 'HTML' }",
+      ");"
+    ]
+  },
+  "Safety Comment": {
+    "prefix": "safety",
+    "body": "// SAFETY: $0"
+  },
+  "TODO Comment": {
+    "prefix": "todo",
+    "body": "// TODO: $0"
+  },
+  "With Retry": {
+    "prefix": "retry",
+    "body": [
+      "await withRetry(",
+      "  async () => {",
+      "    $0",
+      "  },",
+      "  { retries: 3, delay: 1000 }",
+      ");"
+    ]
+  },
+  "Feature Vector Field": {
+    "prefix": "feature",
+    "body": "${1:fieldName}: ${2:number}; // $3"
+  }
+}

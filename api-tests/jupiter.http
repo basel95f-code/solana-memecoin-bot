@@ -1,0 +1,47 @@
+### Jupiter API Tests
+### REST Client extension required (humao.rest-client)
+
+### ========================================
+### Price API
+### ========================================
+
+### Get SOL Price
+GET https://api.jup.ag/price/v2?ids=So11111111111111111111111111111111111111112
+Accept: application/json
+
+###
+
+### Get Multiple Token Prices
+GET https://api.jup.ag/price/v2?ids=So11111111111111111111111111111111111111112,DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263
+Accept: application/json
+
+###
+
+### ========================================
+### Token List
+### ========================================
+
+### Get Strict Token List (verified tokens only)
+GET https://tokens.jup.ag/tokens?tags=verified
+Accept: application/json
+
+###
+
+### Get All Tokens
+GET https://tokens.jup.ag/tokens
+Accept: application/json
+
+###
+
+### ========================================
+### Test Your Token
+### ========================================
+
+### Replace with your token address
+@myToken = YOUR_TOKEN_ADDRESS_HERE
+
+### Get My Token Price
+GET https://api.jup.ag/price/v2?ids={{myToken}}
+Accept: application/json
+
+###

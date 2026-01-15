@@ -1,0 +1,73 @@
+### DexScreener API Tests
+### REST Client extension required (humao.rest-client)
+
+### ========================================
+### Token Info
+### ========================================
+
+### Get Token Info - BONK
+GET https://api.dexscreener.com/latest/dex/tokens/DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263
+Accept: application/json
+
+###
+
+### Get Token Info - WIF
+GET https://api.dexscreener.com/latest/dex/tokens/EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm
+Accept: application/json
+
+###
+
+### ========================================
+### Search
+### ========================================
+
+### Search Token by Name
+GET https://api.dexscreener.com/latest/dex/search?q=bonk
+Accept: application/json
+
+###
+
+### Search by Contract Address
+GET https://api.dexscreener.com/latest/dex/search?q=DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263
+Accept: application/json
+
+###
+
+### ========================================
+### Pairs
+### ========================================
+
+### Get Pairs by Token Address
+GET https://api.dexscreener.com/latest/dex/pairs/solana/DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263
+Accept: application/json
+
+###
+
+### ========================================
+### Boosts & Trending
+### ========================================
+
+### Get Latest Boosted Tokens
+GET https://api.dexscreener.com/token-boosts/latest/v1
+Accept: application/json
+
+###
+
+### Get Top Boosted Tokens
+GET https://api.dexscreener.com/token-boosts/top/v1
+Accept: application/json
+
+###
+
+### ========================================
+### Test Your Token
+### ========================================
+
+### Replace with your token address
+@myToken = YOUR_TOKEN_ADDRESS_HERE
+
+### Get My Token Info
+GET https://api.dexscreener.com/latest/dex/tokens/{{myToken}}
+Accept: application/json
+
+###

@@ -290,13 +290,14 @@ function assessHolders(holders: HolderAnalysis): {
     });
   }
 
-  // Single wallet dominance check
-  const largestHolder = holders.topHolders[0];
-  if (largestHolder && largestHolder.percentage > 50) {
+  // Single wallet dominance check (with null safety)
+  const largestHolder = holders.topHolders?.[0];
+  const largestPercent = largestHolder?.percentage ?? 0;
+  if (largestPercent > 50) {
     factors.push({
       name: 'Single Wallet Dominance',
       impact: 15,
-      description: `One wallet holds ${largestHolder.percentage.toFixed(1)}%`,
+      description: `One wallet holds ${largestPercent.toFixed(1)}%`,
       passed: false,
     });
     score = Math.max(0, score - 8); // Severe penalty for 50%+ single holder

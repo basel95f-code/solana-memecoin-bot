@@ -70,7 +70,17 @@ export function timeAgo(timestamp: number): string {
 // Alert Formatters
 // ============================================
 
-export function formatTokenAlert(analysis: TokenAnalysis, dexData?: DexScreenerPair): string {
+export interface MLPrediction {
+  rugProbability: number;
+  confidence: number;
+  recommendation: string;
+}
+
+export function formatTokenAlert(
+  analysis: TokenAnalysis,
+  dexData?: DexScreenerPair,
+  mlPrediction?: MLPrediction
+): string {
   const { token, pool, liquidity, holders, contract, social, risk } = analysis;
 
   const priceUsd = dexData?.priceUsd ? parseFloat(dexData.priceUsd) : 0;
@@ -104,6 +114,18 @@ export function formatTokenAlert(analysis: TokenAnalysis, dexData?: DexScreenerP
       `└ LP: Not burned/locked ⚠️`,
     ``,
   ];
+
+  // Add ML prediction if available
+  if (mlPrediction) {
+    const rugPct = (mlPrediction.rugProbability * 100).toFixed(0);
+    const confPct = (mlPrediction.confidence * 100).toFixed(0);
+    const rugEmoji = mlPrediction.rugProbability > 0.7 ? '🚨' :
+                     mlPrediction.rugProbability > 0.4 ? '⚠️' : '✅';
+    lines.push(`🤖 <b>ML Analysis</b>`);
+    lines.push(`${rugEmoji} Rug Risk: ${rugPct}% (${confPct}% conf)`);
+    lines.push(`└ ${mlPrediction.recommendation}`);
+    lines.push(``);
+  }
 
   // Add risk factors (top 3 failed)
   const failedFactors = risk.factors.filter(f => !f.passed).slice(0, 3);

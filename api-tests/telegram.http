@@ -1,0 +1,96 @@
+### Telegram Bot API Tests
+### REST Client extension required (humao.rest-client)
+### Uses variables from .env file
+
+@bot_token = {{$dotenv TELEGRAM_BOT_TOKEN}}
+@chat_id = {{$dotenv TELEGRAM_CHAT_ID}}
+
+### ========================================
+### Bot Info
+### ========================================
+
+### Get Bot Info
+GET https://api.telegram.org/bot{{bot_token}}/getMe
+Accept: application/json
+
+###
+
+### Get Bot Commands
+GET https://api.telegram.org/bot{{bot_token}}/getMyCommands
+Accept: application/json
+
+###
+
+### ========================================
+### Messages
+### ========================================
+
+### Send Test Message (Plain Text)
+POST https://api.telegram.org/bot{{bot_token}}/sendMessage
+Content-Type: application/json
+
+{
+  "chat_id": "{{chat_id}}",
+  "text": "Test message from VS Code REST Client"
+}
+
+###
+
+### Send Test Message (HTML)
+POST https://api.telegram.org/bot{{bot_token}}/sendMessage
+Content-Type: application/json
+
+{
+  "chat_id": "{{chat_id}}",
+  "text": "<b>Test Alert</b>\n\nToken: <code>ABC123</code>\nScore: 85/100",
+  "parse_mode": "HTML"
+}
+
+###
+
+### Send Test Alert (Full Format)
+POST https://api.telegram.org/bot{{bot_token}}/sendMessage
+Content-Type: application/json
+
+{
+  "chat_id": "{{chat_id}}",
+  "text": "NEW TOKEN ALERT\n\n$TEST (Test Token)\nCA: AbC123...xyz\n\nLiquidity: $10,000\nHolders: 150\nRisk Score: 75/100\n\nSafety: LP Burned\nMint Auth: Revoked\n\nDexScreener | Birdeye",
+  "parse_mode": "HTML",
+  "disable_web_page_preview": true
+}
+
+###
+
+### ========================================
+### Updates
+### ========================================
+
+### Get Updates (Check for incoming messages)
+GET https://api.telegram.org/bot{{bot_token}}/getUpdates
+Accept: application/json
+
+###
+
+### Get Updates with Offset
+GET https://api.telegram.org/bot{{bot_token}}/getUpdates?offset=-1&limit=10
+Accept: application/json
+
+###
+
+### ========================================
+### Webhook (if using)
+### ========================================
+
+### Get Webhook Info
+GET https://api.telegram.org/bot{{bot_token}}/getWebhookInfo
+Accept: application/json
+
+###
+
+### Delete Webhook (to use polling instead)
+POST https://api.telegram.org/bot{{bot_token}}/deleteWebhook
+Content-Type: application/json
+
+{}
+
+###

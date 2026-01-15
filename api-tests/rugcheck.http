@@ -1,0 +1,43 @@
+### RugCheck API Tests
+### REST Client extension required (humao.rest-client)
+
+### ========================================
+### Token Reports
+### ========================================
+
+### Get Token Report - BONK
+GET https://api.rugcheck.xyz/v1/tokens/DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263/report
+Accept: application/json
+
+###
+
+### Get Token Report Summary - BONK
+GET https://api.rugcheck.xyz/v1/tokens/DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263/report/summary
+Accept: application/json
+
+###
+
+### Get Token Report - WIF
+GET https://api.rugcheck.xyz/v1/tokens/EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm/report
+Accept: application/json
+
+###
+
+### ========================================
+### Test Your Token
+### ========================================
+
+### Replace with your token address
+@myToken = YOUR_TOKEN_ADDRESS_HERE
+
+### Get My Token Report
+GET https://api.rugcheck.xyz/v1/tokens/{{myToken}}/report
+Accept: application/json
+
+###
+
+### Get My Token Summary
+GET https://api.rugcheck.xyz/v1/tokens/{{myToken}}/report/summary
+Accept: application/json
+
+###

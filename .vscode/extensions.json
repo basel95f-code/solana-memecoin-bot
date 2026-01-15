@@ -1,0 +1,22 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "ms-vscode.vscode-typescript-next",
+    "VisualStudioExptTeam.vscodeintellicode",
+    "ms-azuretools.vscode-docker",
+    "orta.vscode-jest",
+    "ryanluker.vscode-coverage-gutters",
+    "eamodio.gitlens",
+    "mhutchie.git-graph",
+    "usernamehw.errorlens",
+    "streetsidesoftware.code-spell-checker",
+    "aaron-bond.better-comments",
+    "christian-kohler.path-intellisense",
+    "mikestead.dotenv",
+    "gruntfuggly.todo-tree",
+    "humao.rest-client",
+    "RandomFractalsInc.vscode-data-preview",
+    "anthropics.claude-code"
+  ]
+}

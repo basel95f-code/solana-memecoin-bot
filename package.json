@@ -10,7 +10,10 @@
     "watch": "tsc -w",
     "test": "jest",
     "test:coverage": "jest --coverage",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "test:token": "ts-node scripts/test-token.ts",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix"
   },
   "keywords": [
     "solana",
@@ -22,15 +25,19 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.24.0",
     "@solana/spl-token": "^0.4.6",
     "@solana/web3.js": "^1.95.3",
+    "@tensorflow/tfjs": "^4.20.0",
     "axios": "^1.7.7",
     "dotenv": "^16.4.5",
+    "sql.js": "^1.10.0",
     "telegraf": "^4.16.3"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/node": "^22.5.5",
+    "@types/sql.js": "^1.4.9",
     "jest": "^30.2.0",
     "ts-jest": "^29.4.6",
     "ts-node": "^10.9.2",

@@ -46,7 +46,11 @@ class TelegramService {
     }
   }
 
-  async sendAlert(analysis: TokenAnalysis, chatId?: string): Promise<void> {
+  async sendAlert(
+    analysis: TokenAnalysis,
+    mlPrediction?: { rugProbability: number; confidence: number; recommendation: string },
+    chatId?: string
+  ): Promise<void> {
     const targetChatId = chatId || this.defaultChatId;
 
     // Check if alerts are muted for this chat
@@ -65,8 +69,8 @@ class TelegramService {
       // Get additional data from DexScreener
       const dexData = await dexScreenerService.getTokenData(analysis.token.mint);
 
-      // Format the alert with the new formatter
-      const message = formatTokenAlert(analysis, dexData || undefined);
+      // Format the alert with ML prediction
+      const message = formatTokenAlert(analysis, dexData || undefined, mlPrediction);
 
       await this.bot.telegram.sendMessage(targetChatId, message, {
         parse_mode: 'HTML',

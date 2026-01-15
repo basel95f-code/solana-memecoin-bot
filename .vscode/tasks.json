@@ -1,0 +1,80 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Dev Server",
+      "type": "shell",
+      "command": "npm run dev",
+      "isBackground": true,
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Build",
+      "type": "shell",
+      "command": "npm run build",
+      "problemMatcher": ["$tsc"],
+      "group": "build"
+    },
+    {
+      "label": "Watch Build",
+      "type": "shell",
+      "command": "npm run watch",
+      "isBackground": true,
+      "problemMatcher": ["$tsc-watch"]
+    },
+    {
+      "label": "Start Production",
+      "type": "shell",
+      "command": "npm start",
+      "dependsOn": "Build"
+    },
+    {
+      "label": "Test",
+      "type": "shell",
+      "command": "npm test",
+      "group": "test"
+    },
+    {
+      "label": "Test Watch",
+      "type": "shell",
+      "command": "npm run test:watch",
+      "isBackground": true
+    },
+    {
+      "label": "Test Coverage",
+      "type": "shell",
+      "command": "npm run test:coverage"
+    },
+    {
+      "label": "Lint Fix",
+      "type": "shell",
+      "command": "npm run lint:fix"
+    },
+    {
+      "label": "Install Dependencies",
+      "type": "shell",
+      "command": "npm install"
+    },
+    {
+      "label": "Check Token",
+      "type": "shell",
+      "command": "npx ts-node scripts/test-token.ts ${input:tokenAddress}"
+    },
+    {
+      "label": "Clean Build",
+      "type": "shell",
+      "command": "rm -rf dist && npm run build",
+      "windows": {
+        "command": "if exist dist rmdir /s /q dist && npm run build"
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "tokenAddress",
+      "type": "promptString",
+      "description": "Token address to check"
+    }
+  ]
+}

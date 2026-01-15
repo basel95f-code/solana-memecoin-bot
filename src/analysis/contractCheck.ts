@@ -1,6 +1,8 @@
 import { PublicKey } from '@solana/web3.js';
 import { solanaService } from '../services/solana';
 import { ContractAnalysis } from '../types';
+import { logger } from '../utils/logger';
+import { PROGRAMS, CONTRACT } from '../constants';
 
 export async function analyzeContract(mintAddress: string): Promise<ContractAnalysis> {
   let mintAuthorityRevoked = false;
@@ -50,46 +52,119 @@ export async function analyzeContract(mintAddress: string): Promise<ContractAnal
   };
 }
 
+/**
+ * Check for Token-2022 transfer fees using proper extension parsing
+ *
+ * Token-2022 Extension Layout:
+ * - Base mint account: 82 bytes (standard Mint structure)
+ * - Account type discriminator: 1 byte (should be 1 for Mint)
+ * - Extensions start at byte 83
+ *
+ * Each extension:
+ * - Type (u16): 2 bytes
+ * - Length (u16): 2 bytes
+ * - Data: variable
+ *
+ * TransferFeeConfig extension type = 1
+ * TransferFeeConfig layout:
+ * - transferFeeConfigAuthority (32 bytes)
+ * - withdrawWithheldAuthority (32 bytes)
+ * - withheldAmount (u64, 8 bytes)
+ * - olderTransferFee:
+ *   - epoch (u64, 8 bytes)
+ *   - maximumFee (u64, 8 bytes)
+ *   - transferFeeBasisPoints (u16, 2 bytes)
+ * - newerTransferFee:
+ *   - epoch (u64, 8 bytes)
+ *   - maximumFee (u64, 8 bytes)
+ *   - transferFeeBasisPoints (u16, 2 bytes)
+ */
 async function checkTransferFee(mintAddress: string): Promise<{
   hasFee: boolean;
   feePercent?: number;
+  maxFee?: number;
 }> {
   try {
     const connection = solanaService.getConnection();
     const mintPubkey = new PublicKey(mintAddress);
 
-    // Get the mint account data
     const accountInfo = await connection.getAccountInfo(mintPubkey);
-
     if (!accountInfo) {
       return { hasFee: false };
     }
 
-    // Check if it's a Token-2022 token by checking the owner program
-    const TOKEN_2022_PROGRAM = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
-    if (accountInfo.owner.toBase58() === TOKEN_2022_PROGRAM) {
-      // Token-2022 tokens may have transfer fees
-      // Parse the extension data to check for transfer fee config
-      const data = accountInfo.data;
+    // Check if it's a Token-2022 token
+    if (accountInfo.owner.toBase58() !== PROGRAMS.TOKEN_2022_PROGRAM) {
+      return { hasFee: false };
+    }
 
-      // Transfer fee extension is indicated in the account data
-      // This is a simplified check - full parsing would require decoding the extension
-      if (data.length > 165) {
-        // Has extensions
-        // Look for transfer fee basis points in the data
-        // Extension type 1 = TransferFeeConfig
-        const hasTransferFeeExtension = data.includes(0x01) && data.length > 200;
+    const data = accountInfo.data;
 
-        if (hasTransferFeeExtension) {
-          // Try to extract fee percentage (simplified)
-          // Real implementation would properly decode the extension
-          return { hasFee: true, feePercent: undefined };
+    // Token-2022 mint base size is 82 bytes + 1 byte account type
+    // Extensions start at byte 83
+    if (data.length <= CONTRACT.TOKEN_ACCOUNT_SIZE) {
+      return { hasFee: false };
+    }
+
+    // Parse extensions
+    let offset = 83; // Start after base mint + account type
+
+    while (offset + 4 <= data.length) {
+      // Read extension type (u16 little-endian)
+      const extensionType = data.readUInt16LE(offset);
+      offset += 2;
+
+      // Read extension length (u16 little-endian)
+      const extensionLength = data.readUInt16LE(offset);
+      offset += 2;
+
+      // Check if this is TransferFeeConfig (type = 1)
+      if (extensionType === 1) {
+        // TransferFeeConfig found!
+        // Skip to the fee data:
+        // - transferFeeConfigAuthority: 32 bytes
+        // - withdrawWithheldAuthority: 32 bytes
+        // - withheldAmount: 8 bytes
+        // - olderTransferFee.epoch: 8 bytes
+        // - olderTransferFee.maximumFee: 8 bytes
+        // - olderTransferFee.transferFeeBasisPoints: 2 bytes (offset 88 from start of extension)
+
+        if (extensionLength >= 90) {
+          const feeDataOffset = offset + 32 + 32 + 8; // Skip to olderTransferFee
+          const olderEpoch = data.readBigUInt64LE(feeDataOffset);
+          const olderMaxFee = data.readBigUInt64LE(feeDataOffset + 8);
+          const olderBasisPoints = data.readUInt16LE(feeDataOffset + 16);
+
+          // Also check newer fee (might be different)
+          const newerBasisPoints = data.readUInt16LE(feeDataOffset + 18 + 8 + 8);
+
+          // Use the higher of the two fee rates
+          const basisPoints = Math.max(olderBasisPoints, newerBasisPoints);
+
+          if (basisPoints > 0) {
+            const feePercent = basisPoints / 100; // Basis points to percent
+            const maxFee = Number(olderMaxFee);
+
+            logger.debug('contractCheck', `Token-2022 transfer fee: ${feePercent}% (${basisPoints} bps)`);
+
+            return {
+              hasFee: true,
+              feePercent,
+              maxFee: maxFee > 0 ? maxFee : undefined,
+            };
+          }
         }
+
+        return { hasFee: false };
       }
+
+      // Move to next extension
+      offset += extensionLength;
     }
 
     return { hasFee: false };
-  } catch {
+  } catch (error) {
+    logger.silentError('contractCheck', 'Transfer fee check failed', error as Error);
     return { hasFee: false };
   }
 }

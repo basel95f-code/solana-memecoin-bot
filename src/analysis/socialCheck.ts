@@ -1,5 +1,7 @@
 import axios from 'axios';
 import { SocialAnalysis, TokenMetadata } from '../types';
+import { logger } from '../utils/logger';
+import { TIMEOUTS } from '../constants';
 
 export async function analyzeSocials(metadata: TokenMetadata | undefined): Promise<SocialAnalysis> {
   const result: SocialAnalysis = {
@@ -66,33 +68,150 @@ function normalizeWebsiteUrl(website: string): string {
   return `https://${website}`;
 }
 
+/**
+ * Get Twitter follower count using Twitter API v2
+ * Requires TWITTER_BEARER_TOKEN environment variable
+ */
 async function getTwitterFollowers(url: string): Promise<number | undefined> {
-  // Twitter API requires authentication, so we'll skip follower count
-  // In production, you'd use Twitter API v2 with bearer token
-  return undefined;
-}
+  const bearerToken = process.env.TWITTER_BEARER_TOKEN;
+  if (!bearerToken) {
+    logger.silentError('socialCheck', 'No Twitter bearer token configured');
+    return undefined;
+  }
 
-async function getTelegramMembers(url: string): Promise<number | undefined> {
-  // Telegram doesn't expose member count via public API
-  // Would need to use Telegram Bot API with the bot being a member
-  return undefined;
-}
-
-async function getWebsiteAge(url: string): Promise<number | undefined> {
   try {
-    // Check if website is accessible
-    const response = await axios.head(url, {
-      timeout: 5000,
+    // Extract username from URL
+    const match = url.match(/(?:twitter\.com|x\.com)\/([^\/\?#]+)/i);
+    if (!match) return undefined;
+
+    const username = match[1].toLowerCase();
+    if (['home', 'explore', 'search', 'notifications', 'messages'].includes(username)) {
+      return undefined;
+    }
+
+    const response = await axios.get(
+      `https://api.twitter.com/2/users/by/username/${username}`,
+      {
+        headers: { Authorization: `Bearer ${bearerToken}` },
+        params: { 'user.fields': 'public_metrics' },
+        timeout: TIMEOUTS.HTTP_REQUEST_MS,
+      }
+    );
+
+    const followers = response.data?.data?.public_metrics?.followers_count;
+    if (typeof followers === 'number') {
+      logger.debug('socialCheck', `Twitter @${username}: ${followers} followers`);
+      return followers;
+    }
+
+    return undefined;
+  } catch (error) {
+    logger.silentError('socialCheck', 'Twitter API failed', error as Error);
+    return undefined;
+  }
+}
+
+/**
+ * Get Telegram member count by scraping the public preview page
+ */
+async function getTelegramMembers(url: string): Promise<number | undefined> {
+  try {
+    const response = await axios.get(url, {
+      timeout: TIMEOUTS.HTTP_REQUEST_MS,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; TelegramBot/1.0)',
+      },
+    });
+
+    const html = response.data;
+
+    // Try to extract member count from various patterns
+    // Pattern 1: "X members" or "X subscribers"
+    const memberMatch = html.match(/(\d[\d\s,]*)\s*(?:members?|subscribers?)/i);
+    if (memberMatch) {
+      const count = parseInt(memberMatch[1].replace(/[\s,]/g, ''), 10);
+      if (!isNaN(count)) {
+        logger.debug('socialCheck', `Telegram: ${count} members`);
+        return count;
+      }
+    }
+
+    // Pattern 2: Look in meta tags
+    const metaMatch = html.match(/content="(\d+)\s*(?:members|subscribers)/i);
+    if (metaMatch) {
+      const count = parseInt(metaMatch[1], 10);
+      if (!isNaN(count)) {
+        return count;
+      }
+    }
+
+    return undefined;
+  } catch (error) {
+    logger.silentError('socialCheck', 'Telegram scrape failed', error as Error);
+    return undefined;
+  }
+}
+
+/**
+ * Get website/domain age using WHOIS API
+ * Requires WHOIS_API_KEY environment variable
+ */
+async function getWebsiteAge(url: string): Promise<number | undefined> {
+  const whoisApiKey = process.env.WHOIS_API_KEY;
+
+  try {
+    // First check if website is accessible
+    const headResponse = await axios.head(url, {
+      timeout: TIMEOUTS.HTTP_REQUEST_MS,
       validateStatus: () => true,
     });
 
-    if (response.status >= 200 && response.status < 400) {
-      // Website exists, but we can't easily get age without WHOIS lookup
-      // Return undefined for now
+    if (headResponse.status < 200 || headResponse.status >= 400) {
       return undefined;
     }
+
+    // If no WHOIS API key, just confirm site exists
+    if (!whoisApiKey) {
+      logger.silentError('socialCheck', 'No WHOIS API key - skipping domain age');
+      return undefined;
+    }
+
+    // Extract domain from URL
+    const domain = new URL(url).hostname;
+
+    // Call WHOIS API (using whoisfreaks.com)
+    const whoisResponse = await axios.get(
+      `https://api.whoisfreaks.com/v1.0/whois`,
+      {
+        params: {
+          whois: 'live',
+          domainName: domain,
+          apiKey: whoisApiKey,
+        },
+        timeout: TIMEOUTS.WHOIS_LOOKUP_MS,
+      }
+    );
+
+    // Extract creation date
+    const creationDate =
+      whoisResponse.data?.create_date ||
+      whoisResponse.data?.creation_date ||
+      whoisResponse.data?.domain_registered;
+
+    if (creationDate) {
+      const createdAt = new Date(creationDate).getTime();
+      const ageMs = Date.now() - createdAt;
+      const ageDays = Math.floor(ageMs / (1000 * 60 * 60 * 24));
+
+      if (ageDays > 0) {
+        logger.debug('socialCheck', `Domain ${domain}: ${ageDays} days old`);
+        return ageDays;
+      }
+    }
+
     return undefined;
-  } catch {
+  } catch (error) {
+    logger.silentError('socialCheck', 'Website age check failed', error as Error);
     return undefined;
   }
 }

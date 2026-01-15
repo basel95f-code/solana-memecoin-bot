@@ -1,0 +1,72 @@
+{
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit",
+    "source.organizeImports": "explicit"
+  },
+  "editor.tabSize": 2,
+  "editor.rulers": [100, 120],
+  "editor.minimap.enabled": false,
+  "editor.bracketPairColorization.enabled": true,
+  "editor.guides.bracketPairs": "active",
+  "editor.inlineSuggest.enabled": true,
+  "editor.stickyScroll.enabled": true,
+  "editor.fontFamily": "JetBrains Mono, Fira Code, Consolas, monospace",
+  "editor.fontLigatures": true,
+  "editor.fontSize": 14,
+  "editor.lineHeight": 1.6,
+
+  "files.autoSave": "onFocusChange",
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/.git": true,
+    "**/coverage": true,
+    "**/logs": true
+  },
+  "files.associations": {
+    "*.env*": "dotenv"
+  },
+
+  "typescript.preferences.importModuleSpecifier": "relative",
+  "typescript.suggest.autoImports": true,
+  "typescript.updateImportsOnFileMove.enabled": "always",
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.inlayHints.parameterNames.enabled": "literals",
+  "typescript.inlayHints.functionLikeReturnTypes.enabled": true,
+
+  "eslint.validate": ["javascript", "typescript"],
+  "prettier.singleQuote": true,
+  "prettier.trailingComma": "es5",
+  "prettier.printWidth": 100,
+
+  "terminal.integrated.fontFamily": "JetBrains Mono, monospace",
+  "terminal.integrated.fontSize": 13,
+  "terminal.integrated.env.windows": { "NODE_ENV": "development" },
+
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/*.log": true,
+    "**/data/historical": true
+  },
+
+  "jest.autoRun": "off",
+  "jest.jestCommandLine": "npm test --",
+
+  "errorLens.enabledDiagnosticLevels": ["error", "warning"],
+  "errorLens.delay": 500,
+
+  "todo-tree.general.tags": ["TODO", "FIXME", "HACK", "BUG", "SAFETY", "IMPORTANT"],
+  "todo-tree.highlights.defaultHighlight": {
+    "type": "tag",
+    "foreground": "#fff",
+    "background": "#f59e0b"
+  },
+
+  "git.autofetch": true,
+  "gitlens.codeLens.enabled": true
+}

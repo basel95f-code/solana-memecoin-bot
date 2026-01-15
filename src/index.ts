@@ -12,16 +12,22 @@ import { jupiterMonitor } from './monitors/jupiter';
 import { analyzeToken } from './analysis/tokenAnalyzer';
 import { incrementTokensAnalyzed } from './telegram/commands';
 import { formatAdvancedAlert } from './telegram/commands/advanced';
-import { PoolInfo, FilterSettings } from './types';
+import { PoolInfo, FilterSettings, TokenAnalysis } from './types';
+import { logger } from './utils/logger';
+import { QUEUE, CLEANUP } from './constants';
+import { database } from './database';
+import { rugPredictor } from './ml/rugPredictor';
+import { claudeExplainer } from './ml/claudeExplainer';
 
-const MAX_QUEUE_SIZE = 500; // Maximum number of pools in queue
-const QUEUE_WARNING_THRESHOLD = 400; // Log warning when queue exceeds this
+const MAX_QUEUE_SIZE = QUEUE.MAX_SIZE;
+const QUEUE_WARNING_THRESHOLD = QUEUE.WARNING_THRESHOLD;
 
 class SolanaMemecoinBot {
   private isRunning: boolean = false;
   private analysisQueue: PoolInfo[] = [];
   private processingQueue: boolean = false;
   private queueWarningLogged: boolean = false;
+  private queueLock: boolean = false; // Mutex for thread-safe queue operations
 
   async start(): Promise<void> {
     console.log('');
@@ -29,6 +35,19 @@ class SolanaMemecoinBot {
     console.log('================================================');
 
     try {
+      // Initialize database (SQLite with WAL mode)
+      await database.initialize();
+      logger.info('Main', 'Database initialized');
+
+      // Initialize ML rug predictor
+      await rugPredictor.initialize();
+      const mlStats = rugPredictor.getStats();
+      logger.info('Main', `ML predictor ready (${mlStats.totalPredictions} predictions made)`);
+
+      // Log Claude explainer status
+      const claudeStats = claudeExplainer.getStats();
+      logger.info('Main', `Claude explainer: ${claudeStats.isAvailable ? 'Available' : 'Using local explanations'}`);
+
       // Verify Solana RPC connection
       await solanaService.verifyConnection();
 
@@ -115,35 +134,56 @@ class SolanaMemecoinBot {
     });
   }
 
-  private queueAnalysis(pool: PoolInfo): void {
-    // Skip if already in cache
-    if (tokenCache.has(pool.tokenMint)) {
-      return;
+  /**
+   * Thread-safe queue operation with mutex lock
+   * Prevents race conditions when multiple monitors emit events simultaneously
+   */
+  private async queueAnalysis(pool: PoolInfo): Promise<void> {
+    // Acquire lock with spin-wait (simple mutex)
+    const maxWaitMs = 1000;
+    const startTime = Date.now();
+    while (this.queueLock) {
+      if (Date.now() - startTime > maxWaitMs) {
+        logger.warn('Queue', `Lock timeout for ${pool.tokenMint.slice(0, 8)}...`);
+        return; // Drop the pool rather than deadlock
+      }
+      await this.sleep(10);
     }
+    this.queueLock = true;
 
-    // Skip if already in queue
-    if (this.analysisQueue.some(p => p.tokenMint === pool.tokenMint)) {
-      return;
+    try {
+      // Skip if already in cache
+      if (tokenCache.has(pool.tokenMint)) {
+        return;
+      }
+
+      // Skip if already in queue
+      if (this.analysisQueue.some(p => p.tokenMint === pool.tokenMint)) {
+        return;
+      }
+
+      // Check queue size limit
+      if (this.analysisQueue.length >= MAX_QUEUE_SIZE) {
+        // Remove oldest entries to make room (FIFO overflow)
+        const removed = this.analysisQueue.splice(0, QUEUE.OVERFLOW_EVICTION_COUNT);
+        logger.warn('Queue', `Overflow: removed ${removed.length} oldest entries`);
+      }
+
+      // Log warning if queue is getting large
+      if (this.analysisQueue.length >= QUEUE_WARNING_THRESHOLD && !this.queueWarningLogged) {
+        logger.warn('Queue', `Size warning: ${this.analysisQueue.length} items queued`);
+        this.queueWarningLogged = true;
+      } else if (this.analysisQueue.length < QUEUE_WARNING_THRESHOLD / 2) {
+        this.queueWarningLogged = false;
+      }
+
+      // Add to queue
+      this.analysisQueue.push(pool);
+      logger.info('Queue', `Added: ${pool.tokenMint.slice(0, 8)}... from ${pool.source} (${this.analysisQueue.length} in queue)`);
+    } finally {
+      // Always release lock
+      this.queueLock = false;
     }
-
-    // Check queue size limit
-    if (this.analysisQueue.length >= MAX_QUEUE_SIZE) {
-      // Remove oldest entries to make room (FIFO overflow)
-      const removed = this.analysisQueue.splice(0, 50);
-      console.warn(`⚠️ Queue overflow: removed ${removed.length} oldest entries`);
-    }
-
-    // Log warning if queue is getting large
-    if (this.analysisQueue.length >= QUEUE_WARNING_THRESHOLD && !this.queueWarningLogged) {
-      console.warn(`⚠️ Queue size warning: ${this.analysisQueue.length} items queued`);
-      this.queueWarningLogged = true;
-    } else if (this.analysisQueue.length < QUEUE_WARNING_THRESHOLD / 2) {
-      this.queueWarningLogged = false;
-    }
-
-    // Add to queue
-    this.analysisQueue.push(pool);
-    console.log(`📥 Queued: ${pool.tokenMint.slice(0, 8)}... from ${pool.source} (${this.analysisQueue.length} in queue)`);
   }
 
   private async processQueue(): Promise<void> {
@@ -175,17 +215,48 @@ class SolanaMemecoinBot {
           const analysis = await analyzeToken(pool.tokenMint, pool);
           incrementTokensAnalyzed();
 
-          if (analysis && this.shouldAlert(analysis, chatId)) {
-            // Send Telegram alert
-            await telegramService.sendAlert(analysis);
+          if (analysis) {
+            // Get ML prediction for rug probability
+            const mlPrediction = await rugPredictor.predict({
+              liquidityUsd: analysis.liquidity.totalLiquidityUsd,
+              riskScore: analysis.risk.score,
+              holderCount: analysis.holders.totalHolders,
+              top10Percent: analysis.holders.top10HoldersPercent,
+              mintRevoked: analysis.contract.mintAuthorityRevoked,
+              freezeRevoked: analysis.contract.freezeAuthorityRevoked,
+              lpBurnedPercent: analysis.liquidity.lpBurnedPercent,
+              hasSocials: analysis.social.hasTwitter || analysis.social.hasTelegram || analysis.social.hasWebsite,
+              tokenAgeHours: analysis.pool.createdAt
+                ? (Date.now() - new Date(analysis.pool.createdAt).getTime()) / 3600000
+                : 0,
+            });
 
-            // Mark rate limit
-            rateLimitService.markAlertSent(chatId, pool.tokenMint);
-            tokenCache.markAlertSent(pool.tokenMint);
+            // Save analysis to database
+            await this.saveAnalysisToDatabase(analysis, mlPrediction);
 
-            console.log(
-              `🔔 Alert: ${analysis.token.symbol} - ${analysis.risk.level} (${analysis.risk.score}/100)`
-            );
+            if (this.shouldAlert(analysis, chatId)) {
+              // Send Telegram alert with ML prediction info
+              await telegramService.sendAlert(analysis, mlPrediction);
+
+              // Mark rate limit
+              rateLimitService.markAlertSent(chatId, pool.tokenMint);
+              tokenCache.markAlertSent(pool.tokenMint);
+
+              // Save alert to database
+              database.saveAlert({
+                tokenMint: pool.tokenMint,
+                symbol: analysis.token.symbol,
+                alertType: 'new_token',
+                chatId,
+                riskScore: analysis.risk.score,
+                riskLevel: analysis.risk.level,
+              });
+
+              const rugPct = (mlPrediction.rugProbability * 100).toFixed(0);
+              console.log(
+                `🔔 Alert: ${analysis.token.symbol} - ${analysis.risk.level} (${analysis.risk.score}/100) | ML: ${rugPct}% rug risk`
+              );
+            }
           }
         } catch (error) {
           console.error(`❌ Error analyzing ${pool.tokenMint.slice(0, 8)}...:`, error);
@@ -267,12 +338,53 @@ class SolanaMemecoinBot {
     return true;
   }
 
+  /**
+   * Save analysis and ML prediction to database for history and ML training
+   */
+  private async saveAnalysisToDatabase(
+    analysis: TokenAnalysis,
+    mlPrediction: { rugProbability: number; confidence: number; recommendation: string }
+  ): Promise<void> {
+    try {
+      database.saveAnalysis({
+        tokenMint: analysis.token.mint,
+        symbol: analysis.token.symbol,
+        name: analysis.token.name,
+        riskScore: analysis.risk.score,
+        riskLevel: analysis.risk.level,
+        liquidityUsd: analysis.liquidity.totalLiquidityUsd,
+        lpBurnedPercent: analysis.liquidity.lpBurnedPercent,
+        lpLockedPercent: analysis.liquidity.lpLockedPercent,
+        holderCount: analysis.holders.totalHolders,
+        top10Percent: analysis.holders.top10HoldersPercent,
+        mintRevoked: analysis.contract.mintAuthorityRevoked,
+        freezeRevoked: analysis.contract.freezeAuthorityRevoked,
+        isHoneypot: analysis.contract.isHoneypot,
+        hasTwitter: analysis.social.hasTwitter,
+        hasTelegram: analysis.social.hasTelegram,
+        hasWebsite: analysis.social.hasWebsite,
+        source: analysis.pool.source,
+        mlRugProbability: mlPrediction.rugProbability,
+        mlConfidence: mlPrediction.confidence,
+      });
+    } catch (error) {
+      logger.silentError('Database', 'Failed to save analysis', error as Error);
+    }
+  }
+
   private logStats(): void {
     const cacheStats = tokenCache.getStats();
     const rateLimitStats = rateLimitService.getStats();
+    const dbStats = database.getStats();
+    const mlStats = rugPredictor.getStats();
+
     console.log(
       `📊 Stats: ${cacheStats.total} tokens | ${cacheStats.alertsSent} alerts | ` +
       `${this.analysisQueue.length} queued | ${rateLimitStats.totalEntries} cooldowns`
+    );
+    console.log(
+      `💾 DB: ${dbStats.totalAnalyses} analyses | ${dbStats.alertsToday} alerts today | ` +
+      `🤖 ML: ${mlStats.totalPredictions} predictions`
     );
   }
 
@@ -304,6 +416,10 @@ class SolanaMemecoinBot {
 
     // Stop Telegram bot
     telegramService.stop();
+
+    // Close database connection
+    database.close();
+    logger.info('Main', 'Database closed');
 
     console.log('✅ Bot stopped');
   }

@@ -205,6 +205,13 @@ class SolanaService {
 
   async getTokenHolders(mintAddress: string, limit: number = 20): Promise<Array<{ address: string; balance: number }>> {
     try {
+      // Try Helius DAS API first (much faster and handles large datasets)
+      const heliusHolders = await this.getTokenHoldersHelius(mintAddress, limit);
+      if (heliusHolders.length > 0) {
+        return heliusHolders;
+      }
+
+      // Fallback to standard RPC (may fail for large token sets)
       const mintPubkey = new PublicKey(mintAddress);
 
       const accounts = await rpcExecutor.execute(
@@ -235,6 +242,57 @@ class SolanaService {
       return holders;
     } catch (error) {
       console.error(`Failed to get token holders for ${mintAddress}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Get token holders using Helius DAS API (handles large datasets with pagination)
+   */
+  private async getTokenHoldersHelius(mintAddress: string, limit: number = 20): Promise<Array<{ address: string; balance: number }>> {
+    try {
+      // Extract API key from RPC URL
+      const apiKeyMatch = config.solanaRpcUrl.match(/api-key=([^&]+)/);
+      if (!apiKeyMatch) {
+        return []; // Not using Helius, skip
+      }
+
+      // First get token decimals
+      const mintInfo = await this.getMintInfo(mintAddress);
+      const decimals = mintInfo?.decimals ?? 6; // Default to 6 (most common for pump.fun tokens)
+
+      const response = await axios.post(
+        config.solanaRpcUrl,
+        {
+          jsonrpc: '2.0',
+          id: 'helius-holders',
+          method: 'getTokenAccounts',
+          params: {
+            mint: mintAddress,
+            limit: Math.min(limit * 2, 100), // Get extra to filter
+            options: {
+              showZeroBalance: false,
+            },
+          },
+        },
+        { timeout: 15000 }
+      );
+
+      if (response.data?.result?.token_accounts) {
+        const accounts = response.data.result.token_accounts;
+        return accounts
+          .map((acc: any) => ({
+            address: acc.owner,
+            balance: acc.amount / Math.pow(10, decimals),
+          }))
+          .filter((h: any) => h.balance > 0)
+          .sort((a: any, b: any) => b.balance - a.balance)
+          .slice(0, limit);
+      }
+
+      return [];
+    } catch (error) {
+      // Silently fail and let fallback handle it
       return [];
     }
   }
