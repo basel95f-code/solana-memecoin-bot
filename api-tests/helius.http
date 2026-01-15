@@ -1,0 +1,157 @@
+### Helius RPC API Tests
+### REST Client extension required (humao.rest-client)
+
+@api_key = {{$dotenv HELIUS_API_KEY}}
+@rpc_url = https://mainnet.helius-rpc.com/?api-key={{api_key}}
+
+### ========================================
+### Standard RPC Methods
+### ========================================
+
+### Get Solana Version
+POST {{rpc_url}}
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "id": "version",
+  "method": "getVersion"
+}
+
+###
+
+### Get Recent Blockhash
+POST {{rpc_url}}
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "id": "blockhash",
+  "method": "getLatestBlockhash"
+}
+
+###
+
+### ========================================
+### Token Holder Analysis
+### ========================================
+
+### Get Token Accounts (Helius DAS API)
+### Replace with your token mint address
+@token_mint = 8y45AJzCUBSZL1UDFQRzCKovQBLQFudBrpPeg5yNpump
+
+POST {{rpc_url}}
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "id": "holders",
+  "method": "getTokenAccounts",
+  "params": {
+    "mint": "{{token_mint}}",
+    "limit": 20,
+    "options": {
+      "showZeroBalance": false
+    }
+  }
+}
+
+###
+
+### ========================================
+### Token Metadata
+### ========================================
+
+### Get Asset (Token Metadata)
+POST {{rpc_url}}
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "id": "asset",
+  "method": "getAsset",
+  "params": {
+    "id": "{{token_mint}}"
+  }
+}
+
+###
+
+### ========================================
+### Account Info
+### ========================================
+
+### Get Account Info
+@wallet_address = YOUR_WALLET_ADDRESS
+
+POST {{rpc_url}}
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "id": "account",
+  "method": "getAccountInfo",
+  "params": [
+    "{{wallet_address}}",
+    { "encoding": "jsonParsed" }
+  ]
+}
+
+###
+
+### Get Token Accounts by Owner
+POST {{rpc_url}}
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "id": "tokens",
+  "method": "getTokenAccountsByOwner",
+  "params": [
+    "{{wallet_address}}",
+    { "programId": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" },
+    { "encoding": "jsonParsed" }
+  ]
+}
+
+###
+
+### ========================================
+### Transaction History
+### ========================================
+
+### Get Signatures for Address
+POST {{rpc_url}}
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "id": "signatures",
+  "method": "getSignaturesForAddress",
+  "params": [
+    "{{token_mint}}",
+    { "limit": 10 }
+  ]
+}
+
+###
+
+### ========================================
+### BONK Token Example
+### ========================================
+
+### Get BONK Holders
+POST {{rpc_url}}
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "id": "bonk-holders",
+  "method": "getTokenAccounts",
+  "params": {
+    "mint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+    "limit": 10
+  }
+}
+
+###
