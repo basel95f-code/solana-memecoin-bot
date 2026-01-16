@@ -14,7 +14,7 @@ import { database } from '../database';
 import { apiServer } from '../api/server';
 import { outcomeTracker } from '../services/outcomeTracker';
 import { dexScreenerService } from '../services/dexscreener';
-import { PoolInfo, TokenAnalysis } from '../types';
+import type { PoolInfo, TokenAnalysis } from '../types';
 import { logger } from '../utils/logger';
 import { QUEUE } from '../constants';
 import { shouldAlert } from './alertFilter';
@@ -78,7 +78,7 @@ export class QueueProcessor {
    */
   start(): void {
     this.isRunning = true;
-    this.processQueue();
+    void this.processQueue();
   }
 
   /**

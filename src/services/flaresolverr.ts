@@ -1,4 +1,5 @@
-import axios, { AxiosInstance } from 'axios';
+import type { AxiosInstance } from 'axios';
+import axios from 'axios';
 
 const DEFAULT_FLARESOLVERR_URL = 'http://localhost:8191/v1';
 const REQUEST_TIMEOUT = 60000; // 60 seconds - FlareSolverr can take time to solve challenges
@@ -73,7 +74,7 @@ class FlareSolverrService {
       if (this.isAvailable) {
         console.log('[FlareSolverr] Service is available');
       }
-    } catch (error) {
+    } catch {
       this.isAvailable = false;
       this.lastCheck = now;
     }

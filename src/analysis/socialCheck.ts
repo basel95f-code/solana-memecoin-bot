@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { SocialAnalysis, TokenMetadata } from '../types';
+import type { SocialAnalysis, TokenMetadata } from '../types';
 import { logger } from '../utils/logger';
 import { TIMEOUTS } from '../constants';
 
@@ -81,7 +81,7 @@ async function getTwitterFollowers(url: string): Promise<number | undefined> {
 
   try {
     // Extract username from URL
-    const match = url.match(/(?:twitter\.com|x\.com)\/([^\/\?#]+)/i);
+    const match = url.match(/(?:twitter\.com|x\.com)\/([^/?#]+)/i);
     if (!match) return undefined;
 
     const username = match[1].toLowerCase();

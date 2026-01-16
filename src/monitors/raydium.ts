@@ -1,7 +1,9 @@
-import { PublicKey, AccountInfo } from '@solana/web3.js';
+import type { AccountInfo } from '@solana/web3.js';
+import { PublicKey } from '@solana/web3.js';
 import { solanaService } from '../services/solana';
 import { tokenCache } from '../services/cache';
-import { PoolInfo, RAYDIUM_AMM_PROGRAM, SOL_MINT } from '../types';
+import type { PoolInfo} from '../types';
+import { RAYDIUM_AMM_PROGRAM, SOL_MINT } from '../types';
 import { EventEmitter } from 'events';
 
 // Raydium AMM Pool layout offsets
@@ -30,7 +32,7 @@ export class RaydiumMonitor extends EventEmitter {
       this.subscriptionId = solanaService.subscribeToProgram(
         RAYDIUM_AMM_PROGRAM,
         (accountInfo, pubkey) => {
-          this.handleAccountChange(accountInfo, pubkey).catch((error) => {
+          this.handleAccountChange(accountInfo, pubkey).catch((_error) => {
             // Silently ignore parsing errors for non-pool accounts
           });
         }
@@ -83,7 +85,7 @@ export class RaydiumMonitor extends EventEmitter {
 
       // Emit event for the main bot to handle
       this.emit('newPool', pool);
-    } catch (error) {
+    } catch {
       // Silently ignore parsing errors for non-pool accounts
     }
   }

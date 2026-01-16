@@ -1,4 +1,4 @@
-import { SentimentAnalysis, TokenInfo } from '../types';
+import type { SentimentAnalysis, TokenInfo } from '../types';
 import { twitterService } from '../services/twitter';
 import { SENTIMENT } from '../constants';
 

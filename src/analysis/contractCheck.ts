@@ -1,6 +1,6 @@
 import { PublicKey } from '@solana/web3.js';
 import { solanaService } from '../services/solana';
-import { ContractAnalysis } from '../types';
+import type { ContractAnalysis } from '../types';
 import { logger } from '../utils/logger';
 import { PROGRAMS, CONTRACT } from '../constants';
 
@@ -131,7 +131,7 @@ async function checkTransferFee(mintAddress: string): Promise<{
 
         if (extensionLength >= 90) {
           const feeDataOffset = offset + 32 + 32 + 8; // Skip to olderTransferFee
-          const olderEpoch = data.readBigUInt64LE(feeDataOffset);
+          const _olderEpoch = data.readBigUInt64LE(feeDataOffset); // Epoch info for debugging
           const olderMaxFee = data.readBigUInt64LE(feeDataOffset + 8);
           const olderBasisPoints = data.readUInt16LE(feeDataOffset + 16);
 

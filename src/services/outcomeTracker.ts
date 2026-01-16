@@ -102,9 +102,9 @@ class OutcomeTracker extends EventEmitter {
     logger.info('OutcomeTracker', `Started monitoring (${this.trackedTokens.size} tokens tracked)`);
 
     // Run immediately, then on interval
-    this.updateAllTokens();
+    void this.updateAllTokens();
     this.monitorInterval = setInterval(() => {
-      this.updateAllTokens();
+      void this.updateAllTokens();
     }, MONITORING_INTERVAL_MS);
 
     // Run cleanup daily (every 24 hours)
@@ -296,7 +296,7 @@ class OutcomeTracker extends EventEmitter {
     const now = Math.floor(Date.now() / 1000);
     const tokensToClassify: TrackedToken[] = [];
 
-    for (const [mint, token] of this.trackedTokens) {
+    for (const [_mint, token] of this.trackedTokens) {
       const ageMs = (now - token.discoveredAt) * 1000;
 
       // Check if monitoring period complete

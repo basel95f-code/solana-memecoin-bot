@@ -1,6 +1,6 @@
 import { Telegraf } from 'telegraf';
 import { config } from '../config';
-import { TokenAnalysis, RiskLevel, WatchedToken, DexScreenerPair, WalletActivityAlert, TrackedWallet, WalletTransaction } from '../types';
+import type { TokenAnalysis, WatchedToken, WalletActivityAlert, TrackedWallet, WalletTransaction } from '../types';
 import { registerAllCommands, incrementAlertsSent } from '../telegram/commands';
 import { formatTokenAlert, formatWatchlistAlert } from '../telegram/formatters';
 import { alertActionKeyboard } from '../telegram/keyboards';

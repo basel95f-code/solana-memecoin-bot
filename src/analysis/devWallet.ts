@@ -6,7 +6,7 @@
 import { PublicKey } from '@solana/web3.js';
 import { solanaService } from '../services/solana';
 import { logger } from '../utils/logger';
-import { HolderInfo } from '../types';
+import type { HolderInfo } from '../types';
 
 export interface DevWalletAnalysis {
   isDevIdentified: boolean;
@@ -52,7 +52,7 @@ export async function analyzeDevWallet(
 
   try {
     const connection = solanaService.getConnection();
-    const mintPubkey = new PublicKey(tokenMint);
+    const _mintPubkey = new PublicKey(tokenMint); // Validated for format
 
     // Find the wallet that received the first token mint
     const devAddress = await findDevWallet(tokenMint);

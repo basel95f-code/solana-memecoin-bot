@@ -1,11 +1,13 @@
 import { EventEmitter } from 'events';
-import { Connection, PublicKey, ParsedTransactionWithMeta, ConfirmedSignatureInfo, Logs } from '@solana/web3.js';
+import type { ParsedTransactionWithMeta, ConfirmedSignatureInfo, Logs } from '@solana/web3.js';
+import { Connection, PublicKey } from '@solana/web3.js';
 import axios from 'axios';
 import { config } from '../config';
 import { storageService } from './storage';
 import { solanaService } from './solana';
 import { dexScreenerService } from './dexscreener';
-import { TrackedWallet, WalletTransaction, WalletActivityAlert, SOL_MINT, DEFAULT_CATEGORY_PRIORITIES } from '../types';
+import type { TrackedWallet, WalletTransaction, WalletActivityAlert} from '../types';
+import { SOL_MINT, DEFAULT_CATEGORY_PRIORITIES } from '../types';
 import { logger } from '../utils/logger';
 import { WALLET_MONITOR, DEX_PROGRAMS as DEX_PROGRAM_IDS } from '../constants';
 
@@ -275,9 +277,9 @@ export class WalletMonitorService extends EventEmitter {
 
     for (const [address, sub] of this.subscriptions) {
       try {
-        this.wsConnection.removeOnLogsListener(sub.subscriptionId);
+        void this.wsConnection.removeOnLogsListener(sub.subscriptionId);
         logger.debug('WalletMonitor', `Unsubscribed from ${address.slice(0, 8)}...`);
-      } catch (error) {
+      } catch {
         // Ignore cleanup errors
       }
     }
@@ -361,10 +363,10 @@ export class WalletMonitorService extends EventEmitter {
     for (const [address, sub] of this.subscriptions) {
       if (!currentWallets.has(address)) {
         try {
-          this.wsConnection.removeOnLogsListener(sub.subscriptionId);
+          void this.wsConnection.removeOnLogsListener(sub.subscriptionId);
           this.subscriptions.delete(address);
           logger.debug('WalletMonitor', `Unsubscribed from removed wallet ${address.slice(0, 8)}...`);
-        } catch (error) {
+        } catch {
           // Ignore
         }
       }
@@ -453,7 +455,7 @@ export class WalletMonitorService extends EventEmitter {
               this.txCache.set(sig.signature, Date.now());
             }
           }
-        } catch (error) {
+        } catch {
           // Skip failed transaction fetches
         }
       }
@@ -500,7 +502,7 @@ export class WalletMonitorService extends EventEmitter {
 
       // Check for simple token transfers
       return this.parseTransferTransaction(tx, walletAddress, signature, timestamp);
-    } catch (error) {
+    } catch {
       return null;
     }
   }
@@ -579,7 +581,7 @@ export class WalletMonitorService extends EventEmitter {
       // Determine transaction type
       // Look for the non-SOL token that changed
       const nonSolChange = balanceChanges.find(c => c.mint !== SOL_MINT);
-      const solChange = balanceChanges.find(c => c.mint === SOL_MINT);
+      const _solChange = balanceChanges.find(c => c.mint === SOL_MINT); // Available for debugging
 
       if (!nonSolChange) return null;
 
@@ -600,7 +602,7 @@ export class WalletMonitorService extends EventEmitter {
         amount: Math.abs(nonSolChange.change),
         solAmount: Math.abs(solBalanceChange),
       };
-    } catch (error) {
+    } catch {
       return null;
     }
   }
@@ -656,7 +658,7 @@ export class WalletMonitorService extends EventEmitter {
       }
 
       return null;
-    } catch (error) {
+    } catch {
       return null;
     }
   }
@@ -714,10 +716,10 @@ export class WalletMonitorService extends EventEmitter {
     const sub = this.subscriptions.get(walletAddress);
     if (sub && this.wsConnection) {
       try {
-        this.wsConnection.removeOnLogsListener(sub.subscriptionId);
+        void this.wsConnection.removeOnLogsListener(sub.subscriptionId);
         this.subscriptions.delete(walletAddress);
         logger.debug('WalletMonitor', `Removed subscription for ${walletAddress.slice(0, 8)}...`);
-      } catch (error) {
+      } catch {
         // Ignore
       }
     }

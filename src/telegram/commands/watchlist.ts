@@ -1,10 +1,10 @@
-import { Context, Telegraf } from 'telegraf';
+import type { Context, Telegraf } from 'telegraf';
 import { PublicKey } from '@solana/web3.js';
 import { storageService } from '../../services/storage';
 import { dexScreenerService } from '../../services/dexscreener';
-import { formatWatchlist, truncateAddress } from '../formatters';
+import { formatWatchlist } from '../formatters';
 import { watchlistKeyboard, confirmKeyboard } from '../keyboards';
-import { WatchedToken } from '../../types';
+import type { WatchedToken } from '../../types';
 import { config } from '../../config';
 
 function isValidSolanaAddress(address: string): boolean {

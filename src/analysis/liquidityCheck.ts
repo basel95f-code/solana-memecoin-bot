@@ -1,6 +1,6 @@
-import { PublicKey } from '@solana/web3.js';
 import { solanaService } from '../services/solana';
-import { LiquidityAnalysis, PoolInfo, KNOWN_LP_LOCKERS, SOL_MINT, USDC_MINT, USDT_MINT } from '../types';
+import type { LiquidityAnalysis, PoolInfo} from '../types';
+import { KNOWN_LP_LOCKERS, SOL_MINT, USDC_MINT, USDT_MINT } from '../types';
 import { withRetry } from '../utils/retry';
 import axios from 'axios';
 
@@ -40,7 +40,8 @@ let cachedSolPrice: { price: number; timestamp: number } | null = null;
 const SOL_PRICE_CACHE_TTL = 60000; // 1 minute
 
 export async function analyzeLiquidity(pool: PoolInfo): Promise<LiquidityAnalysis> {
-  const connection = solanaService.getConnection();
+  // Connection available if needed for on-chain lookups
+  const _connection = solanaService.getConnection();
 
   let totalLiquidityUsd = 0;
   let lpBurned = false;

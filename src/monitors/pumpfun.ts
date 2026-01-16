@@ -1,8 +1,6 @@
-import { PublicKey, AccountInfo } from '@solana/web3.js';
 import axios from 'axios';
-import { solanaService } from '../services/solana';
-import { tokenCache } from '../services/cache';
-import { PoolInfo, PUMPFUN_PROGRAM, SOL_MINT } from '../types';
+import type { PoolInfo} from '../types';
+import { SOL_MINT } from '../types';
 import { config } from '../config';
 import { EventEmitter } from 'events';
 
@@ -209,7 +207,7 @@ export class PumpFunMonitor extends EventEmitter {
         if (response.data && Array.isArray(response.data)) {
           return response.data;
         }
-      } catch (error) {
+      } catch {
         // Try next endpoint
         continue;
       }
@@ -239,7 +237,7 @@ export class PumpFunMonitor extends EventEmitter {
         if (response.data && Array.isArray(response.data)) {
           return response.data;
         }
-      } catch (error) {
+      } catch {
         // Try latest endpoint as fallback
         try {
           const response = await axios.get(`${baseUrl}/coins/latest`, {

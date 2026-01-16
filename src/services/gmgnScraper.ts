@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { GMGNToken } from '../types';
+import type { GMGNToken } from '../types';
 
 const FLARESOLVERR_URL = process.env.FLARESOLVERR_URL || 'http://localhost:8191/v1';
 const GMGN_URL = 'https://gmgn.ai/?chain=sol';
@@ -173,7 +173,7 @@ class GMGNScraper {
         txCount,
         priceChange,
       };
-    } catch (error) {
+    } catch {
       return null;
     }
   }

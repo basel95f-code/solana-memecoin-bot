@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { config } from '../config';
-import { RugCheckResult, RugCheckRisk } from '../types';
+import type { RugCheckResult, RugCheckRisk } from '../types';
 import { withRetry } from '../utils/retry';
 
 const RUGCHECK_API_BASE = 'https://api.rugcheck.xyz/v1';

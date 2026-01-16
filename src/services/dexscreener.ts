@@ -1,5 +1,6 @@
-import axios, { AxiosInstance } from 'axios';
-import { DexScreenerPair, DexScreenerResponse, TrendingToken } from '../types';
+import type { AxiosInstance } from 'axios';
+import axios from 'axios';
+import type { DexScreenerPair, DexScreenerResponse, TrendingToken } from '../types';
 import { withRetry, RateLimiter } from '../utils/retry';
 
 const BASE_URL = 'https://api.dexscreener.com/latest/dex';

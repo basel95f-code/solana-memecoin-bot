@@ -1,4 +1,4 @@
-import { Telegraf } from 'telegraf';
+import type { Telegraf } from 'telegraf';
 import { registerBasicCommands } from './basic';
 import { registerAlertCommands } from './alerts';
 import { registerFilterCommands } from './filters';

@@ -4,15 +4,15 @@
 
 import { config } from '../config';
 import { telegramService } from '../services/telegram';
-import { storageService } from '../services/storage';
-import { advancedMonitor, AdvancedAlert } from '../services/advancedMonitor';
+import type { AdvancedAlert } from '../services/advancedMonitor';
+import { advancedMonitor } from '../services/advancedMonitor';
 import { walletMonitorService } from '../services/walletMonitor';
 import { raydiumMonitor } from '../monitors/raydium';
 import { pumpFunMonitor } from '../monitors/pumpfun';
 import { jupiterMonitor } from '../monitors/jupiter';
 import { apiServer } from '../api/server';
 import { formatAdvancedAlert } from '../telegram/commands/advanced';
-import { PoolInfo, WalletActivityAlert } from '../types';
+import type { PoolInfo, WalletActivityAlert } from '../types';
 import { logger } from '../utils/logger';
 import { queueProcessor } from './queueProcessor';
 import { shouldSendAdvancedAlert } from './alertFilter';
@@ -60,17 +60,17 @@ export function setupWalletMonitorListeners(): void {
 function setupMonitorListeners(): void {
   // Raydium new pool events
   raydiumMonitor.on('newPool', (pool: PoolInfo) => {
-    queueProcessor.queueAnalysis(pool);
+    void queueProcessor.queueAnalysis(pool);
   });
 
   // Pump.fun new pool events
   pumpFunMonitor.on('newPool', (pool: PoolInfo) => {
-    queueProcessor.queueAnalysis(pool);
+    void queueProcessor.queueAnalysis(pool);
   });
 
   // Jupiter new token events
   jupiterMonitor.on('newPool', (pool: PoolInfo) => {
-    queueProcessor.queueAnalysis(pool);
+    void queueProcessor.queueAnalysis(pool);
   });
 }
 

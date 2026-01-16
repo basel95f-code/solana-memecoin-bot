@@ -78,9 +78,9 @@ class SnapshotCollector {
     logger.info('SnapshotCollector', 'Started snapshot collection');
 
     // Run immediately, then on interval
-    this.collectSnapshots();
+    void this.collectSnapshots();
     this.intervalId = setInterval(() => {
-      this.collectSnapshots();
+      void this.collectSnapshots();
     }, SNAPSHOT_INTERVAL_MS);
   }
 

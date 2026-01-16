@@ -6,7 +6,7 @@
 import { PublicKey } from '@solana/web3.js';
 import { solanaService } from '../services/solana';
 import { logger } from '../utils/logger';
-import { HolderInfo } from '../types';
+import type { HolderInfo } from '../types';
 
 export interface WalletCluster {
   clusterId: string;

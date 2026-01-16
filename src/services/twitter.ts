@@ -1,4 +1,5 @@
-import axios, { AxiosInstance } from 'axios';
+import type { AxiosInstance } from 'axios';
+import axios from 'axios';
 import { SENTIMENT, TIMEOUTS } from '../constants';
 
 const BASE_URL = 'https://api.twitter.com/2';

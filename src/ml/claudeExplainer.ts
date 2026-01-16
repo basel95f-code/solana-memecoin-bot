@@ -4,8 +4,8 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
-import { TokenAnalysis } from '../types';
-import { PredictionResult } from './rugPredictor';
+import type { TokenAnalysis } from '../types';
+import type { PredictionResult } from './rugPredictor';
 import { logger } from '../utils/logger';
 
 interface ExplanationResult {
@@ -121,13 +121,13 @@ Keep it concise and actionable. Focus on the most important factors.`;
     const lines = text.split('\n').filter(l => l.trim());
 
     // Try to extract summary (first sentence or first line)
-    const summary = lines[0]?.replace(/^[1\.\)\-\*]+\s*/, '').trim() || '';
+    const summary = lines[0]?.replace(/^[1.)\-*]+\s*/, '').trim() || '';
 
     // Extract bullet points
     const keyPoints: string[] = [];
     for (const line of lines) {
-      if (line.match(/^[\-\*\d\.\)]+\s+/)) {
-        const point = line.replace(/^[\-\*\d\.\)]+\s+/, '').trim();
+      if (line.match(/^[-*\d.)]+\s+/)) {
+        const point = line.replace(/^[-*\d.)]+\s+/, '').trim();
         if (point.length > 10 && keyPoints.length < 5) {
           keyPoints.push(point);
         }

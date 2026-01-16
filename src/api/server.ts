@@ -8,7 +8,6 @@ import path from 'path';
 import fs from 'fs';
 import { storageService } from '../services/storage';
 import { database } from '../database';
-import { dexScreenerService } from '../services/dexscreener';
 import { solanaService } from '../services/solana';
 import { walletMonitorService } from '../services/walletMonitor';
 import { config } from '../config';
@@ -344,7 +343,7 @@ class ApiServer {
    * Serve static files from dashboard directory
    */
   private serveStatic(pathname: string, res: http.ServerResponse): void {
-    let filePath = path.join(DASHBOARD_DIR, pathname === '/' ? 'index.html' : pathname);
+    const filePath = path.join(DASHBOARD_DIR, pathname === '/' ? 'index.html' : pathname);
 
     // Security: prevent directory traversal
     if (!filePath.startsWith(DASHBOARD_DIR)) {

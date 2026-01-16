@@ -1,6 +1,8 @@
 import { solanaService } from '../services/solana';
-import { HolderAnalysis, HolderInfo, TokenInfo, TOKEN_PROGRAM_ID } from '../types';
-import { PublicKey, ParsedAccountData } from '@solana/web3.js';
+import type { HolderAnalysis, HolderInfo, TokenInfo} from '../types';
+import { TOKEN_PROGRAM_ID } from '../types';
+import type { ParsedAccountData } from '@solana/web3.js';
+import { PublicKey } from '@solana/web3.js';
 
 const WHALE_THRESHOLD_PERCENT = 5;
 const CONCENTRATED_THRESHOLD = 50; // Top 10 holders > 50% is concentrated

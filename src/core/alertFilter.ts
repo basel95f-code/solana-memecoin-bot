@@ -3,7 +3,8 @@
  */
 
 import { storageService } from '../services/storage';
-import { TokenAnalysis, DEFAULT_CATEGORY_PRIORITIES } from '../types';
+import type { TokenAnalysis} from '../types';
+import { DEFAULT_CATEGORY_PRIORITIES } from '../types';
 
 /**
  * Determine if a token analysis should trigger an alert based on user settings

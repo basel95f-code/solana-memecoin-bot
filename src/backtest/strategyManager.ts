@@ -4,12 +4,11 @@
  */
 
 import { database } from '../database';
-import {
+import type {
   BacktestStrategy,
   EntryConditions,
   ExitConditions,
-  PositionSizing,
-  TakeProfitLevel,
+  PositionSizing
 } from './types';
 import { PRESET_STRATEGIES, getPresetStrategy } from './presets';
 import { validateStrategy } from './engine';

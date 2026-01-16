@@ -1,4 +1,4 @@
-import { Context, Telegraf } from 'telegraf';
+import type { Context, Telegraf } from 'telegraf';
 import { storageService } from '../../services/storage';
 
 const VALID_TIMEZONES = [

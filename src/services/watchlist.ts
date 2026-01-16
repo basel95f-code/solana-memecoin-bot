@@ -2,18 +2,14 @@ import { config } from '../config';
 import { storageService } from './storage';
 import { dexScreenerService } from './dexscreener';
 import { telegramService } from './telegram';
-import { WatchedToken, DEFAULT_CATEGORY_PRIORITIES } from '../types';
+import type { WatchedToken} from '../types';
+import { DEFAULT_CATEGORY_PRIORITIES } from '../types';
 import { withRetry } from '../utils/retry';
 import axios from 'axios';
 
 // Jupiter price API supports batching
 const JUPITER_PRICE_API = 'https://price.jup.ag/v6/price';
 const BATCH_SIZE = 100; // Max tokens per batch request
-
-interface TokenPriceData {
-  price: number;
-  mint: string;
-}
 
 class WatchlistService {
   private checkInterval: NodeJS.Timeout | null = null;
@@ -165,7 +161,7 @@ class WatchlistService {
           }
         }
       }
-    } catch (error) {
+    } catch {
       console.warn('Batch price fetch failed, falling back to individual fetches');
 
       // Fallback: fetch individually with small delay
@@ -304,7 +300,7 @@ class WatchlistService {
         currentPrice,
         priceChange,
       };
-    } catch (error) {
+    } catch {
       return { success: false, error: 'Failed to fetch price' };
     }
   }

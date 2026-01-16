@@ -1,8 +1,7 @@
-import { Context, Telegraf } from 'telegraf';
+import type { Context, Telegraf } from 'telegraf';
 import { dexScreenerService } from '../../services/dexscreener';
 import { gmgnService } from '../../services/gmgn';
-import { dataAggregator } from '../../services/dataAggregator';
-import { formatTrendingList, formatSmartMoneyList, SmartMoneyPick } from '../formatters';
+import { formatTrendingList, formatSmartMoneyList } from '../formatters';
 import { trendingKeyboard, smartMoneyKeyboard } from '../keyboards';
 
 export function registerDiscoveryCommands(bot: Telegraf): void {
@@ -237,7 +236,7 @@ export function registerDiscoveryCommands(bot: Telegraf): void {
         parse_mode: 'HTML',
         ...trendingKeyboard()
       });
-    } catch (error) {
+    } catch {
       await ctx.answerCbQuery('Error refreshing');
     }
   });
@@ -253,7 +252,7 @@ export function registerDiscoveryCommands(bot: Telegraf): void {
         parse_mode: 'HTML',
         ...trendingKeyboard()
       });
-    } catch (error) {
+    } catch {
       await ctx.answerCbQuery('Error loading');
     }
   });
@@ -269,7 +268,7 @@ export function registerDiscoveryCommands(bot: Telegraf): void {
         parse_mode: 'HTML',
         ...trendingKeyboard()
       });
-    } catch (error) {
+    } catch {
       await ctx.answerCbQuery('Error loading');
     }
   });
@@ -285,7 +284,7 @@ export function registerDiscoveryCommands(bot: Telegraf): void {
         parse_mode: 'HTML',
         ...trendingKeyboard()
       });
-    } catch (error) {
+    } catch {
       await ctx.answerCbQuery('Error loading');
     }
   });
@@ -301,7 +300,7 @@ export function registerDiscoveryCommands(bot: Telegraf): void {
         parse_mode: 'HTML',
         ...trendingKeyboard()
       });
-    } catch (error) {
+    } catch {
       await ctx.answerCbQuery('Error loading');
     }
   });
@@ -318,7 +317,7 @@ export function registerDiscoveryCommands(bot: Telegraf): void {
         parse_mode: 'HTML',
         ...smartMoneyKeyboard()
       });
-    } catch (error) {
+    } catch {
       await ctx.answerCbQuery('Error loading smart money data');
     }
   });
@@ -334,7 +333,7 @@ export function registerDiscoveryCommands(bot: Telegraf): void {
         parse_mode: 'HTML',
         ...smartMoneyKeyboard()
       });
-    } catch (error) {
+    } catch {
       await ctx.answerCbQuery('Error refreshing');
     }
   });
@@ -360,7 +359,7 @@ export function registerDiscoveryCommands(bot: Telegraf): void {
         parse_mode: 'HTML',
         ...smartMoneyKeyboard()
       });
-    } catch (error) {
+    } catch {
       await ctx.answerCbQuery('Error loading');
     }
   });
@@ -386,7 +385,7 @@ export function registerDiscoveryCommands(bot: Telegraf): void {
         parse_mode: 'HTML',
         ...smartMoneyKeyboard()
       });
-    } catch (error) {
+    } catch {
       await ctx.answerCbQuery('Error loading');
     }
   });
@@ -402,7 +401,7 @@ export function registerDiscoveryCommands(bot: Telegraf): void {
         parse_mode: 'HTML',
         ...trendingKeyboard()
       });
-    } catch (error) {
+    } catch {
       await ctx.answerCbQuery('Error loading');
     }
   });

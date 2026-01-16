@@ -1,7 +1,7 @@
-import { Context, Telegraf } from 'telegraf';
+import type { Context, Telegraf } from 'telegraf';
 import { PublicKey } from '@solana/web3.js';
-import { advancedMonitor, AdvancedAlert } from '../../services/advancedMonitor';
-import { storageService } from '../../services/storage';
+import type { AdvancedAlert } from '../../services/advancedMonitor';
+import { advancedMonitor } from '../../services/advancedMonitor';
 import { dexScreenerService } from '../../services/dexscreener';
 import { formatNumber, truncateAddress } from '../formatters';
 

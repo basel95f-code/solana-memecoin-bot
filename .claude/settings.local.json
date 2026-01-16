@@ -50,7 +50,20 @@
       "Bash(npm run dev:*)",
       "Bash(tasklist:*)",
       "Bash(wmic process where \"ProcessId=5224\" get Name,ExecutablePath)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(cmd //c \"taskkill /PID 3696 /F\")",
+      "Bash(cmd //c \"taskkill /PID 9884 /F\")",
+      "Bash(cmd //c \"taskkill /PID 15044 /F\")",
+      "Bash(cmd //c \"taskkill /PID 16628 /F\")",
+      "Bash(cmd //c \"taskkill /IM node.exe /F\")",
+      "Bash(dir /s \"C:\\\\Users\\\\User\\\\solana-memecoin-bot\\\\data\")",
+      "Bash(dir \"C:\\\\Users\\\\User\\\\solana-memecoin-bot\\\\src\\\\services\")",
+      "Bash(dir /s \"C:\\\\Users\\\\User\\\\solana-memecoin-bot\\\\data\\\\models\")",
+      "Bash(dir \"C:\\\\Users\\\\User\\\\solana-memecoin-bot\\\\data\\\\models\")",
+      "Bash(dir /B \"C:\\\\Users\\\\User\\\\solana-memecoin-bot\")",
+      "Bash(sqlite3:*)",
+      "Bash(cursor:*)",
+      "Bash(cmd //c \"taskkill /PID 8796 /F\")"
     ]
   }
 }

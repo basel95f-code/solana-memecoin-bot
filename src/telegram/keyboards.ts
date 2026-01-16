@@ -1,6 +1,6 @@
 import { Markup } from 'telegraf';
-import { InlineKeyboardMarkup } from 'telegraf/typings/core/types/typegram';
-import { FilterProfile, WatchedToken, FilterSettings } from '../types';
+import type { InlineKeyboardMarkup } from 'telegraf/typings/core/types/typegram';
+import type { FilterProfile, WatchedToken, FilterSettings } from '../types';
 
 export function tokenActionKeyboard(mint: string): Markup.Markup<InlineKeyboardMarkup> {
   return Markup.inlineKeyboard([

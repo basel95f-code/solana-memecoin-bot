@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { tokenCache } from '../services/cache';
-import { PoolInfo, SOL_MINT } from '../types';
+import type { PoolInfo} from '../types';
+import { SOL_MINT } from '../types';
 import { config } from '../config';
 import { EventEmitter } from 'events';
 import { withRetry, CircuitBreaker } from '../utils/retry';
@@ -155,7 +156,7 @@ export class JupiterMonitor extends EventEmitter {
       if (tokens.length > 0) {
         return tokens;
       }
-    } catch (primaryError) {
+    } catch {
       console.warn('Primary Jupiter endpoint failed, trying fallbacks...');
     }
 
@@ -372,7 +373,7 @@ export class JupiterMonitor extends EventEmitter {
     try {
       await this.syncKnownTokens();
       console.log('Jupiter auto-recovery: successful');
-    } catch (error) {
+    } catch {
       console.warn('Jupiter auto-recovery: failed, will retry later');
     }
   }

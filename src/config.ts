@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import { ExtendedBotConfig } from './types';
+import type { ExtendedBotConfig } from './types';
 
 dotenv.config();
 

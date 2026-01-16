@@ -3,19 +3,17 @@
  * Uses sql.js (SQLite compiled to WebAssembly) for cross-platform compatibility
  */
 
-import initSqlJs, { Database as SqlJsDatabase } from 'sql.js';
+import type { Database as SqlJsDatabase } from 'sql.js';
+import initSqlJs from 'sql.js';
 import path from 'path';
 import fs from 'fs';
 import { SCHEMA, MIGRATIONS } from './schema';
 import { logger } from '../utils/logger';
-import {
+import type {
   BacktestStrategy,
   BacktestResults,
   BacktestTrade,
-  TokenWithOutcome,
-  BacktestStrategyRow,
-  BacktestRunRow,
-  BacktestTradeRow,
+  TokenWithOutcome
 } from '../backtest/types';
 
 interface AnalysisInput {

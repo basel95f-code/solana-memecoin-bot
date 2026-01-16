@@ -3,7 +3,7 @@
  * Core simulation engine for backtesting trading strategies
  */
 
-import {
+import type {
   BacktestStrategy,
   BacktestConfig,
   BacktestTrade,

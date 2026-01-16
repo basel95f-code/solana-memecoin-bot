@@ -1,6 +1,6 @@
-import { Context, Telegraf } from 'telegraf';
+import type { Context, Telegraf } from 'telegraf';
 import { storageService } from '../../services/storage';
-import { BlacklistEntry, BlacklistType } from '../../types';
+import type { BlacklistEntry } from '../../types';
 import { Markup } from 'telegraf';
 
 // Validate Solana address (base58, 32-44 chars)

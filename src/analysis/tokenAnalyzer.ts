@@ -9,14 +9,11 @@ import { analyzeContract } from './contractCheck';
 import { analyzeSocials } from './socialCheck';
 import { analyzeSentiment, getDefaultSentiment } from './sentimentAnalysis';
 import { classifyRisk } from '../risk/classifier';
-import { TokenAnalysis, PoolInfo, TokenInfo, LiquidityAnalysis, HolderAnalysis, ContractAnalysis, SocialAnalysis, SentimentAnalysis, RugCheckResult, SmartMoneyActivity } from '../types';
+import type { TokenAnalysis, PoolInfo, LiquidityAnalysis, HolderAnalysis, ContractAnalysis, SocialAnalysis} from '../types';
 import { config } from '../config';
 
 // Track in-flight analysis requests to prevent duplicates
 const pendingAnalysis = new Map<string, Promise<TokenAnalysis | null>>();
-
-// Analysis timeout (30 seconds)
-const ANALYSIS_TIMEOUT = 30000;
 
 /**
  * Wrap a promise with a timeout

@@ -1,4 +1,4 @@
-import { Context, Telegraf } from 'telegraf';
+import type { Context, Telegraf } from 'telegraf';
 import { formatHelp, formatStats } from '../formatters';
 import { config } from '../../config';
 

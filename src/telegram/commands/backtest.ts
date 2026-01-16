@@ -3,29 +3,28 @@
  * Commands for running and managing backtests
  */
 
-import { Telegraf, Context } from 'telegraf';
+import type { Telegraf, Context } from 'telegraf';
 import { database } from '../../database';
+import type {
+  BacktestConfig,
+  BacktestStrategy,
+  BacktestResults
+} from '../../backtest';
 import {
   runBacktest,
   getPresetStrategy,
-  getPresetNames,
-  formatPresetInfo,
-  formatResultsSummary,
-  PRESET_STRATEGIES,
-  BacktestConfig,
-  BacktestTrade,
-  BacktestStrategy,
-  BacktestResults,
+  PRESET_STRATEGIES
 } from '../../backtest';
+import type {
+  StrategyWizardState} from '../../backtest/strategyManager';
 import {
   strategyManager,
-  StrategyWizardState,
   createWizardState,
 } from '../../backtest/strategyManager';
 import { snapshotCollector } from '../../backtest/snapshotCollector';
 import { outcomeTracker } from '../../services/outcomeTracker';
 import { storageService } from '../../services/storage';
-import { FilterSettings } from '../../types';
+import type { FilterSettings } from '../../types';
 import { logger } from '../../utils/logger';
 
 // Store wizard states by chat ID

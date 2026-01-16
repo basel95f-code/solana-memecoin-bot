@@ -1,8 +1,8 @@
-import { Context, Telegraf } from 'telegraf';
+import type { Context, Telegraf } from 'telegraf';
 import { storageService } from '../../services/storage';
 import { filterProfileKeyboard, settingsKeyboard } from '../keyboards';
 import { formatSettings, formatFilterProfile } from '../formatters';
-import { FilterProfile, FilterSettings, FILTER_PRESETS } from '../../types';
+import type { FilterProfile, FilterSettings } from '../../types';
 
 // All available profiles organized by category
 const RISK_PROFILES: FilterProfile[] = ['sniper', 'early', 'balanced', 'conservative', 'graduation', 'whale', 'degen', 'cto'];

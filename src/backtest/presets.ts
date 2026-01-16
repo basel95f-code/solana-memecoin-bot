@@ -3,7 +3,7 @@
  * Pre-configured strategies for common trading approaches
  */
 
-import { BacktestStrategy } from './types';
+import type { BacktestStrategy } from './types';
 
 /**
  * Conservative Trader Strategy

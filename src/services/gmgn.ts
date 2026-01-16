@@ -1,5 +1,6 @@
-import axios, { AxiosInstance } from 'axios';
-import { GMGNToken, GMGNResponse, SmartMoneyActivity, TrendingToken } from '../types';
+import type { AxiosInstance } from 'axios';
+import axios from 'axios';
+import type { GMGNToken, GMGNResponse, SmartMoneyActivity, TrendingToken } from '../types';
 import { withRetry, RateLimiter } from '../utils/retry';
 import { flareSolverr } from './flaresolverr';
 import { gmgnScraper } from './gmgnScraper';

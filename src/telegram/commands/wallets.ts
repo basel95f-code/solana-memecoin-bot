@@ -1,9 +1,9 @@
-import { Context, Telegraf } from 'telegraf';
+import type { Context, Telegraf } from 'telegraf';
 import { Markup } from 'telegraf';
 import { PublicKey } from '@solana/web3.js';
 import { storageService } from '../../services/storage';
 import { walletMonitorService } from '../../services/walletMonitor';
-import { TrackedWallet, WalletTransaction } from '../../types';
+import type { TrackedWallet, WalletTransaction } from '../../types';
 
 function isValidSolanaAddress(address: string): boolean {
   try {

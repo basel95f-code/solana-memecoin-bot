@@ -1,10 +1,11 @@
-import { Context, Telegraf } from 'telegraf';
+import type { Context, Telegraf } from 'telegraf';
 import { storageService } from '../../services/storage';
-import {
+import type {
   AlertCategory,
-  AlertCategories,
+  AlertPriority
+} from '../../types';
+import {
   DEFAULT_ALERT_CATEGORIES,
-  AlertPriority,
   PRIORITY_ORDER,
   DEFAULT_PRIORITY_SETTINGS,
 } from '../../types';

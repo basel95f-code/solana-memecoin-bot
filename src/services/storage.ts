@@ -1,22 +1,23 @@
 import * as fs from 'fs';
 import * as fsPromises from 'fs/promises';
 import * as path from 'path';
-import {
+import type {
   UserSettings,
   FilterSettings,
   FilterProfile,
   WatchedToken,
-  FILTER_PRESETS,
   AlertCategories,
   AlertCategory,
-  DEFAULT_ALERT_CATEGORIES,
   BlacklistEntry,
   BlacklistType,
   AlertPriority,
   AlertPrioritySettings,
+  TrackedWallet} from '../types';
+import {
+  FILTER_PRESETS,
+  DEFAULT_ALERT_CATEGORIES,
   DEFAULT_PRIORITY_SETTINGS,
-  PRIORITY_ORDER,
-  TrackedWallet,
+  PRIORITY_ORDER
 } from '../types';
 
 // Configuration constants

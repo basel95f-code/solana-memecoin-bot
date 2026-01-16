@@ -3,7 +3,7 @@
  * Calculates performance metrics from backtest trades
  */
 
-import { BacktestTrade, EquityPoint, BacktestResults } from './types';
+import type { BacktestTrade, EquityPoint, BacktestResults } from './types';
 
 // Risk-free rate for Sharpe calculation (annual, e.g., 5%)
 const RISK_FREE_RATE = 0.05;

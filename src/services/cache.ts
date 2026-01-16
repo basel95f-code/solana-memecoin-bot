@@ -1,4 +1,4 @@
-import { CachedToken, TokenAnalysis } from '../types';
+import type { CachedToken, TokenAnalysis } from '../types';
 
 interface CachedTokenWithAccess extends CachedToken {
   lastAccessed: number;

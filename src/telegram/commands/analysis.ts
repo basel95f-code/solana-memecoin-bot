@@ -1,4 +1,4 @@
-import { Context, Telegraf } from 'telegraf';
+import type { Context, Telegraf } from 'telegraf';
 import { PublicKey } from '@solana/web3.js';
 import { analyzeToken } from '../../analysis/tokenAnalyzer';
 import { dexScreenerService } from '../../services/dexscreener';
@@ -6,7 +6,7 @@ import { solanaService } from '../../services/solana';
 import { rugCheckService } from '../../services/rugcheck';
 import { formatFullAnalysis, formatDexScreenerAnalysis, formatNumber, truncateAddress } from '../formatters';
 import { tokenActionKeyboard, compareKeyboard } from '../keyboards';
-import { TokenAnalysis } from '../../types';
+import type { TokenAnalysis } from '../../types';
 import { classifyRisk, getRiskEmoji, getRiskDescription } from '../../risk/classifier';
 import { analyzeHolders } from '../../analysis/holderAnalysis';
 import { analyzeContract } from '../../analysis/contractCheck';
@@ -75,7 +75,7 @@ export function registerAnalysisCommands(bot: Telegraf): void {
           source: 'jupiter',
           createdAt: new Date(),
         });
-      } catch (analysisError) {
+      } catch {
         console.log('Full analysis failed (RPC rate limit?), using DexScreener data only');
       }
 

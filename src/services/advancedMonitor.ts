@@ -1,8 +1,6 @@
 import { EventEmitter } from 'events';
 import { dexScreenerService } from './dexscreener';
 import { solanaService } from './solana';
-import { tokenCache } from './cache';
-import { DexScreenerPair } from '../types';
 
 // Alert types for advanced monitoring
 export type AlertType = 'volume_spike' | 'whale_movement' | 'liquidity_drain' | 'authority_change';

@@ -1,19 +1,21 @@
+import type {
+  AccountInfo,
+  ParsedAccountData
+} from '@solana/web3.js';
 import {
   Connection,
   PublicKey,
-  AccountInfo,
-  ParsedAccountData,
-  Commitment,
 } from '@solana/web3.js';
+import type {
+  Mint
+} from '@solana/spl-token';
 import {
   getMint,
-  getAccount,
   TOKEN_PROGRAM_ID,
-  TOKEN_2022_PROGRAM_ID,
-  Mint,
+  TOKEN_2022_PROGRAM_ID
 } from '@solana/spl-token';
 import { config } from '../config';
-import { TokenInfo, TokenMetadata } from '../types';
+import type { TokenInfo, TokenMetadata } from '../types';
 import { withRetry, ResilientExecutor } from '../utils/retry';
 import axios from 'axios';
 

@@ -1,6 +1,6 @@
 import { dexScreenerService } from './dexscreener';
 import { gmgnService } from './gmgn';
-import { TrendingToken, DexScreenerPair, GMGNToken, SmartMoneyActivity } from '../types';
+import type { TrendingToken, SmartMoneyActivity } from '../types';
 
 interface AggregatedTokenData {
   mint: string;
@@ -135,7 +135,7 @@ class DataAggregator {
     // Convert to discovery results with scoring
     const results: DiscoveryResult[] = [];
 
-    for (const [mint, token] of tokenMap) {
+    for (const [mint] of tokenMap) {
       const aggregated = await this.getTokenData(mint);
       if (!aggregated) continue;
 

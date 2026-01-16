@@ -1,4 +1,4 @@
-import {
+import type {
   TokenAnalysis,
   RiskLevel,
   TrendingToken,
@@ -261,7 +261,7 @@ export function formatDexScreenerAnalysis(dexData: DexScreenerPair): string {
 }
 
 export function formatFullAnalysis(analysis: TokenAnalysis, dexData?: DexScreenerPair): string {
-  const { token, pool, liquidity, holders, contract, social, sentiment, smartMoney, risk } = analysis;
+  const { token, liquidity, holders, contract, social, sentiment, smartMoney, risk } = analysis;
 
   const priceUsd = dexData?.priceUsd ? parseFloat(dexData.priceUsd) : 0;
 
