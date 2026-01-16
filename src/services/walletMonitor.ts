@@ -1,11 +1,22 @@
 import { EventEmitter } from 'events';
 import { Connection, PublicKey, ParsedTransactionWithMeta, ConfirmedSignatureInfo } from '@solana/web3.js';
+import axios from 'axios';
 import { config } from '../config';
 import { storageService } from './storage';
 import { solanaService } from './solana';
 import { dexScreenerService } from './dexscreener';
 import { TrackedWallet, WalletTransaction, WalletActivityAlert, SOL_MINT, DEFAULT_CATEGORY_PRIORITIES } from '../types';
 import { logger } from '../utils/logger';
+
+// Token metadata cache
+interface TokenMetadataCache {
+  symbol: string;
+  name: string;
+  priceUsd?: number;
+  cachedAt: number;
+}
+const tokenMetadataCache = new Map<string, TokenMetadataCache>();
+const METADATA_CACHE_TTL = 300000; // 5 minutes
 
 // Known DEX program IDs for detecting swaps
 const RAYDIUM_AMM_V4 = '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8';
@@ -30,10 +41,10 @@ const TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
 const TOKEN_2022_PROGRAM = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
 
 // Configuration
-const POLL_INTERVAL_MS = 60000; // 60 seconds
+const POLL_INTERVAL_MS = 15000; // 15 seconds - faster alerts
 const MAX_SIGNATURES_PER_WALLET = 20;
 const TX_CACHE_TTL_MS = 300000; // 5 minutes
-const ALERT_COOLDOWN_MS = 30000; // 30 seconds between alerts for same wallet
+const ALERT_COOLDOWN_MS = 10000; // 10 seconds between alerts for same wallet
 
 interface WalletMonitorConfig {
   enabled: boolean;
@@ -81,6 +92,8 @@ export class WalletMonitorService extends EventEmitter {
       const chatIds = storageService.getAllTrackedWalletChatIds();
       if (chatIds.length === 0) return;
 
+      logger.info('WalletMonitor', `Polling ${chatIds.length} chats with tracked wallets`);
+
       // Cleanup old cache entries
       this.cleanupTxCache();
 
@@ -102,7 +115,9 @@ export class WalletMonitorService extends EventEmitter {
 
     // Check if wallet_activity alerts are enabled
     if (!settings.filters.alertsEnabled) return;
-    if (settings.filters.alertCategories && !settings.filters.alertCategories.wallet_activity) return;
+    // Default to true if wallet_activity category not set (backward compatibility)
+    const walletAlertEnabled = settings.filters.alertCategories?.wallet_activity ?? true;
+    if (!walletAlertEnabled) return;
 
     // Check quiet hours
     if (storageService.isQuietHours(chatId)) return;
@@ -112,21 +127,31 @@ export class WalletMonitorService extends EventEmitter {
     if (!storageService.shouldAlertForPriority(chatId, alertPriority)) return;
 
     const wallets = storageService.getTrackedWallets(chatId);
+    if (wallets.length > 0) {
+      logger.info('WalletMonitor', `Checking ${wallets.length} wallets for chat ${chatId}`);
+    }
     const minSolValue = settings.filters.walletAlertMinSol || 0;
 
     for (const wallet of wallets) {
       try {
         const transactions = await this.fetchWalletTransactions(wallet);
+        if (transactions.length > 0) {
+          logger.info('WalletMonitor', `Found ${transactions.length} new tx for ${wallet.label}`);
+        }
 
         for (const tx of transactions) {
+          logger.info('WalletMonitor', `Processing tx: ${tx.type} ${tx.tokenMint.slice(0,8)}... SOL: ${tx.solAmount || 'N/A'}`);
+
           // Skip if below minimum SOL threshold
           if (minSolValue > 0 && tx.solAmount && tx.solAmount < minSolValue) {
+            logger.debug('WalletMonitor', `Skipping: below min SOL threshold`);
             continue;
           }
 
           // Check cooldown for this wallet
           const now = Date.now();
           if (wallet.lastAlertedAt && now - wallet.lastAlertedAt < ALERT_COOLDOWN_MS) {
+            logger.debug('WalletMonitor', `Skipping: cooldown active`);
             continue;
           }
 
@@ -137,6 +162,7 @@ export class WalletMonitorService extends EventEmitter {
             chatId,
           };
 
+          logger.info('WalletMonitor', `Emitting wallet activity alert for ${wallet.label}`);
           this.emit('walletActivity', alert);
 
           // Update last alerted time
@@ -457,19 +483,90 @@ export class WalletMonitorService extends EventEmitter {
 
   // Enrich transaction with token metadata
   async enrichTransaction(tx: WalletTransaction): Promise<WalletTransaction> {
+    const mint = tx.tokenMint;
+
+    // Check cache first
+    const cached = tokenMetadataCache.get(mint);
+    if (cached && Date.now() - cached.cachedAt < METADATA_CACHE_TTL) {
+      tx.tokenSymbol = cached.symbol;
+      tx.tokenName = cached.name;
+      if (cached.priceUsd && tx.amount) {
+        tx.priceUsd = cached.priceUsd * tx.amount;
+      }
+      return tx;
+    }
+
+    // Try DexScreener first
     try {
-      const dexData = await dexScreenerService.getTokenData(tx.tokenMint);
-      if (dexData) {
+      const dexData = await dexScreenerService.getTokenData(mint);
+      if (dexData?.baseToken) {
         tx.tokenSymbol = dexData.baseToken.symbol;
         tx.tokenName = dexData.baseToken.name;
-        if (dexData.priceUsd && tx.amount) {
-          tx.priceUsd = parseFloat(dexData.priceUsd) * tx.amount;
+        const price = dexData.priceUsd ? parseFloat(dexData.priceUsd) : undefined;
+        if (price && tx.amount) {
+          tx.priceUsd = price * tx.amount;
         }
+        // Cache it
+        tokenMetadataCache.set(mint, {
+          symbol: dexData.baseToken.symbol,
+          name: dexData.baseToken.name,
+          priceUsd: price,
+          cachedAt: Date.now(),
+        });
+        return tx;
       }
     } catch {
-      // Ignore enrichment failures
+      // Try next source
     }
+
+    // Try Jupiter token list
+    try {
+      const jupResponse = await axios.get(`https://price.jup.ag/v6/price?ids=${mint}`, { timeout: 5000 });
+      if (jupResponse.data?.data?.[mint]) {
+        const jupData = jupResponse.data.data[mint];
+        // Jupiter price API doesn't have name/symbol, try token info
+        const tokenInfo = await solanaService.getTokenInfo(mint);
+        tx.tokenSymbol = tokenInfo?.symbol || mint.slice(0, 6);
+        tx.tokenName = tokenInfo?.name || 'Unknown';
+        if (jupData.price && tx.amount) {
+          tx.priceUsd = jupData.price * tx.amount;
+        }
+        tokenMetadataCache.set(mint, {
+          symbol: tx.tokenSymbol,
+          name: tx.tokenName,
+          priceUsd: jupData.price,
+          cachedAt: Date.now(),
+        });
+        return tx;
+      }
+    } catch {
+      // Try next source
+    }
+
+    // Fallback: on-chain metadata
+    try {
+      const tokenInfo = await solanaService.getTokenInfo(mint);
+      if (tokenInfo) {
+        tx.tokenSymbol = tokenInfo.symbol;
+        tx.tokenName = tokenInfo.name;
+        tokenMetadataCache.set(mint, {
+          symbol: tokenInfo.symbol,
+          name: tokenInfo.name,
+          cachedAt: Date.now(),
+        });
+      }
+    } catch {
+      // Last resort: use truncated mint
+      tx.tokenSymbol = mint.slice(0, 6);
+      tx.tokenName = 'Unknown Token';
+    }
+
     return tx;
+  }
+
+  // Clear metadata cache (for testing)
+  clearMetadataCache(): void {
+    tokenMetadataCache.clear();
   }
 }
 
