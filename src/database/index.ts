@@ -8,6 +8,15 @@ import path from 'path';
 import fs from 'fs';
 import { SCHEMA, MIGRATIONS } from './schema';
 import { logger } from '../utils/logger';
+import {
+  BacktestStrategy,
+  BacktestResults,
+  BacktestTrade,
+  TokenWithOutcome,
+  BacktestStrategyRow,
+  BacktestRunRow,
+  BacktestTradeRow,
+} from '../backtest/types';
 
 interface AnalysisInput {
   tokenMint: string;
@@ -360,6 +369,458 @@ class DatabaseService {
       logger.debug('Database', 'Cleanup completed');
     } catch (error) {
       logger.silentError('Database', 'Cleanup failed', error as Error);
+    }
+  }
+
+  // ============================================
+  // Backtest Methods
+  // ============================================
+
+  /**
+   * Get tokens with outcomes for backtesting
+   */
+  getTokensWithOutcomes(startDate: number, endDate: number): TokenWithOutcome[] {
+    if (!this.db) return [];
+
+    try {
+      const result = this.db.exec(`
+        SELECT
+          toc.mint,
+          toc.symbol,
+          toc.initial_price,
+          toc.initial_liquidity,
+          toc.initial_risk_score,
+          toc.initial_holders,
+          toc.initial_top10_percent,
+          toc.peak_price,
+          toc.peak_liquidity,
+          toc.final_price,
+          toc.final_liquidity,
+          toc.outcome,
+          toc.peak_price_multiplier,
+          toc.time_to_peak,
+          toc.discovered_at,
+          toc.peak_at,
+          toc.outcome_recorded_at,
+          ta.mint_revoked,
+          ta.freeze_revoked,
+          ta.lp_burned_percent,
+          ta.has_twitter,
+          ta.has_telegram,
+          ta.has_website
+        FROM token_outcomes toc
+        LEFT JOIN token_analysis ta ON toc.mint = ta.mint
+        WHERE toc.discovered_at >= ? AND toc.discovered_at <= ?
+          AND toc.outcome IS NOT NULL
+          AND toc.initial_price > 0
+          AND toc.peak_price > 0
+        ORDER BY toc.discovered_at ASC
+      `, [startDate, endDate]);
+
+      if (result.length === 0) return [];
+
+      const columns = result[0].columns;
+      return result[0].values.map(row => {
+        const obj: any = {};
+        columns.forEach((col, i) => {
+          obj[col] = row[i];
+        });
+
+        return {
+          mint: obj.mint,
+          symbol: obj.symbol,
+          initialPrice: obj.initial_price || 0,
+          initialLiquidity: obj.initial_liquidity || 0,
+          initialRiskScore: obj.initial_risk_score || 0,
+          initialHolders: obj.initial_holders || 0,
+          initialTop10Percent: obj.initial_top10_percent,
+          peakPrice: obj.peak_price || obj.initial_price,
+          peakLiquidity: obj.peak_liquidity,
+          finalPrice: obj.final_price || obj.initial_price,
+          finalLiquidity: obj.final_liquidity,
+          outcome: obj.outcome || 'unknown',
+          peakMultiplier: obj.peak_price_multiplier || 1,
+          timeToPeak: obj.time_to_peak,
+          discoveredAt: obj.discovered_at,
+          peakAt: obj.peak_at,
+          outcomeRecordedAt: obj.outcome_recorded_at,
+          mintRevoked: obj.mint_revoked === 1,
+          freezeRevoked: obj.freeze_revoked === 1,
+          lpBurned: (obj.lp_burned_percent || 0) > 50,
+          lpBurnedPercent: obj.lp_burned_percent,
+          hasTwitter: obj.has_twitter === 1,
+          hasTelegram: obj.has_telegram === 1,
+          hasWebsite: obj.has_website === 1,
+        } as TokenWithOutcome;
+      });
+    } catch (error) {
+      logger.error('Database', 'Failed to get tokens with outcomes', error as Error);
+      return [];
+    }
+  }
+
+  /**
+   * Save a backtest strategy
+   */
+  saveBacktestStrategy(strategy: BacktestStrategy): number {
+    if (!this.db) return 0;
+
+    try {
+      const now = Math.floor(Date.now() / 1000);
+
+      this.db.run(`
+        INSERT OR REPLACE INTO backtest_strategies (
+          name, description, entry_conditions, exit_conditions,
+          position_sizing, is_preset, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        strategy.name,
+        strategy.description,
+        JSON.stringify(strategy.entry),
+        JSON.stringify(strategy.exit),
+        JSON.stringify(strategy.sizing),
+        strategy.isPreset ? 1 : 0,
+        strategy.createdAt ?? now,
+        now,
+      ]);
+
+      this.dirty = true;
+
+      // Get the ID
+      const result = this.db.exec('SELECT last_insert_rowid()');
+      return result.length > 0 ? (result[0].values[0][0] as number) : 0;
+    } catch (error) {
+      logger.error('Database', 'Failed to save backtest strategy', error as Error);
+      return 0;
+    }
+  }
+
+  /**
+   * Get a backtest strategy by name
+   */
+  getBacktestStrategy(name: string): BacktestStrategy | null {
+    if (!this.db) return null;
+
+    try {
+      const result = this.db.exec(
+        'SELECT * FROM backtest_strategies WHERE name = ?',
+        [name]
+      );
+
+      if (result.length === 0 || result[0].values.length === 0) return null;
+
+      const columns = result[0].columns;
+      const row: any = {};
+      columns.forEach((col, i) => {
+        row[col] = result[0].values[0][i];
+      });
+
+      return {
+        id: row.id,
+        name: row.name,
+        description: row.description,
+        entry: JSON.parse(row.entry_conditions),
+        exit: JSON.parse(row.exit_conditions),
+        sizing: JSON.parse(row.position_sizing),
+        isPreset: row.is_preset === 1,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      };
+    } catch (error) {
+      logger.error('Database', 'Failed to get backtest strategy', error as Error);
+      return null;
+    }
+  }
+
+  /**
+   * Get all backtest strategies
+   */
+  getAllBacktestStrategies(): BacktestStrategy[] {
+    if (!this.db) return [];
+
+    try {
+      const result = this.db.exec('SELECT * FROM backtest_strategies ORDER BY name');
+
+      if (result.length === 0) return [];
+
+      const columns = result[0].columns;
+      return result[0].values.map(values => {
+        const row: any = {};
+        columns.forEach((col, i) => {
+          row[col] = values[i];
+        });
+
+        return {
+          id: row.id,
+          name: row.name,
+          description: row.description,
+          entry: JSON.parse(row.entry_conditions),
+          exit: JSON.parse(row.exit_conditions),
+          sizing: JSON.parse(row.position_sizing),
+          isPreset: row.is_preset === 1,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        };
+      });
+    } catch (error) {
+      logger.error('Database', 'Failed to get all backtest strategies', error as Error);
+      return [];
+    }
+  }
+
+  /**
+   * Save backtest run results
+   */
+  saveBacktestRun(results: BacktestResults, trades: BacktestTrade[]): number {
+    if (!this.db) return 0;
+
+    try {
+      this.db.run(`
+        INSERT INTO backtest_runs (
+          strategy_id, strategy_name, start_date, end_date, days_analyzed,
+          initial_capital, final_capital, total_trades, winning_trades, losing_trades,
+          win_rate, total_profit_loss, total_return, average_win, average_loss,
+          largest_win, largest_loss, max_drawdown, max_drawdown_duration,
+          sharpe_ratio, sortino_ratio, profit_factor, average_hold_time,
+          longest_winning_streak, longest_losing_streak, equity_curve,
+          executed_at, execution_time_ms
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        results.strategyId,
+        results.strategyName,
+        results.startDate,
+        results.endDate,
+        results.daysAnalyzed,
+        results.initialCapital,
+        results.finalCapital,
+        results.totalTrades,
+        results.winningTrades,
+        results.losingTrades,
+        results.winRate,
+        results.totalProfitLoss,
+        results.totalReturn,
+        results.averageWin,
+        results.averageLoss,
+        results.largestWin,
+        results.largestLoss,
+        results.maxDrawdown,
+        results.maxDrawdownDuration,
+        results.sharpeRatio,
+        results.sortinoRatio,
+        results.profitFactor,
+        results.averageHoldTime,
+        results.longestWinningStreak,
+        results.longestLosingStreak,
+        JSON.stringify(results.equityCurve),
+        results.executedAt,
+        results.executionTimeMs,
+      ]);
+
+      this.dirty = true;
+
+      // Get the run ID
+      const idResult = this.db.exec('SELECT last_insert_rowid()');
+      const runId = idResult.length > 0 ? (idResult[0].values[0][0] as number) : 0;
+
+      // Save trades
+      for (const trade of trades) {
+        this.db.run(`
+          INSERT INTO backtest_trades (
+            run_id, token_mint, token_symbol, token_name,
+            entry_price, entry_time, position_size,
+            exit_price, exit_time, exit_reason,
+            profit_loss, profit_loss_percent, hold_time_seconds,
+            peak_price, peak_multiplier,
+            entry_risk_score, entry_liquidity, entry_holders
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          runId,
+          trade.tokenMint,
+          trade.tokenSymbol,
+          trade.tokenName ?? null,
+          trade.entryPrice,
+          trade.entryTime,
+          trade.positionSize,
+          trade.exitPrice,
+          trade.exitTime,
+          trade.exitReason,
+          trade.profitLoss,
+          trade.profitLossPercent,
+          trade.holdTimeSeconds,
+          trade.peakPrice,
+          trade.peakMultiplier,
+          trade.entryRiskScore ?? null,
+          trade.entryLiquidity ?? null,
+          trade.entryHolders ?? null,
+        ]);
+      }
+
+      return runId;
+    } catch (error) {
+      logger.error('Database', 'Failed to save backtest run', error as Error);
+      return 0;
+    }
+  }
+
+  /**
+   * Get backtest run by ID
+   */
+  getBacktestRun(runId: number): BacktestResults | null {
+    if (!this.db) return null;
+
+    try {
+      const result = this.db.exec('SELECT * FROM backtest_runs WHERE id = ?', [runId]);
+
+      if (result.length === 0 || result[0].values.length === 0) return null;
+
+      const columns = result[0].columns;
+      const row: any = {};
+      columns.forEach((col, i) => {
+        row[col] = result[0].values[0][i];
+      });
+
+      return {
+        id: row.id,
+        strategyId: row.strategy_id,
+        strategyName: row.strategy_name,
+        startDate: row.start_date,
+        endDate: row.end_date,
+        daysAnalyzed: row.days_analyzed,
+        initialCapital: row.initial_capital,
+        finalCapital: row.final_capital,
+        totalTrades: row.total_trades,
+        winningTrades: row.winning_trades,
+        losingTrades: row.losing_trades,
+        winRate: row.win_rate,
+        totalProfitLoss: row.total_profit_loss,
+        totalReturn: row.total_return,
+        averageWin: row.average_win,
+        averageLoss: row.average_loss,
+        largestWin: row.largest_win,
+        largestLoss: row.largest_loss,
+        maxDrawdown: row.max_drawdown,
+        maxDrawdownDuration: row.max_drawdown_duration,
+        sharpeRatio: row.sharpe_ratio,
+        sortinoRatio: row.sortino_ratio,
+        profitFactor: row.profit_factor,
+        averageHoldTime: row.average_hold_time,
+        longestWinningStreak: row.longest_winning_streak,
+        longestLosingStreak: row.longest_losing_streak,
+        equityCurve: JSON.parse(row.equity_curve || '[]'),
+        executedAt: row.executed_at,
+        executionTimeMs: row.execution_time_ms,
+      };
+    } catch (error) {
+      logger.error('Database', 'Failed to get backtest run', error as Error);
+      return null;
+    }
+  }
+
+  /**
+   * Get trades for a backtest run
+   */
+  getBacktestTrades(runId: number, limit: number = 100): BacktestTrade[] {
+    if (!this.db) return [];
+
+    try {
+      const result = this.db.exec(
+        'SELECT * FROM backtest_trades WHERE run_id = ? ORDER BY entry_time LIMIT ?',
+        [runId, limit]
+      );
+
+      if (result.length === 0) return [];
+
+      const columns = result[0].columns;
+      return result[0].values.map(values => {
+        const row: any = {};
+        columns.forEach((col, i) => {
+          row[col] = values[i];
+        });
+
+        return {
+          id: row.id,
+          runId: row.run_id,
+          tokenMint: row.token_mint,
+          tokenSymbol: row.token_symbol,
+          tokenName: row.token_name,
+          entryPrice: row.entry_price,
+          entryTime: row.entry_time,
+          positionSize: row.position_size,
+          exitPrice: row.exit_price,
+          exitTime: row.exit_time,
+          exitReason: row.exit_reason,
+          profitLoss: row.profit_loss,
+          profitLossPercent: row.profit_loss_percent,
+          holdTimeSeconds: row.hold_time_seconds,
+          peakPrice: row.peak_price,
+          peakMultiplier: row.peak_multiplier,
+          entryRiskScore: row.entry_risk_score,
+          entryLiquidity: row.entry_liquidity,
+          entryHolders: row.entry_holders,
+        };
+      });
+    } catch (error) {
+      logger.error('Database', 'Failed to get backtest trades', error as Error);
+      return [];
+    }
+  }
+
+  /**
+   * Get recent backtest runs
+   */
+  getRecentBacktestRuns(limit: number = 10): BacktestResults[] {
+    if (!this.db) return [];
+
+    try {
+      const result = this.db.exec(
+        'SELECT * FROM backtest_runs ORDER BY executed_at DESC LIMIT ?',
+        [limit]
+      );
+
+      if (result.length === 0) return [];
+
+      const columns = result[0].columns;
+      return result[0].values.map(values => {
+        const row: any = {};
+        columns.forEach((col, i) => {
+          row[col] = values[i];
+        });
+
+        return {
+          id: row.id,
+          strategyId: row.strategy_id,
+          strategyName: row.strategy_name,
+          startDate: row.start_date,
+          endDate: row.end_date,
+          daysAnalyzed: row.days_analyzed,
+          initialCapital: row.initial_capital,
+          finalCapital: row.final_capital,
+          totalTrades: row.total_trades,
+          winningTrades: row.winning_trades,
+          losingTrades: row.losing_trades,
+          winRate: row.win_rate,
+          totalProfitLoss: row.total_profit_loss,
+          totalReturn: row.total_return,
+          averageWin: row.average_win,
+          averageLoss: row.average_loss,
+          largestWin: row.largest_win,
+          largestLoss: row.largest_loss,
+          maxDrawdown: row.max_drawdown,
+          maxDrawdownDuration: row.max_drawdown_duration,
+          sharpeRatio: row.sharpe_ratio,
+          sortinoRatio: row.sortino_ratio,
+          profitFactor: row.profit_factor,
+          averageHoldTime: row.average_hold_time,
+          longestWinningStreak: row.longest_winning_streak,
+          longestLosingStreak: row.longest_losing_streak,
+          equityCurve: JSON.parse(row.equity_curve || '[]'),
+          executedAt: row.executed_at,
+          executionTimeMs: row.execution_time_ms,
+        };
+      });
+    } catch (error) {
+      logger.error('Database', 'Failed to get recent backtest runs', error as Error);
+      return [];
     }
   }
 

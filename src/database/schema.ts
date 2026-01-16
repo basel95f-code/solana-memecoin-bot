@@ -231,6 +231,97 @@ CREATE INDEX IF NOT EXISTS idx_ml_models_name ON ml_models(model_name);
  * Migration scripts for schema updates
  */
 export const MIGRATIONS: { version: number; sql: string }[] = [
-  // Future migrations go here
-  // { version: 2, sql: 'ALTER TABLE token_analysis ADD COLUMN new_field TEXT;' }
+  // Backtesting framework tables
+  {
+    version: 1,
+    sql: `
+      -- ============================================
+      -- Backtest Strategies
+      -- Stores strategy definitions for backtesting
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS backtest_strategies (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        description TEXT,
+        entry_conditions TEXT NOT NULL, -- JSON
+        exit_conditions TEXT NOT NULL, -- JSON
+        position_sizing TEXT NOT NULL, -- JSON
+        is_preset INTEGER DEFAULT 0,
+        created_at INTEGER DEFAULT (strftime('%s', 'now')),
+        updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_backtest_strategies_name ON backtest_strategies(name);
+
+      -- ============================================
+      -- Backtest Runs
+      -- Stores execution results for each backtest run
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS backtest_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        strategy_id INTEGER NOT NULL,
+        strategy_name TEXT NOT NULL,
+        start_date INTEGER NOT NULL,
+        end_date INTEGER NOT NULL,
+        days_analyzed INTEGER NOT NULL,
+        initial_capital REAL NOT NULL,
+        final_capital REAL NOT NULL,
+        total_trades INTEGER NOT NULL,
+        winning_trades INTEGER NOT NULL,
+        losing_trades INTEGER NOT NULL,
+        win_rate REAL NOT NULL,
+        total_profit_loss REAL NOT NULL,
+        total_return REAL NOT NULL,
+        average_win REAL,
+        average_loss REAL,
+        largest_win REAL,
+        largest_loss REAL,
+        max_drawdown REAL,
+        max_drawdown_duration INTEGER,
+        sharpe_ratio REAL,
+        sortino_ratio REAL,
+        profit_factor REAL,
+        average_hold_time INTEGER,
+        longest_winning_streak INTEGER,
+        longest_losing_streak INTEGER,
+        equity_curve TEXT, -- JSON array of equity points
+        executed_at INTEGER DEFAULT (strftime('%s', 'now')),
+        execution_time_ms INTEGER,
+        FOREIGN KEY (strategy_id) REFERENCES backtest_strategies(id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_backtest_runs_strategy ON backtest_runs(strategy_id);
+      CREATE INDEX IF NOT EXISTS idx_backtest_runs_time ON backtest_runs(executed_at);
+
+      -- ============================================
+      -- Backtest Trades
+      -- Individual trade records for each backtest run
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS backtest_trades (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id INTEGER NOT NULL,
+        token_mint TEXT NOT NULL,
+        token_symbol TEXT,
+        token_name TEXT,
+        entry_price REAL NOT NULL,
+        entry_time INTEGER NOT NULL,
+        position_size REAL NOT NULL,
+        exit_price REAL NOT NULL,
+        exit_time INTEGER NOT NULL,
+        exit_reason TEXT NOT NULL,
+        profit_loss REAL NOT NULL,
+        profit_loss_percent REAL NOT NULL,
+        hold_time_seconds INTEGER NOT NULL,
+        peak_price REAL,
+        peak_multiplier REAL,
+        entry_risk_score INTEGER,
+        entry_liquidity REAL,
+        entry_holders INTEGER,
+        FOREIGN KEY (run_id) REFERENCES backtest_runs(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_backtest_trades_run ON backtest_trades(run_id);
+      CREATE INDEX IF NOT EXISTS idx_backtest_trades_token ON backtest_trades(token_mint);
+    `
+  }
 ];

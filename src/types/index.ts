@@ -574,6 +574,29 @@ export interface SmartMoneyActivity {
 // Base filter settings type for presets (excludes user-specific fields)
 type FilterPreset = Omit<FilterSettings, 'profile' | 'alertsEnabled' | 'alertCategories' | 'alertPriority' | 'quietHoursStart' | 'quietHoursEnd' | 'timezone'>;
 
+// ============================================
+// Backtest Types (re-exported from backtest module)
+// ============================================
+
+export type {
+  EntryConditions,
+  ExitConditions,
+  TakeProfitLevel,
+  PositionSizing,
+  PositionSizingMethod,
+  BacktestStrategy,
+  BacktestTrade,
+  BacktestResults,
+  BacktestConfig,
+  TokenWithOutcome,
+  TradeOutcome,
+  EquityPoint,
+} from '../backtest/types';
+
+// ============================================
+// Filter Profile Presets
+// ============================================
+
 export const FILTER_PRESETS: Record<Exclude<FilterProfile, 'custom'>, FilterPreset> = {
   // ==========================================
   // RISK-BASED PROFILES
