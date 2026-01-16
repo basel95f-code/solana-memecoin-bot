@@ -23,6 +23,7 @@ import {
   createWizardState,
 } from '../../backtest/strategyManager';
 import { snapshotCollector } from '../../backtest/snapshotCollector';
+import { outcomeTracker } from '../../services/outcomeTracker';
 import { storageService } from '../../services/storage';
 import { FilterSettings } from '../../types';
 import { logger } from '../../utils/logger';
@@ -58,6 +59,9 @@ export function registerBacktestCommands(bot: Telegraf): void {
   // Phase 3: Comparison and quick backtest
   bot.command('compare', handleCompare);
   bot.command('btquick', handleQuickBacktest);
+
+  // Outcome tracking
+  bot.command('outcomes', handleOutcomes);
 
   // Handle text input for wizard
   bot.on('text', handleWizardInput);
@@ -1107,4 +1111,75 @@ function filterToStrategy(filters: FilterSettings): BacktestStrategy {
       maxConcurrentPositions: 20,
     },
   };
+}
+
+// ============================================
+// Outcome Tracking Commands
+// ============================================
+
+/**
+ * /outcomes - View outcome tracking stats
+ */
+async function handleOutcomes(ctx: Context): Promise<void> {
+  try {
+    const trackerStats = outcomeTracker.getStats();
+    const dbStats = database.getOutcomeStats();
+    const trackedTokens = outcomeTracker.getTrackedTokens();
+
+    let message = '📊 *Outcome Tracking Stats*\n\n';
+
+    // Tracker status
+    message += '*Tracker Status:*\n';
+    message += `  Running: ${trackerStats.isRunning ? '✅ Yes' : '❌ No'}\n`;
+    message += `  Currently tracking: ${trackerStats.trackedTokens} tokens\n`;
+    message += `  Pending classification: ${trackerStats.pendingOutcomes}\n\n`;
+
+    // Database stats
+    message += '*Classified Outcomes:*\n';
+    message += `  Total: ${dbStats.total}\n`;
+
+    if (dbStats.total > 0) {
+      const outcomes = Object.entries(dbStats.byOutcome);
+      for (const [outcome, count] of outcomes) {
+        const pct = ((count / dbStats.total) * 100).toFixed(1);
+        const emoji = outcome === 'rug' ? '💀' :
+                     outcome === 'pump' ? '🚀' :
+                     outcome === 'stable' ? '➡️' :
+                     outcome === 'slow_decline' ? '📉' : '❓';
+        message += `  ${emoji} ${outcome}: ${count} (${pct}%)\n`;
+      }
+      message += `\n  Avg Peak: ${dbStats.avgPeakMultiplier.toFixed(2)}x\n`;
+    }
+
+    // Currently tracked tokens (show first 10)
+    if (trackedTokens.length > 0) {
+      message += '\n*Currently Tracking:*\n';
+      const now = Math.floor(Date.now() / 1000);
+
+      const toShow = trackedTokens.slice(0, 10);
+      for (const token of toShow) {
+        const ageHours = ((now - token.discoveredAt) / 3600).toFixed(1);
+        const peakMult = token.initialPrice > 0
+          ? (token.peakPrice / token.initialPrice).toFixed(2)
+          : '?';
+        const currentMult = token.initialPrice > 0
+          ? (token.currentPrice / token.initialPrice).toFixed(2)
+          : '?';
+        message += `  ${token.symbol}: ${ageHours}h | Peak ${peakMult}x | Now ${currentMult}x\n`;
+      }
+
+      if (trackedTokens.length > 10) {
+        message += `  ... and ${trackedTokens.length - 10} more\n`;
+      }
+    }
+
+    // Info about data collection
+    message += '\n_Tokens are tracked for 48h after discovery._\n';
+    message += '_Outcomes are classified as: rug, pump, stable, slow\\_decline_';
+
+    await ctx.reply(message, { parse_mode: 'Markdown' });
+  } catch (error) {
+    logger.error('Commands', 'Failed to get outcome stats', error as Error);
+    await ctx.reply('Failed to get outcome stats.');
+  }
 }

@@ -1119,6 +1119,217 @@ class DatabaseService {
     }
   }
 
+  // ============================================
+  // Outcome Tracking Methods
+  // ============================================
+
+  /**
+   * Save initial token outcome state (when first discovered)
+   */
+  saveTokenOutcomeInitial(data: {
+    mint: string;
+    symbol: string;
+    initialPrice: number;
+    initialLiquidity: number;
+    initialRiskScore: number;
+    initialHolders: number;
+    initialTop10Percent?: number;
+    discoveredAt: number;
+  }): void {
+    if (!this.db) return;
+
+    try {
+      this.db.run(`
+        INSERT OR IGNORE INTO token_outcomes (
+          mint, symbol, initial_price, initial_liquidity, initial_risk_score,
+          initial_holders, initial_top10_percent, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        data.mint,
+        data.symbol,
+        data.initialPrice,
+        data.initialLiquidity,
+        data.initialRiskScore,
+        data.initialHolders,
+        data.initialTop10Percent ?? null,
+        data.discoveredAt,
+      ]);
+
+      this.dirty = true;
+    } catch (error) {
+      logger.error('Database', 'Failed to save initial token outcome', error as Error);
+    }
+  }
+
+  /**
+   * Save final token outcome (when outcome is classified)
+   */
+  saveTokenOutcomeFinal(data: {
+    mint: string;
+    symbol: string;
+    outcome: string;
+    outcomeConfidence: number;
+    peakPrice: number;
+    peakLiquidity?: number;
+    peakHolders?: number;
+    finalPrice: number;
+    finalLiquidity?: number;
+    finalHolders?: number;
+    peakMultiplier: number;
+    timeToPeak?: number;
+    timeToOutcome: number;
+    peakAt?: number;
+    outcomeRecordedAt: number;
+  }): void {
+    if (!this.db) return;
+
+    try {
+      this.db.run(`
+        UPDATE token_outcomes SET
+          outcome = ?,
+          outcome_confidence = ?,
+          peak_price = ?,
+          peak_liquidity = ?,
+          peak_holders = ?,
+          final_price = ?,
+          final_liquidity = ?,
+          final_holders = ?,
+          peak_price_multiplier = ?,
+          time_to_peak = ?,
+          time_to_outcome = ?,
+          peak_at = ?,
+          outcome_recorded_at = ?
+        WHERE mint = ?
+      `, [
+        data.outcome,
+        data.outcomeConfidence,
+        data.peakPrice,
+        data.peakLiquidity ?? null,
+        data.peakHolders ?? null,
+        data.finalPrice,
+        data.finalLiquidity ?? null,
+        data.finalHolders ?? null,
+        data.peakMultiplier,
+        data.timeToPeak ?? null,
+        data.timeToOutcome,
+        data.peakAt ?? null,
+        data.outcomeRecordedAt,
+        data.mint,
+      ]);
+
+      this.dirty = true;
+      logger.debug('Database', `Saved outcome for ${data.symbol}: ${data.outcome}`);
+    } catch (error) {
+      logger.error('Database', 'Failed to save token outcome', error as Error);
+    }
+  }
+
+  /**
+   * Get pending outcomes (tokens tracked but not yet classified)
+   */
+  getPendingOutcomes(): Array<{
+    mint: string;
+    symbol: string;
+    initialPrice: number;
+    initialLiquidity: number;
+    initialRiskScore: number;
+    initialHolders: number;
+    initialTop10Percent?: number;
+    peakPrice?: number;
+    peakLiquidity?: number;
+    peakHolders?: number;
+    finalPrice?: number;
+    finalLiquidity?: number;
+    finalHolders?: number;
+    discoveredAt: number;
+    peakAt?: number;
+  }> {
+    if (!this.db) return [];
+
+    try {
+      const result = this.db.exec(`
+        SELECT * FROM token_outcomes
+        WHERE outcome IS NULL
+        ORDER BY discovered_at DESC
+      `);
+
+      if (result.length === 0) return [];
+
+      const columns = result[0].columns;
+      return result[0].values.map(values => {
+        const row: any = {};
+        columns.forEach((col, i) => {
+          row[col] = values[i];
+        });
+
+        return {
+          mint: row.mint,
+          symbol: row.symbol,
+          initialPrice: row.initial_price || 0,
+          initialLiquidity: row.initial_liquidity || 0,
+          initialRiskScore: row.initial_risk_score || 0,
+          initialHolders: row.initial_holders || 0,
+          initialTop10Percent: row.initial_top10_percent,
+          peakPrice: row.peak_price,
+          peakLiquidity: row.peak_liquidity,
+          peakHolders: row.peak_holders,
+          finalPrice: row.final_price,
+          finalLiquidity: row.final_liquidity,
+          finalHolders: row.final_holders,
+          discoveredAt: row.discovered_at,
+          peakAt: row.peak_at,
+        };
+      });
+    } catch (error) {
+      logger.error('Database', 'Failed to get pending outcomes', error as Error);
+      return [];
+    }
+  }
+
+  /**
+   * Get outcome statistics
+   */
+  getOutcomeStats(): {
+    total: number;
+    byOutcome: Record<string, number>;
+    avgPeakMultiplier: number;
+  } {
+    if (!this.db) return { total: 0, byOutcome: {}, avgPeakMultiplier: 0 };
+
+    try {
+      const totalResult = this.db.exec('SELECT COUNT(*) FROM token_outcomes WHERE outcome IS NOT NULL');
+      const total = totalResult.length > 0 ? (totalResult[0].values[0][0] as number) : 0;
+
+      const byOutcomeResult = this.db.exec(`
+        SELECT outcome, COUNT(*) as count
+        FROM token_outcomes
+        WHERE outcome IS NOT NULL
+        GROUP BY outcome
+      `);
+
+      const byOutcome: Record<string, number> = {};
+      if (byOutcomeResult.length > 0) {
+        for (const row of byOutcomeResult[0].values) {
+          byOutcome[row[0] as string] = row[1] as number;
+        }
+      }
+
+      const avgResult = this.db.exec(`
+        SELECT AVG(peak_price_multiplier)
+        FROM token_outcomes
+        WHERE outcome IS NOT NULL AND peak_price_multiplier IS NOT NULL
+      `);
+      const avgPeakMultiplier = avgResult.length > 0 && avgResult[0].values[0][0]
+        ? (avgResult[0].values[0][0] as number)
+        : 0;
+
+      return { total, byOutcome, avgPeakMultiplier };
+    } catch (error) {
+      logger.error('Database', 'Failed to get outcome stats', error as Error);
+      return { total: 0, byOutcome: {}, avgPeakMultiplier: 0 };
+    }
+  }
+
   /**
    * Close the database connection
    */

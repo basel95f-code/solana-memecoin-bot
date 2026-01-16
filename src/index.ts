@@ -20,6 +20,7 @@ import { database } from './database';
 import { rugPredictor } from './ml/rugPredictor';
 import { claudeExplainer } from './ml/claudeExplainer';
 import { apiServer } from './api/server';
+import { outcomeTracker } from './services/outcomeTracker';
 
 const MAX_QUEUE_SIZE = QUEUE.MAX_SIZE;
 const QUEUE_WARNING_THRESHOLD = QUEUE.WARNING_THRESHOLD;
@@ -124,6 +125,11 @@ class SolanaMemecoinBot {
 
       // Start advanced monitoring (volume spikes, whale alerts, etc.)
       await advancedMonitor.start();
+
+      // Start outcome tracker for backtesting data
+      await outcomeTracker.initialize();
+      outcomeTracker.start();
+      logger.info('Main', 'Outcome tracker started');
 
       // Start API server for dashboard
       apiServer.start();
@@ -567,8 +573,42 @@ class SolanaMemecoinBot {
         mlRugProbability: mlPrediction.rugProbability,
         mlConfidence: mlPrediction.confidence,
       });
+
+      // Track token for outcome analysis (for backtesting)
+      this.trackTokenForOutcome(analysis).catch(e =>
+        logger.silentError('OutcomeTracker', 'Failed to track token', e as Error)
+      );
     } catch (error) {
       logger.silentError('Database', 'Failed to save analysis', error as Error);
+    }
+  }
+
+  /**
+   * Track a token for outcome analysis
+   */
+  private async trackTokenForOutcome(analysis: TokenAnalysis): Promise<void> {
+    try {
+      // Get current price from DexScreener
+      const { dexScreenerService } = await import('./services/dexscreener');
+      const pairData = await dexScreenerService.getTokenData(analysis.token.mint);
+
+      const initialPrice = pairData ? parseFloat(pairData.priceUsd || '0') : 0;
+
+      // Only track if we have valid price data
+      if (initialPrice > 0) {
+        outcomeTracker.trackToken(
+          analysis.token.mint,
+          analysis.token.symbol,
+          initialPrice,
+          analysis.liquidity.totalLiquidityUsd,
+          analysis.risk.score,
+          analysis.holders.totalHolders,
+          analysis.holders.top10HoldersPercent
+        );
+      }
+    } catch (error) {
+      // Silently fail - outcome tracking is optional
+      logger.debug('OutcomeTracker', `Failed to track ${analysis.token.symbol}: ${(error as Error).message}`);
     }
   }
 
@@ -616,6 +656,9 @@ class SolanaMemecoinBot {
 
     // Stop wallet monitoring
     walletMonitorService.stop();
+
+    // Stop outcome tracker
+    outcomeTracker.stop();
 
     // Stop Telegram bot
     telegramService.stop();
