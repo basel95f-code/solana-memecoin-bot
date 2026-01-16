@@ -825,6 +825,301 @@ class DatabaseService {
   }
 
   /**
+   * Delete a backtest strategy
+   */
+  deleteBacktestStrategy(name: string): void {
+    if (!this.db) return;
+
+    try {
+      this.db.run('DELETE FROM backtest_strategies WHERE name = ? AND is_preset = 0', [name]);
+      this.dirty = true;
+    } catch (error) {
+      logger.error('Database', 'Failed to delete backtest strategy', error as Error);
+    }
+  }
+
+  // ============================================
+  // Snapshot Methods
+  // ============================================
+
+  /**
+   * Save a token snapshot
+   */
+  saveTokenSnapshot(snapshot: {
+    mint: string;
+    symbol?: string;
+    priceUsd: number;
+    priceSol?: number;
+    volume5m?: number;
+    volume1h?: number;
+    volume24h?: number;
+    liquidityUsd?: number;
+    marketCap?: number;
+    holderCount?: number;
+    priceChange5m?: number;
+    priceChange1h?: number;
+    priceChange24h?: number;
+    buys5m?: number;
+    sells5m?: number;
+    buys1h?: number;
+    sells1h?: number;
+    recordedAt: number;
+  }): void {
+    if (!this.db) return;
+
+    try {
+      this.db.run(`
+        INSERT OR REPLACE INTO token_snapshots (
+          mint, symbol, price_usd, price_sol,
+          volume_5m, volume_1h, volume_24h,
+          liquidity_usd, market_cap, holder_count,
+          price_change_5m, price_change_1h, price_change_24h,
+          buys_5m, sells_5m, buys_1h, sells_1h,
+          recorded_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        snapshot.mint,
+        snapshot.symbol ?? null,
+        snapshot.priceUsd,
+        snapshot.priceSol ?? null,
+        snapshot.volume5m ?? null,
+        snapshot.volume1h ?? null,
+        snapshot.volume24h ?? null,
+        snapshot.liquidityUsd ?? null,
+        snapshot.marketCap ?? null,
+        snapshot.holderCount ?? null,
+        snapshot.priceChange5m ?? null,
+        snapshot.priceChange1h ?? null,
+        snapshot.priceChange24h ?? null,
+        snapshot.buys5m ?? null,
+        snapshot.sells5m ?? null,
+        snapshot.buys1h ?? null,
+        snapshot.sells1h ?? null,
+        snapshot.recordedAt,
+      ]);
+      this.dirty = true;
+    } catch (error) {
+      logger.silentError('Database', 'Failed to save token snapshot', error as Error);
+    }
+  }
+
+  /**
+   * Get token snapshots
+   */
+  getTokenSnapshots(mint: string, limit: number = 288): any[] {
+    if (!this.db) return [];
+
+    try {
+      const result = this.db.exec(
+        'SELECT * FROM token_snapshots WHERE mint = ? ORDER BY recorded_at DESC LIMIT ?',
+        [mint, limit]
+      );
+
+      if (result.length === 0) return [];
+
+      const columns = result[0].columns;
+      return result[0].values.map(values => {
+        const row: any = {};
+        columns.forEach((col, i) => {
+          row[col] = values[i];
+        });
+        return {
+          mint: row.mint,
+          symbol: row.symbol,
+          priceUsd: row.price_usd,
+          priceSol: row.price_sol,
+          volume5m: row.volume_5m,
+          volume1h: row.volume_1h,
+          volume24h: row.volume_24h,
+          liquidityUsd: row.liquidity_usd,
+          marketCap: row.market_cap,
+          holderCount: row.holder_count,
+          priceChange5m: row.price_change_5m,
+          priceChange1h: row.price_change_1h,
+          priceChange24h: row.price_change_24h,
+          buys5m: row.buys_5m,
+          sells5m: row.sells_5m,
+          buys1h: row.buys_1h,
+          sells1h: row.sells_1h,
+          recordedAt: row.recorded_at,
+        };
+      });
+    } catch (error) {
+      logger.silentError('Database', 'Failed to get token snapshots', error as Error);
+      return [];
+    }
+  }
+
+  /**
+   * Get token snapshots within a time range
+   */
+  getTokenSnapshotsInRange(mint: string, startTime: number, endTime: number): any[] {
+    if (!this.db) return [];
+
+    try {
+      const result = this.db.exec(
+        'SELECT * FROM token_snapshots WHERE mint = ? AND recorded_at >= ? AND recorded_at <= ? ORDER BY recorded_at ASC',
+        [mint, startTime, endTime]
+      );
+
+      if (result.length === 0) return [];
+
+      const columns = result[0].columns;
+      return result[0].values.map(values => {
+        const row: any = {};
+        columns.forEach((col, i) => {
+          row[col] = values[i];
+        });
+        return {
+          mint: row.mint,
+          symbol: row.symbol,
+          priceUsd: row.price_usd,
+          priceSol: row.price_sol,
+          volume5m: row.volume_5m,
+          volume1h: row.volume_1h,
+          volume24h: row.volume_24h,
+          liquidityUsd: row.liquidity_usd,
+          marketCap: row.market_cap,
+          holderCount: row.holder_count,
+          priceChange5m: row.price_change_5m,
+          priceChange1h: row.price_change_1h,
+          priceChange24h: row.price_change_24h,
+          buys5m: row.buys_5m,
+          sells5m: row.sells_5m,
+          buys1h: row.buys_1h,
+          sells1h: row.sells_1h,
+          recordedAt: row.recorded_at,
+        };
+      });
+    } catch (error) {
+      logger.silentError('Database', 'Failed to get token snapshots in range', error as Error);
+      return [];
+    }
+  }
+
+  /**
+   * Add token to snapshot watch list
+   */
+  addToSnapshotWatchList(mint: string, symbol?: string, expiresAt?: number): void {
+    if (!this.db) return;
+
+    try {
+      const now = Math.floor(Date.now() / 1000);
+      this.db.run(`
+        INSERT OR REPLACE INTO snapshot_watch_list (
+          mint, symbol, added_at, is_active, expires_at
+        ) VALUES (?, ?, ?, 1, ?)
+      `, [mint, symbol ?? null, now, expiresAt ?? null]);
+      this.dirty = true;
+    } catch (error) {
+      logger.silentError('Database', 'Failed to add to snapshot watch list', error as Error);
+    }
+  }
+
+  /**
+   * Remove token from snapshot watch list
+   */
+  removeFromSnapshotWatchList(mint: string): void {
+    if (!this.db) return;
+
+    try {
+      this.db.run('UPDATE snapshot_watch_list SET is_active = 0 WHERE mint = ?', [mint]);
+      this.dirty = true;
+    } catch (error) {
+      logger.silentError('Database', 'Failed to remove from snapshot watch list', error as Error);
+    }
+  }
+
+  /**
+   * Get snapshot watch list
+   */
+  getSnapshotWatchList(): any[] {
+    if (!this.db) return [];
+
+    try {
+      const result = this.db.exec('SELECT * FROM snapshot_watch_list WHERE is_active = 1');
+
+      if (result.length === 0) return [];
+
+      const columns = result[0].columns;
+      return result[0].values.map(values => {
+        const row: any = {};
+        columns.forEach((col, i) => {
+          row[col] = values[i];
+        });
+        return {
+          mint: row.mint,
+          symbol: row.symbol,
+          addedAt: row.added_at,
+          lastSnapshotAt: row.last_snapshot_at,
+          snapshotCount: row.snapshot_count,
+          isActive: row.is_active === 1,
+          expiresAt: row.expires_at,
+        };
+      });
+    } catch (error) {
+      logger.silentError('Database', 'Failed to get snapshot watch list', error as Error);
+      return [];
+    }
+  }
+
+  /**
+   * Update snapshot watch entry after collecting a snapshot
+   */
+  updateSnapshotWatchEntry(mint: string): void {
+    if (!this.db) return;
+
+    try {
+      const now = Math.floor(Date.now() / 1000);
+      this.db.run(`
+        UPDATE snapshot_watch_list
+        SET last_snapshot_at = ?, snapshot_count = snapshot_count + 1
+        WHERE mint = ?
+      `, [now, mint]);
+      this.dirty = true;
+    } catch (error) {
+      logger.silentError('Database', 'Failed to update snapshot watch entry', error as Error);
+    }
+  }
+
+  /**
+   * Clean up expired snapshot watches
+   */
+  cleanupExpiredSnapshotWatches(now: number): void {
+    if (!this.db) return;
+
+    try {
+      this.db.run(
+        'UPDATE snapshot_watch_list SET is_active = 0 WHERE expires_at IS NOT NULL AND expires_at < ?',
+        [now]
+      );
+      this.dirty = true;
+    } catch (error) {
+      logger.silentError('Database', 'Failed to cleanup expired snapshot watches', error as Error);
+    }
+  }
+
+  /**
+   * Get snapshot statistics
+   */
+  getSnapshotStats(): { totalSnapshots: number; watchedTokens: number } {
+    if (!this.db) return { totalSnapshots: 0, watchedTokens: 0 };
+
+    try {
+      const snapshotsResult = this.db.exec('SELECT COUNT(*) FROM token_snapshots');
+      const watchedResult = this.db.exec('SELECT COUNT(*) FROM snapshot_watch_list WHERE is_active = 1');
+
+      return {
+        totalSnapshots: snapshotsResult.length > 0 ? (snapshotsResult[0].values[0][0] as number) : 0,
+        watchedTokens: watchedResult.length > 0 ? (watchedResult[0].values[0][0] as number) : 0,
+      };
+    } catch (error) {
+      logger.silentError('Database', 'Failed to get snapshot stats', error as Error);
+      return { totalSnapshots: 0, watchedTokens: 0 };
+    }
+  }
+
+  /**
    * Close the database connection
    */
   close(): void {

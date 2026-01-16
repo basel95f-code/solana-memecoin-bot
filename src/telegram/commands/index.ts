@@ -83,6 +83,9 @@ export function registerAllCommands(bot: Telegraf): void {
     { command: 'strategies', description: 'List backtest strategies' },
     { command: 'backtest', description: 'Run a backtest' },
     { command: 'btresults', description: 'Show backtest results' },
+    { command: 'newstrategy', description: 'Create custom strategy' },
+    { command: 'viewstrategy', description: 'View strategy details' },
+    { command: 'snapshots', description: 'Snapshot collection status' },
   ]).catch(err => console.error('Failed to set bot commands:', err));
 
   console.log('All Telegram commands registered');

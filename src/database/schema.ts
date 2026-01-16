@@ -323,5 +323,75 @@ export const MIGRATIONS: { version: number; sql: string }[] = [
       CREATE INDEX IF NOT EXISTS idx_backtest_trades_run ON backtest_trades(run_id);
       CREATE INDEX IF NOT EXISTS idx_backtest_trades_token ON backtest_trades(token_mint);
     `
+  },
+  // Token snapshots for enhanced backtesting data
+  {
+    version: 2,
+    sql: `
+      -- ============================================
+      -- Token Snapshots
+      -- Periodic price/volume/liquidity snapshots for backtesting
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS token_snapshots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mint TEXT NOT NULL,
+        symbol TEXT,
+
+        -- Price data
+        price_usd REAL,
+        price_sol REAL,
+
+        -- Volume data
+        volume_5m REAL,
+        volume_1h REAL,
+        volume_24h REAL,
+
+        -- Liquidity data
+        liquidity_usd REAL,
+
+        -- Market data
+        market_cap REAL,
+        holder_count INTEGER,
+
+        -- Price changes
+        price_change_5m REAL,
+        price_change_1h REAL,
+        price_change_24h REAL,
+
+        -- Trade activity
+        buys_5m INTEGER,
+        sells_5m INTEGER,
+        buys_1h INTEGER,
+        sells_1h INTEGER,
+
+        -- Timestamp
+        recorded_at INTEGER NOT NULL,
+
+        -- Composite unique constraint for deduplication
+        UNIQUE(mint, recorded_at)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_token_snapshots_mint ON token_snapshots(mint);
+      CREATE INDEX IF NOT EXISTS idx_token_snapshots_time ON token_snapshots(recorded_at);
+      CREATE INDEX IF NOT EXISTS idx_token_snapshots_mint_time ON token_snapshots(mint, recorded_at);
+
+      -- ============================================
+      -- Watched Tokens for Snapshots
+      -- Tokens being actively tracked for snapshots
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS snapshot_watch_list (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mint TEXT NOT NULL UNIQUE,
+        symbol TEXT,
+        added_at INTEGER NOT NULL,
+        last_snapshot_at INTEGER,
+        snapshot_count INTEGER DEFAULT 0,
+        is_active INTEGER DEFAULT 1,
+        expires_at INTEGER -- Auto-remove after this time
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_snapshot_watch_mint ON snapshot_watch_list(mint);
+      CREATE INDEX IF NOT EXISTS idx_snapshot_watch_active ON snapshot_watch_list(is_active);
+    `
   }
 ];

@@ -22,3 +22,17 @@ export {
   getPresetNames,
   formatPresetInfo,
 } from './presets';
+
+// Export strategy manager
+export {
+  strategyManager,
+  StrategyWizardState,
+  createWizardState,
+} from './strategyManager';
+
+// Export snapshot collector
+export {
+  snapshotCollector,
+  TokenSnapshot,
+  WatchedToken,
+} from './snapshotCollector';
