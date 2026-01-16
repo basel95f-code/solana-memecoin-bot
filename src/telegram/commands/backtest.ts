@@ -15,6 +15,7 @@ import {
   BacktestConfig,
   BacktestTrade,
   BacktestStrategy,
+  BacktestResults,
 } from '../../backtest';
 import {
   strategyManager,
@@ -22,6 +23,8 @@ import {
   createWizardState,
 } from '../../backtest/strategyManager';
 import { snapshotCollector } from '../../backtest/snapshotCollector';
+import { storageService } from '../../services/storage';
+import { FilterSettings } from '../../types';
 import { logger } from '../../utils/logger';
 
 // Store wizard states by chat ID
@@ -51,6 +54,10 @@ export function registerBacktestCommands(bot: Telegraf): void {
   // Snapshot commands
   bot.command('snapshots', handleSnapshots);
   bot.command('watchsnap', handleWatchSnapshot);
+
+  // Phase 3: Comparison and quick backtest
+  bot.command('compare', handleCompare);
+  bot.command('btquick', handleQuickBacktest);
 
   // Handle text input for wizard
   bot.on('text', handleWizardInput);
@@ -780,4 +787,324 @@ async function handleWatchSnapshot(ctx: Context): Promise<void> {
   } else {
     await ctx.reply('Failed to add to watch list. Max tokens may be reached.');
   }
+}
+
+// ============================================
+// Phase 3: Comparison and Quick Backtest
+// ============================================
+
+/**
+ * /compare <strategy1> <strategy2> [days] - Compare two strategies side-by-side
+ */
+async function handleCompare(ctx: Context): Promise<void> {
+  try {
+    const text = ctx.message && 'text' in ctx.message ? ctx.message.text : '';
+    const args = text.split(' ').slice(1);
+
+    if (args.length < 2) {
+      await ctx.reply(
+        '📊 *Compare Strategies*\n\n' +
+        'Usage: `/compare <strategy1> <strategy2> [days]`\n\n' +
+        '*Examples:*\n' +
+        '`/compare conservative_trader degen_sniper 30`\n' +
+        '`/compare my_strategy smart_money_follower`\n\n' +
+        'Use `/strategies` to see available strategies.',
+        { parse_mode: 'Markdown' }
+      );
+      return;
+    }
+
+    const strategy1Name = args[0].toLowerCase();
+    const strategy2Name = args[1].toLowerCase();
+    const days = parseInt(args[2]) || 30;
+
+    // Validate days
+    if (days < 1 || days > 365) {
+      await ctx.reply('Days must be between 1 and 365.');
+      return;
+    }
+
+    // Get strategies
+    let strategy1 = getPresetStrategy(strategy1Name);
+    if (!strategy1) {
+      const dbStrategy = database.getBacktestStrategy(strategy1Name);
+      if (dbStrategy) strategy1 = dbStrategy;
+    }
+
+    let strategy2 = getPresetStrategy(strategy2Name);
+    if (!strategy2) {
+      const dbStrategy = database.getBacktestStrategy(strategy2Name);
+      if (dbStrategy) strategy2 = dbStrategy;
+    }
+
+    if (!strategy1) {
+      await ctx.reply(`Strategy "${strategy1Name}" not found.`);
+      return;
+    }
+    if (!strategy2) {
+      await ctx.reply(`Strategy "${strategy2Name}" not found.`);
+      return;
+    }
+
+    // Send status message
+    const statusMsg = await ctx.reply(
+      `⏳ Comparing strategies...\n\n` +
+      `Strategy 1: ${strategy1.name}\n` +
+      `Strategy 2: ${strategy2.name}\n` +
+      `Period: Last ${days} days`
+    );
+
+    // Run both backtests
+    const config1: BacktestConfig = { strategy: strategy1, days, initialCapital: 10000 };
+    const config2: BacktestConfig = { strategy: strategy2, days, initialCapital: 10000 };
+
+    const getTokens = async (start: number, end: number) =>
+      database.getTokensWithOutcomes(start, end);
+
+    const [results1, results2] = await Promise.all([
+      runBacktest(config1, getTokens),
+      runBacktest(config2, getTokens),
+    ]);
+
+    // Format comparison
+    const comparison = formatComparison(results1, results2);
+
+    await ctx.telegram.editMessageText(
+      ctx.chat!.id,
+      statusMsg.message_id,
+      undefined,
+      comparison,
+      { parse_mode: 'Markdown' }
+    );
+
+  } catch (error) {
+    logger.error('Backtest', 'Error comparing strategies', error as Error);
+    await ctx.reply('Error comparing strategies. Please try again.');
+  }
+}
+
+/**
+ * Format side-by-side comparison of two backtest results
+ */
+function formatComparison(r1: BacktestResults, r2: BacktestResults): string {
+  const lines: string[] = [
+    '📊 *Strategy Comparison*',
+    '',
+    `Period: ${r1.daysAnalyzed} days`,
+    '',
+  ];
+
+  // Header row
+  lines.push('```');
+  lines.push(padRow('Metric', r1.strategyName.slice(0, 12), r2.strategyName.slice(0, 12)));
+  lines.push(padRow('─'.repeat(12), '─'.repeat(12), '─'.repeat(12)));
+
+  // Performance metrics
+  lines.push(padRow('Return', formatPct(r1.totalReturn), formatPct(r2.totalReturn)));
+  lines.push(padRow('Final $', formatUsd(r1.finalCapital), formatUsd(r2.finalCapital)));
+  lines.push(padRow('P&L', formatUsd(r1.totalProfitLoss), formatUsd(r2.totalProfitLoss)));
+  lines.push(padRow('', '', ''));
+
+  // Trade stats
+  lines.push(padRow('Trades', r1.totalTrades.toString(), r2.totalTrades.toString()));
+  lines.push(padRow('Win Rate', formatPct(r1.winRate), formatPct(r2.winRate)));
+  lines.push(padRow('Avg Win', formatUsd(r1.averageWin), formatUsd(r2.averageWin)));
+  lines.push(padRow('Avg Loss', formatUsd(r1.averageLoss), formatUsd(r2.averageLoss)));
+  lines.push(padRow('', '', ''));
+
+  // Risk metrics
+  lines.push(padRow('Drawdown', formatPct(r1.maxDrawdown), formatPct(r2.maxDrawdown)));
+  lines.push(padRow('Sharpe', r1.sharpeRatio.toFixed(2), r2.sharpeRatio.toFixed(2)));
+  lines.push(padRow('Profit F.', formatPF(r1.profitFactor), formatPF(r2.profitFactor)));
+  lines.push('```');
+
+  // Winner summary
+  lines.push('');
+  lines.push('*Best By:*');
+
+  const winners: string[] = [];
+  if (r1.totalReturn > r2.totalReturn) {
+    winners.push(`Return: ${r1.strategyName}`);
+  } else if (r2.totalReturn > r1.totalReturn) {
+    winners.push(`Return: ${r2.strategyName}`);
+  }
+
+  if (r1.winRate > r2.winRate) {
+    winners.push(`Win Rate: ${r1.strategyName}`);
+  } else if (r2.winRate > r1.winRate) {
+    winners.push(`Win Rate: ${r2.strategyName}`);
+  }
+
+  if (r1.sharpeRatio > r2.sharpeRatio) {
+    winners.push(`Sharpe: ${r1.strategyName}`);
+  } else if (r2.sharpeRatio > r1.sharpeRatio) {
+    winners.push(`Sharpe: ${r2.strategyName}`);
+  }
+
+  if (r1.maxDrawdown < r2.maxDrawdown) {
+    winners.push(`Drawdown: ${r1.strategyName}`);
+  } else if (r2.maxDrawdown < r1.maxDrawdown) {
+    winners.push(`Drawdown: ${r2.strategyName}`);
+  }
+
+  for (const w of winners) {
+    lines.push(`• ${w}`);
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Pad a row for table display
+ */
+function padRow(label: string, val1: string, val2: string): string {
+  return `${label.padEnd(12)} ${val1.padStart(12)} ${val2.padStart(12)}`;
+}
+
+function formatPct(value: number): string {
+  const sign = value >= 0 ? '+' : '';
+  return `${sign}${value.toFixed(1)}%`;
+}
+
+function formatUsd(value: number): string {
+  const sign = value >= 0 ? '' : '-';
+  return `${sign}$${Math.abs(value).toFixed(0)}`;
+}
+
+function formatPF(value: number): string {
+  return value === Infinity ? '∞' : value.toFixed(2);
+}
+
+/**
+ * /btquick [days] - Quick backtest using current filter profile
+ */
+async function handleQuickBacktest(ctx: Context): Promise<void> {
+  try {
+    const chatId = ctx.chat?.id?.toString();
+    if (!chatId) return;
+
+    const text = ctx.message && 'text' in ctx.message ? ctx.message.text : '';
+    const args = text.split(' ').slice(1);
+    const days = parseInt(args[0]) || 30;
+
+    // Validate days
+    if (days < 1 || days > 365) {
+      await ctx.reply('Days must be between 1 and 365.');
+      return;
+    }
+
+    // Get user's current filter settings
+    const userSettings = storageService.getUserSettings(chatId);
+    const filters = userSettings.filters;
+
+    // Convert filter profile to strategy
+    const strategy = filterToStrategy(filters);
+
+    // Send status message
+    const statusMsg = await ctx.reply(
+      `⏳ Quick backtest using your "${filters.profile}" profile...\n\n` +
+      `Period: Last ${days} days\n` +
+      `Initial Capital: $10,000`
+    );
+
+    // Run backtest
+    const config: BacktestConfig = {
+      strategy,
+      days,
+      initialCapital: 10000,
+    };
+
+    const results = await runBacktest(
+      config,
+      async (start, end) => database.getTokensWithOutcomes(start, end)
+    );
+
+    // Format results
+    const resultLines: string[] = [
+      `📊 *Quick Backtest Results*`,
+      '',
+      `*Profile:* ${filters.profile}`,
+      `*Period:* ${results.daysAnalyzed} days`,
+      '',
+      '*Performance:*',
+      `  Total Return: ${results.totalReturn >= 0 ? '+' : ''}${results.totalReturn.toFixed(2)}%`,
+      `  Final Capital: $${results.finalCapital.toFixed(2)}`,
+      `  P&L: ${results.totalProfitLoss >= 0 ? '+' : ''}$${results.totalProfitLoss.toFixed(2)}`,
+      '',
+      '*Trade Stats:*',
+      `  Total Trades: ${results.totalTrades}`,
+      `  Win Rate: ${results.winRate.toFixed(1)}%`,
+      `  Winners: ${results.winningTrades} | Losers: ${results.losingTrades}`,
+    ];
+
+    if (results.totalTrades > 0) {
+      resultLines.push('');
+      resultLines.push('*Risk Metrics:*');
+      resultLines.push(`  Max Drawdown: ${results.maxDrawdown.toFixed(2)}%`);
+      resultLines.push(`  Sharpe Ratio: ${results.sharpeRatio.toFixed(2)}`);
+      resultLines.push(`  Profit Factor: ${results.profitFactor === Infinity ? '∞' : results.profitFactor.toFixed(2)}`);
+    } else {
+      resultLines.push('');
+      resultLines.push('_No tokens matched your filter in this period._');
+      resultLines.push('_Try a longer period or adjust your filters._');
+    }
+
+    resultLines.push('');
+    resultLines.push('_Tip: Use `/newstrategy` to create a strategy with custom exit rules._');
+
+    await ctx.telegram.editMessageText(
+      ctx.chat!.id,
+      statusMsg.message_id,
+      undefined,
+      resultLines.join('\n'),
+      { parse_mode: 'Markdown' }
+    );
+
+  } catch (error) {
+    logger.error('Backtest', 'Error running quick backtest', error as Error);
+    await ctx.reply('Error running quick backtest. Please try again.');
+  }
+}
+
+/**
+ * Convert user's filter settings to a backtest strategy
+ */
+function filterToStrategy(filters: FilterSettings): BacktestStrategy {
+  return {
+    name: `profile_${filters.profile}`,
+    description: `Quick backtest using ${filters.profile} profile`,
+    entry: {
+      minRiskScore: filters.minRiskScore,
+      minLiquidity: filters.minLiquidity,
+      maxLiquidity: filters.maxLiquidity,
+      minHolders: filters.minHolders,
+      maxTop10Percent: filters.maxTop10Percent,
+      maxSingleHolderPercent: filters.maxSingleHolderPercent,
+      requireMintRevoked: filters.requireMintRevoked,
+      requireFreezeRevoked: filters.requireFreezeRevoked,
+      requireLPBurned: filters.requireLPBurned,
+      lpBurnedMinPercent: filters.lpBurnedMinPercent,
+      minTokenAge: filters.minTokenAge,
+      maxTokenAge: filters.maxTokenAge,
+      requireSocials: filters.requireSocials,
+    },
+    exit: {
+      // Default exit rules for quick backtest
+      takeProfitLevels: [
+        { percent: 50, sellPercent: 30 },
+        { percent: 100, sellPercent: 40 },
+        { percent: 200, sellPercent: 100 },
+      ],
+      stopLossPercent: -30,
+      trailingStopPercent: 20,
+      trailingStopActivation: 50,
+      exitOnRugSignal: true,
+    },
+    sizing: {
+      method: 'percent_of_capital',
+      percentOfCapital: 5,
+      maxPositionSize: 1000,
+      maxConcurrentPositions: 20,
+    },
+  };
 }
