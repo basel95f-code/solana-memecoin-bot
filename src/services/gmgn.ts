@@ -2,6 +2,7 @@ import axios, { AxiosInstance } from 'axios';
 import { GMGNToken, GMGNResponse, SmartMoneyActivity, TrendingToken } from '../types';
 import { withRetry, RateLimiter } from '../utils/retry';
 import { flareSolverr } from './flaresolverr';
+import { gmgnScraper } from './gmgnScraper';
 
 const BASE_URL = 'https://gmgn.ai/defi/quotation/v1';
 const CACHE_TTL = 30000; // 30 seconds (GMGN updates frequently)
@@ -126,13 +127,41 @@ class GMGNService {
         const result = await this.fetchViaFlareSolverr(fullUrl, cacheKey, limit);
         if (result) return result;
 
-        // Both failed
+        // FlareSolverr API failed, try scraping as last resort
+        console.warn('GMGN: FlareSolverr API failed. Trying web scraping...');
+        const scrapedResult = await this.fetchViaScraping(cacheKey, limit);
+        if (scrapedResult) return scrapedResult;
+
+        // All methods failed
         gmgnAvailable = false;
-        console.warn('GMGN: FlareSolverr not available. Will retry in 60s.');
+        console.warn('GMGN: All methods failed. Will retry in 60s.');
       } else {
         console.error('GMGN: Failed to fetch trending:', error.message);
       }
       return [];
+    }
+  }
+
+  /**
+   * Fetch data via web scraping (last resort)
+   */
+  private async fetchViaScraping(cacheKey: string, limit: number): Promise<GMGNToken[] | null> {
+    try {
+      const tokens = await gmgnScraper.getTrendingAsGMGNTokens(limit);
+
+      if (tokens.length === 0) {
+        return null;
+      }
+
+      // Success via scraping
+      gmgnAvailable = true;
+      console.log(`GMGN: Successfully scraped ${tokens.length} tokens from web page`);
+
+      this.setCache(cacheKey, tokens);
+      return tokens;
+    } catch (error: any) {
+      console.error('GMGN: Scraping failed:', error.message);
+      return null;
     }
   }
 
