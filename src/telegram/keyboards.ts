@@ -50,17 +50,24 @@ export function watchlistKeyboard(tokens: WatchedToken[]): Markup.Markup<InlineK
 }
 
 export function filterProfileKeyboard(currentProfile: FilterProfile): Markup.Markup<InlineKeyboardMarkup> {
-  const profiles: FilterProfile[] = ['conservative', 'balanced', 'aggressive', 'degen'];
+  // Main risk profiles row
+  const riskProfiles: FilterProfile[] = ['sniper', 'early', 'balanced', 'conservative'];
+  // Strategy profiles row
+  const strategyProfiles: FilterProfile[] = ['degen', 'fresh', 'trending', 'whale'];
 
-  const buttons = profiles.map(profile => {
-    const emoji = profile === currentProfile ? '✓ ' : '';
-    const label = profile.charAt(0).toUpperCase() + profile.slice(1);
-    return Markup.button.callback(`${emoji}${label}`, `filter_${profile}`);
-  });
+  const makeButton = (profile: FilterProfile) => {
+    const emojis: Record<string, string> = {
+      sniper: '🎯', early: '⚡', balanced: '⚖️', conservative: '🛡️',
+      degen: '🎰', fresh: '🆕', trending: '🔥', whale: '🐋',
+    };
+    const check = profile === currentProfile ? '✓' : '';
+    return Markup.button.callback(`${check}${emojis[profile] || ''}${profile}`, `filter_${profile}`);
+  };
 
   return Markup.inlineKeyboard([
-    buttons.slice(0, 2),
-    buttons.slice(2, 4),
+    riskProfiles.map(makeButton),
+    strategyProfiles.map(makeButton),
+    [Markup.button.callback('📋 More profiles...', 'show_all_profiles')],
   ]);
 }
 

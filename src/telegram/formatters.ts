@@ -505,52 +505,104 @@ export function formatSmartMoneyList(tokens: SmartMoneyPick[], title: string): s
 
 export function formatSettings(settings: FilterSettings): string {
   const profileEmoji: Record<string, string> = {
-    conservative: '🛡️',
-    balanced: '⚖️',
-    aggressive: '🎯',
-    degen: '🎰',
+    // Risk-based
+    sniper: '🎯', early: '⚡', balanced: '⚖️', conservative: '🛡️',
+    graduation: '🎓', whale: '🐋', degen: '🎰', cto: '🔍',
+    // Market cap
+    micro: '💎', small: '🥉', mid: '🥈', large: '🥇', mega: '👑',
+    // Strategy
+    trending: '🔥', momentum: '📈', fresh: '🆕', revival: '💀', runner: '🏃',
     custom: '⚙️',
   };
 
-  return [
+  const lines = [
     `⚙️ <b>SETTINGS</b>`,
     ``,
     `<b>Profile:</b> ${profileEmoji[settings.profile] || ''} ${settings.profile.toUpperCase()}`,
     `<b>Alerts:</b> ${settings.alertsEnabled ? '✅ Enabled' : '❌ Disabled'}`,
+    settings.fastMode ? `<b>Fast Mode:</b> ✅ Enabled` : null,
     ``,
-    `━━━ <b>FILTERS</b> ━━━`,
-    `Min Liquidity: $${formatNumber(settings.minLiquidity)}`,
+    `━━━ <b>LIQUIDITY</b> ━━━`,
+    `Min: $${formatNumber(settings.minLiquidity)}`,
+    settings.maxLiquidity ? `Max: $${formatNumber(settings.maxLiquidity)}` : null,
+    ``,
+    `━━━ <b>HOLDERS</b> ━━━`,
     `Max Top 10: ${settings.maxTop10Percent}%`,
+    settings.maxSingleHolderPercent ? `Max Single: ${settings.maxSingleHolderPercent}%` : null,
     `Min Holders: ${settings.minHolders}`,
+    ``,
+    `━━━ <b>TOKEN AGE</b> ━━━`,
+    `Min Age: ${Math.floor(settings.minTokenAge / 60)}min`,
+    settings.maxTokenAge ? `Max Age: ${Math.floor(settings.maxTokenAge / 60)}min` : null,
+    ``,
+    `━━━ <b>MARKET CAP</b> ━━━`,
+    settings.minMcap ? `Min MCap: $${formatNumber(settings.minMcap)}` : `Min MCap: None`,
+    settings.maxMcap ? `Max MCap: $${formatNumber(settings.maxMcap)}` : `Max MCap: None`,
+    ``,
+    `━━━ <b>SCORES</b> ━━━`,
     `Min Risk Score: ${settings.minRiskScore}`,
-    `Min Token Age: ${Math.floor(settings.minTokenAge / 60)}min`,
+    settings.minOpportunityScore ? `Min Opportunity: ${settings.minOpportunityScore}` : null,
     ``,
     `━━━ <b>REQUIREMENTS</b> ━━━`,
     `Mint Revoked: ${settings.requireMintRevoked ? '✅' : '❌'}`,
     `Freeze Revoked: ${settings.requireFreezeRevoked ? '✅' : '❌'}`,
-    `LP Burned: ${settings.requireLPBurned ? '✅' : '❌'}`,
+    `LP Burned: ${settings.requireLPBurned ? '✅' : '❌'}${settings.lpBurnedMinPercent ? ` (${settings.lpBurnedMinPercent}%+)` : ''}`,
     `Has Socials: ${settings.requireSocials ? '✅' : '❌'}`,
-    ``,
-    `━━━ <b>OTHER</b> ━━━`,
-    `Timezone: ${settings.timezone}`,
+  ];
+
+  // Add Pump.fun specific if set
+  if (settings.minBondingCurve || settings.maxBondingCurve) {
+    lines.push(``);
+    lines.push(`━━━ <b>PUMP.FUN</b> ━━━`);
+    if (settings.minBondingCurve) lines.push(`Min Bonding: ${settings.minBondingCurve}%`);
+    if (settings.maxBondingCurve) lines.push(`Max Bonding: ${settings.maxBondingCurve}%`);
+  }
+
+  // Add volume/momentum if set
+  if (settings.volumeSpikeMultiplier || settings.minPriceChange1h || settings.minVolume24h) {
+    lines.push(``);
+    lines.push(`━━━ <b>MOMENTUM</b> ━━━`);
+    if (settings.volumeSpikeMultiplier) lines.push(`Volume Spike: ${settings.volumeSpikeMultiplier}x`);
+    if (settings.minPriceChange1h) lines.push(`Min 1h Change: ${settings.minPriceChange1h}%`);
+    if (settings.maxPriceChange1h) lines.push(`Max 1h Change: ${settings.maxPriceChange1h}%`);
+    if (settings.minVolume24h) lines.push(`Min 24h Volume: $${formatNumber(settings.minVolume24h)}`);
+  }
+
+  lines.push(``);
+  lines.push(`━━━ <b>OTHER</b> ━━━`);
+  lines.push(`Timezone: ${settings.timezone}`);
+  lines.push(
     settings.quietHoursStart !== undefined && settings.quietHoursEnd !== undefined
       ? `Quiet Hours: ${settings.quietHoursStart}:00 - ${settings.quietHoursEnd}:00`
-      : `Quiet Hours: Not set`,
-  ].join('\n');
+      : `Quiet Hours: Not set`
+  );
+
+  return lines.filter(l => l !== null).join('\n');
 }
 
 export function formatFilterProfile(profile: string): string {
   const profiles: Record<string, string> = {
-    conservative: [
-      `🛡️ <b>CONSERVATIVE</b>`,
+    // Risk-based profiles
+    sniper: [
+      `🎯 <b>SNIPER</b>`,
       ``,
-      `Safe, established tokens only.`,
+      `Catch tokens at birth. Maximum risk.`,
       ``,
-      `• Min Liquidity: $10,000`,
-      `• Max Top 10: 25%`,
-      `• Min Holders: 100`,
-      `• Min Score: 75`,
-      `• Requires: Mint + Freeze revoked, LP burned, socials`,
+      `• Min Liquidity: $100`,
+      `• Max Top 10: 80%`,
+      `• Max Age: 1 minute`,
+      `• Fast Mode: Enabled`,
+      `• No safety requirements`,
+    ].join('\n'),
+    early: [
+      `⚡ <b>EARLY</b>`,
+      ``,
+      `Early entry with basic safety.`,
+      ``,
+      `• Min Liquidity: $500`,
+      `• Max Top 10: 60%`,
+      `• Max Age: 10 minutes`,
+      `• Requires: Mint revoked`,
     ].join('\n'),
     balanced: [
       `⚖️ <b>BALANCED</b>`,
@@ -559,35 +611,165 @@ export function formatFilterProfile(profile: string): string {
       ``,
       `• Min Liquidity: $2,000`,
       `• Max Top 10: 40%`,
+      `• Max Single: 10%`,
       `• Min Holders: 25`,
       `• Min Score: 50`,
       `• Requires: Mint revoked`,
     ].join('\n'),
-    aggressive: [
-      `🎯 <b>AGGRESSIVE</b>`,
+    conservative: [
+      `🛡️ <b>CONSERVATIVE</b>`,
       ``,
-      `More signals, higher risk.`,
+      `Safe, established tokens only.`,
       ``,
-      `• Min Liquidity: $500`,
-      `• Max Top 10: 60%`,
-      `• Min Holders: 10`,
-      `• Min Score: 30`,
-      `• No strict requirements`,
+      `• Min Liquidity: $10,000`,
+      `• Max Top 10: 25%`,
+      `• Min Holders: 100`,
+      `• Min Score: 70`,
+      `• Requires: Mint + Freeze revoked, LP 50%+ burned, socials`,
+    ].join('\n'),
+    graduation: [
+      `🎓 <b>GRADUATION</b>`,
+      ``,
+      `Track Pump.fun tokens near graduation.`,
+      ``,
+      `• Min Liquidity: $5,000`,
+      `• Bonding Curve: 70-95%`,
+      `• Min Holders: 50`,
+      `• Graduation = migration to Raydium`,
+    ].join('\n'),
+    whale: [
+      `🐋 <b>WHALE</b>`,
+      ``,
+      `Alert on whale activity only.`,
+      ``,
+      `• Min Liquidity: $5,000`,
+      `• Min 24h Volume: $50,000`,
+      `• Focus on whale buys/sells`,
     ].join('\n'),
     degen: [
       `🎰 <b>DEGEN</b>`,
       ``,
       `Everything. DYOR.`,
       ``,
+      `• Min Liquidity: $50`,
+      `• No holder limits`,
+      `• No requirements`,
+      `• Maximum risk, maximum potential`,
+    ].join('\n'),
+    cto: [
+      `🔍 <b>CTO (Community Takeover)</b>`,
+      ``,
+      `Dev abandoned tokens with community revival.`,
+      ``,
+      `• Age: 24h - 7 days`,
+      `• MCap: $10K - $250K`,
+      `• Requires: Mint + Freeze revoked`,
+      `• Look for community-driven revivals`,
+    ].join('\n'),
+
+    // Market cap profiles
+    micro: [
+      `💎 <b>MICRO CAP</b>`,
+      ``,
+      `High risk/high reward gems. $1K-$50K MCap.`,
+      ``,
+      `• MCap: $1K - $50K`,
       `• Min Liquidity: $100`,
-      `• Max Top 10: 90%`,
-      `• Min Holders: 3`,
-      `• Min Score: 0`,
-      `• No requirements - you decide`,
+      `• 100x potential, extreme risk`,
+    ].join('\n'),
+    small: [
+      `🥉 <b>SMALL CAP</b>`,
+      ``,
+      `Small cap plays. $50K-$500K MCap.`,
+      ``,
+      `• MCap: $50K - $500K`,
+      `• Min Liquidity: $1,000`,
+      `• 10-50x potential`,
+    ].join('\n'),
+    mid: [
+      `🥈 <b>MID CAP</b>`,
+      ``,
+      `More established tokens. $500K-$5M MCap.`,
+      ``,
+      `• MCap: $500K - $5M`,
+      `• Min Liquidity: $10,000`,
+      `• 5-10x potential`,
+    ].join('\n'),
+    large: [
+      `🥇 <b>LARGE CAP</b>`,
+      ``,
+      `Safer plays. $5M-$50M MCap.`,
+      ``,
+      `• MCap: $5M - $50M`,
+      `• Min Liquidity: $50,000`,
+      `• 2-5x potential, lower risk`,
+    ].join('\n'),
+    mega: [
+      `👑 <b>MEGA CAP</b>`,
+      ``,
+      `Blue chip memecoins. $50M+ MCap.`,
+      ``,
+      `• MCap: $50M+`,
+      `• Min Liquidity: $100,000`,
+      `• Established tokens only`,
+    ].join('\n'),
+
+    // Strategy profiles
+    trending: [
+      `🔥 <b>TRENDING</b>`,
+      ``,
+      `Tokens with volume spikes.`,
+      ``,
+      `• Volume Spike: 3x+`,
+      `• Min Liquidity: $2,000`,
+      `• Catch the momentum`,
+    ].join('\n'),
+    momentum: [
+      `📈 <b>MOMENTUM</b>`,
+      ``,
+      `Price up with volume increase.`,
+      ``,
+      `• Price up 50%+ in 1h`,
+      `• Volume spike 2x+`,
+      `• Ride the wave`,
+    ].join('\n'),
+    fresh: [
+      `🆕 <b>FRESH</b>`,
+      ``,
+      `Catch tokens at birth.`,
+      ``,
+      `• Max Age: 5 minutes`,
+      `• Fast Mode: Enabled`,
+      `• High risk, first mover advantage`,
+    ].join('\n'),
+    revival: [
+      `💀 <b>REVIVAL</b>`,
+      ``,
+      `Down 80%+ but showing volume comeback.`,
+      ``,
+      `• Down 80%+ from highs`,
+      `• Volume spike 2x+`,
+      `• Mint revoked required`,
+      `• Second chance plays`,
+    ].join('\n'),
+    runner: [
+      `🏃 <b>RUNNER</b>`,
+      ``,
+      `Already pumping, ride the momentum.`,
+      ``,
+      `• Up 100%+ today`,
+      `• Min Volume: $100K`,
+      `• Already validated, catch continuation`,
+    ].join('\n'),
+    custom: [
+      `⚙️ <b>CUSTOM</b>`,
+      ``,
+      `Your custom settings.`,
+      `Use /set to customize individual parameters.`,
     ].join('\n'),
   };
 
-  return profiles[profile] || 'Unknown profile';
+  return profiles[profile] || `Unknown profile: ${profile}`;
 }
 
 // ============================================

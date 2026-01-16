@@ -191,19 +191,49 @@ export const USDT_MINT = 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB';
 // Filter Profiles & User Settings
 // ============================================
 
-export type FilterProfile = 'conservative' | 'balanced' | 'aggressive' | 'degen' | 'custom';
+// Risk-based profiles
+export type RiskProfile = 'sniper' | 'early' | 'balanced' | 'conservative' | 'graduation' | 'whale' | 'degen' | 'cto';
+// Market cap profiles
+export type McapProfile = 'micro' | 'small' | 'mid' | 'large' | 'mega';
+// Strategy profiles
+export type StrategyProfile = 'trending' | 'momentum' | 'fresh' | 'revival' | 'runner';
+// All profiles
+export type FilterProfile = RiskProfile | McapProfile | StrategyProfile | 'custom';
 
 export interface FilterSettings {
   profile: FilterProfile;
+  // Liquidity filters
   minLiquidity: number;
+  maxLiquidity?: number;
+  // Holder filters
   maxTop10Percent: number;
+  maxSingleHolderPercent?: number;
   minHolders: number;
+  // Risk/Score filters
   minRiskScore: number;
-  minTokenAge: number; // seconds
+  minOpportunityScore?: number;
+  // Token age filters (seconds)
+  minTokenAge: number;
+  maxTokenAge?: number;
+  // Market cap filters
+  minMcap?: number;
+  maxMcap?: number;
+  // Safety requirements
   requireMintRevoked: boolean;
   requireFreezeRevoked: boolean;
   requireLPBurned: boolean;
+  lpBurnedMinPercent?: number;
   requireSocials: boolean;
+  // Pump.fun specific
+  minBondingCurve?: number;
+  maxBondingCurve?: number;
+  // Volume/momentum filters
+  volumeSpikeMultiplier?: number;
+  minPriceChange1h?: number;
+  maxPriceChange1h?: number;
+  minVolume24h?: number;
+  // Mode settings
+  fastMode?: boolean;
   alertsEnabled: boolean;
   quietHoursStart?: number; // 0-23
   quietHoursEnd?: number; // 0-23
@@ -420,21 +450,48 @@ export interface SmartMoneyActivity {
   isSmartMoneyBullish: boolean;
 }
 
-export const FILTER_PRESETS: Record<Exclude<FilterProfile, 'custom'>, Omit<FilterSettings, 'profile' | 'alertsEnabled' | 'quietHoursStart' | 'quietHoursEnd' | 'timezone'>> = {
-  conservative: {
-    minLiquidity: 10000,
-    maxTop10Percent: 25,
-    minHolders: 100,
-    minRiskScore: 75,
-    minTokenAge: 3600, // 1 hour
-    requireMintRevoked: true,
-    requireFreezeRevoked: true,
-    requireLPBurned: true,
-    requireSocials: true,
+// Base filter settings type for presets (excludes user-specific fields)
+type FilterPreset = Omit<FilterSettings, 'profile' | 'alertsEnabled' | 'quietHoursStart' | 'quietHoursEnd' | 'timezone'>;
+
+export const FILTER_PRESETS: Record<Exclude<FilterProfile, 'custom'>, FilterPreset> = {
+  // ==========================================
+  // RISK-BASED PROFILES
+  // ==========================================
+
+  // 🎯 SNIPER: Catch tokens at birth, maximum risk
+  sniper: {
+    minLiquidity: 100,
+    maxTop10Percent: 80,
+    minHolders: 3,
+    minRiskScore: 0,
+    minTokenAge: 0,
+    maxTokenAge: 60, // Max 1 minute old
+    requireMintRevoked: false,
+    requireFreezeRevoked: false,
+    requireLPBurned: false,
+    requireSocials: false,
+    fastMode: true,
   },
+
+  // ⚡ EARLY: Early entry with basic safety
+  early: {
+    minLiquidity: 500,
+    maxTop10Percent: 60,
+    minHolders: 10,
+    minRiskScore: 20,
+    minTokenAge: 0,
+    maxTokenAge: 600, // Max 10 minutes old
+    requireMintRevoked: true,
+    requireFreezeRevoked: false,
+    requireLPBurned: false,
+    requireSocials: false,
+  },
+
+  // ⚖️ BALANCED: Default moderate risk
   balanced: {
     minLiquidity: 2000,
     maxTop10Percent: 40,
+    maxSingleHolderPercent: 10,
     minHolders: 25,
     minRiskScore: 50,
     minTokenAge: 600, // 10 minutes
@@ -443,24 +500,231 @@ export const FILTER_PRESETS: Record<Exclude<FilterProfile, 'custom'>, Omit<Filte
     requireLPBurned: false,
     requireSocials: false,
   },
-  aggressive: {
-    minLiquidity: 500,
-    maxTop10Percent: 60,
-    minHolders: 10,
-    minRiskScore: 30,
-    minTokenAge: 120, // 2 minutes
+
+  // 🛡️ CONSERVATIVE: Safe, established tokens
+  conservative: {
+    minLiquidity: 10000,
+    maxTop10Percent: 25,
+    maxSingleHolderPercent: 5,
+    minHolders: 100,
+    minRiskScore: 70,
+    minTokenAge: 3600, // 1 hour
+    requireMintRevoked: true,
+    requireFreezeRevoked: true,
+    requireLPBurned: true,
+    lpBurnedMinPercent: 50,
+    requireSocials: true,
+  },
+
+  // 🎓 GRADUATION: Track Pump.fun graduation
+  graduation: {
+    minLiquidity: 5000,
+    maxTop10Percent: 50,
+    minHolders: 50,
+    minRiskScore: 40,
+    minTokenAge: 0,
+    minBondingCurve: 70,
+    maxBondingCurve: 95,
     requireMintRevoked: false,
     requireFreezeRevoked: false,
     requireLPBurned: false,
     requireSocials: false,
   },
+
+  // 🐋 WHALE: Only alert on whale activity
+  whale: {
+    minLiquidity: 5000,
+    maxTop10Percent: 100, // No limit - we're tracking whales
+    minHolders: 20,
+    minRiskScore: 30,
+    minTokenAge: 0,
+    minVolume24h: 50000,
+    requireMintRevoked: false,
+    requireFreezeRevoked: false,
+    requireLPBurned: false,
+    requireSocials: false,
+  },
+
+  // 🎰 DEGEN: Alert on everything
   degen: {
-    minLiquidity: 100,
-    maxTop10Percent: 90,
-    minHolders: 3,
+    minLiquidity: 50,
+    maxTop10Percent: 100,
+    minHolders: 1,
     minRiskScore: 0,
     minTokenAge: 0,
     requireMintRevoked: false,
+    requireFreezeRevoked: false,
+    requireLPBurned: false,
+    requireSocials: false,
+  },
+
+  // 🔍 CTO: Community takeover plays
+  cto: {
+    minLiquidity: 1000,
+    maxTop10Percent: 50,
+    minHolders: 30,
+    minRiskScore: 30,
+    minTokenAge: 86400, // 24 hours minimum
+    maxTokenAge: 604800, // 7 days maximum
+    minMcap: 10000,
+    maxMcap: 250000,
+    requireMintRevoked: true, // Dev abandoned = mint revoked
+    requireFreezeRevoked: true,
+    requireLPBurned: false,
+    requireSocials: false,
+  },
+
+  // ==========================================
+  // MARKET CAP PROFILES
+  // ==========================================
+
+  // 💎 MICRO: High risk/high reward gems
+  micro: {
+    minLiquidity: 100,
+    maxTop10Percent: 70,
+    minHolders: 5,
+    minRiskScore: 0,
+    minTokenAge: 0,
+    minMcap: 1000,
+    maxMcap: 50000,
+    requireMintRevoked: false,
+    requireFreezeRevoked: false,
+    requireLPBurned: false,
+    requireSocials: false,
+  },
+
+  // 🥉 SMALL: Small cap plays
+  small: {
+    minLiquidity: 1000,
+    maxTop10Percent: 50,
+    minHolders: 30,
+    minRiskScore: 30,
+    minTokenAge: 300,
+    minMcap: 50000,
+    maxMcap: 500000,
+    requireMintRevoked: true,
+    requireFreezeRevoked: false,
+    requireLPBurned: false,
+    requireSocials: false,
+  },
+
+  // 🥈 MID: More established tokens
+  mid: {
+    minLiquidity: 10000,
+    maxTop10Percent: 35,
+    minHolders: 100,
+    minRiskScore: 50,
+    minTokenAge: 1800,
+    minMcap: 500000,
+    maxMcap: 5000000,
+    requireMintRevoked: true,
+    requireFreezeRevoked: true,
+    requireLPBurned: false,
+    requireSocials: false,
+  },
+
+  // 🥇 LARGE: Safer plays
+  large: {
+    minLiquidity: 50000,
+    maxTop10Percent: 25,
+    minHolders: 500,
+    minRiskScore: 60,
+    minTokenAge: 3600,
+    minMcap: 5000000,
+    maxMcap: 50000000,
+    requireMintRevoked: true,
+    requireFreezeRevoked: true,
+    requireLPBurned: true,
+    requireSocials: true,
+  },
+
+  // 👑 MEGA: Blue chip memecoins only
+  mega: {
+    minLiquidity: 100000,
+    maxTop10Percent: 20,
+    minHolders: 1000,
+    minRiskScore: 70,
+    minTokenAge: 86400,
+    minMcap: 50000000,
+    requireMintRevoked: true,
+    requireFreezeRevoked: true,
+    requireLPBurned: true,
+    requireSocials: true,
+  },
+
+  // ==========================================
+  // STRATEGY PROFILES
+  // ==========================================
+
+  // 🔥 TRENDING: Volume spike detection
+  trending: {
+    minLiquidity: 2000,
+    maxTop10Percent: 50,
+    minHolders: 20,
+    minRiskScore: 30,
+    minTokenAge: 0,
+    volumeSpikeMultiplier: 3, // 3x volume spike
+    requireMintRevoked: false,
+    requireFreezeRevoked: false,
+    requireLPBurned: false,
+    requireSocials: false,
+  },
+
+  // 📈 MOMENTUM: Price up with volume
+  momentum: {
+    minLiquidity: 2000,
+    maxTop10Percent: 50,
+    minHolders: 30,
+    minRiskScore: 30,
+    minTokenAge: 300,
+    minPriceChange1h: 50, // Up 50%+ in 1h
+    volumeSpikeMultiplier: 2,
+    requireMintRevoked: false,
+    requireFreezeRevoked: false,
+    requireLPBurned: false,
+    requireSocials: false,
+  },
+
+  // 🆕 FRESH: Catch at birth
+  fresh: {
+    minLiquidity: 100,
+    maxTop10Percent: 80,
+    minHolders: 3,
+    minRiskScore: 0,
+    minTokenAge: 0,
+    maxTokenAge: 300, // Max 5 minutes old
+    requireMintRevoked: false,
+    requireFreezeRevoked: false,
+    requireLPBurned: false,
+    requireSocials: false,
+    fastMode: true,
+  },
+
+  // 💀 REVIVAL: Down 80%+ from ATH, volume comeback
+  revival: {
+    minLiquidity: 1000,
+    maxTop10Percent: 60,
+    minHolders: 20,
+    minRiskScore: 20,
+    minTokenAge: 3600,
+    maxPriceChange1h: -80, // Down 80% from recent high
+    volumeSpikeMultiplier: 2,
+    requireMintRevoked: true,
+    requireFreezeRevoked: false,
+    requireLPBurned: false,
+    requireSocials: false,
+  },
+
+  // 🏃 RUNNER: Already pumping, ride momentum
+  runner: {
+    minLiquidity: 5000,
+    maxTop10Percent: 40,
+    minHolders: 50,
+    minRiskScore: 40,
+    minTokenAge: 600,
+    minPriceChange1h: 100, // Up 100%+ today
+    minVolume24h: 100000,
+    requireMintRevoked: true,
     requireFreezeRevoked: false,
     requireLPBurned: false,
     requireSocials: false,
