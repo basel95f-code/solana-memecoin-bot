@@ -8,6 +8,7 @@ import {
   SocialAnalysis,
   SentimentAnalysis,
   RugCheckResult,
+  SmartMoneyActivity,
 } from '../types';
 import { SENTIMENT } from '../constants';
 
@@ -18,11 +19,12 @@ interface AnalysisInputs {
   social: SocialAnalysis;
   sentiment?: SentimentAnalysis;
   rugcheck?: RugCheckResult;
+  smartMoney?: SmartMoneyActivity;
   tokenAge?: number; // seconds since creation
 }
 
 /*
- * RISK SCORING SYSTEM (0-110 points, capped at 100)
+ * RISK SCORING SYSTEM (0-120 points, capped at 100)
  *
  * Liquidity Score (25 points max):
  *   $50K+ = 25pts, $20K+ = 20pts, $10K+ = 15pts, $5K+ = 10pts, $1K+ = 5pts
@@ -49,6 +51,13 @@ interface AnalysisInputs {
  *   Negative (<-0.2) = 2pts
  *   Very negative (<-0.5) = 0pts
  *   No data = 5pts (neutral)
+ *
+ * Smart Money Activity (10 points max) - from GMGN.ai:
+ *   Net buys 5+ = 10pts (strong accumulation)
+ *   Net buys 2-4 = 7pts (accumulating)
+ *   Net buys 1 = 5pts (slight interest)
+ *   No activity = 3pts (neutral)
+ *   Net sells = 0pts (dumping)
  *
  * Risk Levels:
  *   80-100 = LOW (green)
@@ -91,6 +100,11 @@ export function classifyRisk(inputs: AnalysisInputs): RiskClassification {
   const sentimentResult = assessSentiment(inputs.sentiment);
   factors.push(...sentimentResult.factors);
   totalScore += sentimentResult.score;
+
+  // Smart Money Activity (10 points max) - from GMGN.ai
+  const smartMoneyResult = assessSmartMoney(inputs.smartMoney);
+  factors.push(...smartMoneyResult.factors);
+  totalScore += smartMoneyResult.score;
 
   // Honeypot is an instant failure - no partial score
   if (inputs.contract.isHoneypot) {
@@ -512,6 +526,82 @@ function assessSentiment(sentiment?: SentimentAnalysis): {
       name: 'Twitter Sentiment',
       impact: 10,
       description: `Very negative! Warnings: ${sentiment.topNegativeTerms.slice(0, 3).join(', ')}`,
+      passed: false,
+    });
+  }
+
+  return { score, factors };
+}
+
+function assessSmartMoney(smartMoney?: SmartMoneyActivity): {
+  score: number;
+  factors: RiskFactor[];
+} {
+  const factors: RiskFactor[] = [];
+
+  // No smart money data - give partial credit
+  if (!smartMoney) {
+    return {
+      score: 3, // Neutral-ish default
+      factors: [
+        {
+          name: 'Smart Money',
+          impact: 10,
+          description: 'No smart money data available',
+          passed: true,
+        },
+      ],
+    };
+  }
+
+  const netBuys = smartMoney.netSmartMoney;
+  let score = 3; // Default neutral
+
+  if (netBuys >= 5) {
+    // Strong accumulation by smart money
+    score = 10;
+    factors.push({
+      name: 'Smart Money',
+      impact: 10,
+      description: `Strong accumulation: ${smartMoney.smartBuys24h} buys, ${smartMoney.smartSells24h} sells (net +${netBuys})`,
+      passed: true,
+    });
+  } else if (netBuys >= 2) {
+    // Accumulating
+    score = 7;
+    factors.push({
+      name: 'Smart Money',
+      impact: 10,
+      description: `Accumulating: ${smartMoney.smartBuys24h} buys, ${smartMoney.smartSells24h} sells (net +${netBuys})`,
+      passed: true,
+    });
+  } else if (netBuys >= 1) {
+    // Slight interest
+    score = 5;
+    factors.push({
+      name: 'Smart Money',
+      impact: 10,
+      description: `Slight interest: ${smartMoney.smartBuys24h} buys, ${smartMoney.smartSells24h} sells`,
+      passed: true,
+    });
+  } else if (netBuys === 0) {
+    // No activity or balanced
+    score = 3;
+    factors.push({
+      name: 'Smart Money',
+      impact: 10,
+      description: smartMoney.smartBuys24h > 0
+        ? `Balanced: ${smartMoney.smartBuys24h} buys, ${smartMoney.smartSells24h} sells`
+        : 'No smart money activity detected',
+      passed: true,
+    });
+  } else {
+    // Net selling - warning sign
+    score = 0;
+    factors.push({
+      name: 'Smart Money',
+      impact: 10,
+      description: `Dumping: ${smartMoney.smartSells24h} sells > ${smartMoney.smartBuys24h} buys (net ${netBuys})`,
       passed: false,
     });
   }

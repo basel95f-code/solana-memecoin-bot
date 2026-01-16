@@ -423,6 +423,172 @@ class DexScreenerService {
     };
   }
 
+  /**
+   * Get pair data by pair address
+   */
+  async getPairByAddress(pairAddress: string): Promise<DexScreenerPair | null> {
+    const cacheKey = `pair:${pairAddress}`;
+    const cached = this.getCached<DexScreenerPair>(cacheKey);
+    if (cached) return cached;
+
+    try {
+      await rateLimiter.acquire();
+      const response = await withRetry(
+        () => this.client.get<DexScreenerResponse>(`/pairs/solana/${pairAddress}`),
+        { maxRetries: 2, initialDelayMs: 500 }
+      );
+      const pairs = response.data.pairs || [];
+      if (pairs.length === 0) return null;
+
+      const pair = pairs[0];
+      this.setCache(cacheKey, pair);
+      return pair;
+    } catch (error) {
+      console.error(`DexScreener: Failed to fetch pair ${pairAddress}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Get multiple pairs by addresses in batch
+   */
+  async getMultiplePairs(pairAddresses: string[]): Promise<Map<string, DexScreenerPair>> {
+    const results = new Map<string, DexScreenerPair>();
+    if (pairAddresses.length === 0) return results;
+
+    // Check cache first
+    const uncached: string[] = [];
+    for (const addr of pairAddresses) {
+      const cached = this.getCached<DexScreenerPair>(`pair:${addr}`);
+      if (cached) {
+        results.set(addr, cached);
+      } else {
+        uncached.push(addr);
+      }
+    }
+
+    if (uncached.length === 0) return results;
+
+    // DexScreener pairs endpoint supports comma-separated addresses
+    const batchSize = 30;
+    for (let i = 0; i < uncached.length; i += batchSize) {
+      const batch = uncached.slice(i, i + batchSize);
+      try {
+        await rateLimiter.acquire();
+        const response = await withRetry(
+          () => this.client.get<DexScreenerResponse>(`/pairs/solana/${batch.join(',')}`),
+          { maxRetries: 2, initialDelayMs: 500 }
+        );
+
+        for (const pair of response.data.pairs || []) {
+          this.setCache(`pair:${pair.pairAddress}`, pair);
+          results.set(pair.pairAddress, pair);
+        }
+      } catch (error) {
+        console.error(`DexScreener: Batch pair fetch failed:`, error);
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Get token profile with social links and additional info
+   */
+  async getTokenProfile(tokenAddress: string): Promise<{
+    socials: { type: string; url: string }[];
+    websites: { label: string; url: string }[];
+    imageUrl?: string;
+    description?: string;
+  } | null> {
+    const pairs = await this.getTokenPairs(tokenAddress);
+    if (pairs.length === 0) return null;
+
+    // Get the best pair with most info
+    const pairWithInfo = pairs.find(p => p.info) || pairs[0];
+    if (!pairWithInfo.info) return null;
+
+    return {
+      socials: pairWithInfo.info.socials || [],
+      websites: pairWithInfo.info.websites || [],
+      imageUrl: pairWithInfo.info.imageUrl,
+      description: undefined, // DexScreener doesn't provide description
+    };
+  }
+
+  /**
+   * Get recently created pairs (more reliable than token-boosts for new tokens)
+   */
+  async getRecentPairs(maxAgeMinutes: number = 30, limit: number = 20): Promise<TrendingToken[]> {
+    const cacheKey = `recent:${maxAgeMinutes}:${limit}`;
+    const cached = this.getCached<TrendingToken[]>(cacheKey);
+    if (cached) return cached;
+
+    try {
+      // Use search to find new Solana pairs
+      await rateLimiter.acquire();
+      const response = await withRetry(
+        () => this.client.get<DexScreenerResponse>('/search?q=solana'),
+        { maxRetries: 2, initialDelayMs: 500 }
+      );
+
+      const now = Date.now();
+      const maxAge = maxAgeMinutes * 60 * 1000;
+
+      const recentPairs = (response.data.pairs || [])
+        .filter(p => {
+          if (p.chainId !== 'solana') return false;
+          if (!p.pairCreatedAt) return false;
+          if ((now - p.pairCreatedAt) > maxAge) return false;
+          if ((p.liquidity?.usd || 0) < 500) return false;
+          return true;
+        })
+        .sort((a, b) => (b.pairCreatedAt || 0) - (a.pairCreatedAt || 0))
+        .slice(0, limit)
+        .map(p => this.pairToTrendingToken(p));
+
+      this.setCache(cacheKey, recentPairs);
+      return recentPairs;
+    } catch (error) {
+      console.error('DexScreener: Failed to fetch recent pairs:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Enhanced token data with buy/sell ratio analysis
+   */
+  async getTokenWithBuySellAnalysis(tokenAddress: string): Promise<{
+    pair: DexScreenerPair;
+    buySellRatio1h: number;
+    buySellRatio24h: number;
+    isBuyPressure: boolean;
+    volumeToLiquidityRatio: number;
+  } | null> {
+    const pair = await this.getTokenData(tokenAddress);
+    if (!pair) return null;
+
+    const buys1h = pair.txns?.h1?.buys || 0;
+    const sells1h = pair.txns?.h1?.sells || 0;
+    const buys24h = pair.txns?.h24?.buys || 0;
+    const sells24h = pair.txns?.h24?.sells || 0;
+
+    const buySellRatio1h = sells1h > 0 ? buys1h / sells1h : buys1h > 0 ? Infinity : 1;
+    const buySellRatio24h = sells24h > 0 ? buys24h / sells24h : buys24h > 0 ? Infinity : 1;
+
+    const volume24h = pair.volume?.h24 || 0;
+    const liquidity = pair.liquidity?.usd || 0;
+    const volumeToLiquidityRatio = liquidity > 0 ? volume24h / liquidity : 0;
+
+    return {
+      pair,
+      buySellRatio1h,
+      buySellRatio24h,
+      isBuyPressure: buySellRatio1h > 1.2 && buySellRatio24h > 1,
+      volumeToLiquidityRatio,
+    };
+  }
+
   clearCache(): void {
     this.cache.clear();
   }

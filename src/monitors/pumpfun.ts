@@ -25,7 +25,8 @@ interface PumpFunToken {
   associated_bonding_curve: string;
   creator: string;
   created_timestamp: number;
-  raydium_pool: string | null;
+  raydium_pool: string | null; // Legacy - tokens used to graduate to Raydium
+  pumpswap_pool: string | null; // New - tokens now graduate to PumpSwap (March 2025+)
   complete: boolean;
   virtual_sol_reserves: number;
   virtual_token_reserves: number;
@@ -148,7 +149,7 @@ export class PumpFunMonitor extends EventEmitter {
 
   private async fetchRecentTokens(initialLoad: boolean = false): Promise<void> {
     try {
-      // Fetch recently graduated tokens (moved to Raydium)
+      // Fetch recently graduated tokens (moved to PumpSwap or legacy Raydium)
       const graduated = await this.fetchGraduatedTokens();
 
       // Fetch new token launches
@@ -165,13 +166,16 @@ export class PumpFunMonitor extends EventEmitter {
         // On initial load, just populate the seen list
         if (initialLoad) continue;
 
-        // Skip tokens without Raydium pool (not graduated yet)
-        // Unless we want to monitor pre-graduation tokens
-        if (!token.raydium_pool && !token.complete) {
+        // Check if token has graduated (PumpSwap is primary, Raydium is legacy fallback)
+        const hasGraduated = token.pumpswap_pool || token.raydium_pool || token.complete;
+
+        // Skip tokens that haven't graduated yet
+        if (!hasGraduated) {
           continue;
         }
 
-        console.log(`New Pump.fun token: ${token.symbol} (${token.mint})`);
+        const graduationDest = token.pumpswap_pool ? 'PumpSwap' : (token.raydium_pool ? 'Raydium' : 'bonding');
+        console.log(`New Pump.fun token graduated to ${graduationDest}: ${token.symbol} (${token.mint})`);
 
         const pool = this.createPoolInfo(token);
         this.emit('newPool', pool);
@@ -181,6 +185,8 @@ export class PumpFunMonitor extends EventEmitter {
     }
   }
 
+  // Fetch tokens that have reached "king of the hill" status (about to graduate or recently graduated)
+  // Since March 2025, tokens graduate to PumpSwap instead of Raydium
   private async fetchGraduatedTokens(): Promise<PumpFunToken[]> {
     for (const baseUrl of PUMPFUN_API_ENDPOINTS) {
       try {
@@ -252,15 +258,22 @@ export class PumpFunMonitor extends EventEmitter {
   }
 
   private createPoolInfo(token: PumpFunToken): PoolInfo {
+    // Determine pool address and source based on graduation status
+    // PumpSwap is the new graduation destination (March 2025+), Raydium is legacy
+    const poolAddress = token.pumpswap_pool || token.raydium_pool || token.bonding_curve || '';
+    const source: PoolInfo['source'] = token.pumpswap_pool
+      ? 'pumpswap'
+      : (token.raydium_pool ? 'raydium' : 'pumpfun');
+
     return {
-      address: token.bonding_curve || token.raydium_pool || '',
+      address: poolAddress,
       tokenMint: token.mint,
       baseMint: token.mint,
       quoteMint: SOL_MINT,
       baseReserve: token.virtual_token_reserves / 1e6, // Pump.fun uses 6 decimals
       quoteReserve: token.virtual_sol_reserves / 1e9,
       lpMint: '',
-      source: 'pumpfun',
+      source,
       createdAt: new Date(token.created_timestamp),
     };
   }

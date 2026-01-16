@@ -28,7 +28,7 @@ export interface PoolInfo {
   baseReserve: number;
   quoteReserve: number;
   lpMint: string;
-  source: 'raydium' | 'pumpfun' | 'jupiter';
+  source: 'raydium' | 'pumpfun' | 'pumpswap' | 'jupiter';
   createdAt: Date;
 }
 
@@ -132,6 +132,7 @@ export interface TokenAnalysis {
   social: SocialAnalysis;
   sentiment?: SentimentAnalysis;
   rugcheck?: RugCheckResult;
+  smartMoney?: SmartMoneyActivity;
   risk: RiskClassification;
   analyzedAt: Date;
 }
@@ -178,6 +179,7 @@ export const KNOWN_LP_LOCKERS = [
 
 export const RAYDIUM_AMM_PROGRAM = '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8';
 export const PUMPFUN_PROGRAM = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
+export const PUMPSWAP_AMM_PROGRAM = 'pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA'; // PumpSwap DEX (graduation destination)
 export const TOKEN_PROGRAM_ID = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
 export const TOKEN_2022_PROGRAM_ID = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
 
@@ -351,6 +353,72 @@ export interface ExtendedBotConfig extends BotConfig {
 // ============================================
 // Filter Profile Presets
 // ============================================
+
+// ============================================
+// GMGN.ai API Types
+// ============================================
+
+export interface GMGNToken {
+  address: string;
+  symbol: string;
+  name: string;
+  decimals: number;
+  logo?: string;
+  price: number;
+  price_change_percent?: number;
+  price_change_1h?: number;
+  price_change_6h?: number;
+  price_change_24h?: number;
+  volume_24h?: number;
+  swaps?: number;
+  buys?: number;
+  sells?: number;
+  liquidity?: number;
+  market_cap?: number;
+  fdv?: number;
+  holder_count?: number;
+  // Smart money metrics
+  smart_buy_24h?: number;
+  smart_sell_24h?: number;
+  smart_net_buy_24h?: number;
+  smart_money_holding?: number;
+  // Safety metrics
+  is_honeypot?: boolean;
+  is_verified?: boolean;
+  is_renounced?: boolean;
+  open_timestamp?: number;
+  // Additional metadata
+  pool_address?: string;
+  dex?: string;
+}
+
+export interface GMGNResponse {
+  code: number;
+  msg: string;
+  data: {
+    rank: GMGNToken[];
+  };
+}
+
+export interface GMGNTokenInfoResponse {
+  code: number;
+  msg: string;
+  data: {
+    token: GMGNToken;
+    pools?: any[];
+    holders?: any[];
+  };
+}
+
+export interface SmartMoneyActivity {
+  mint: string;
+  symbol: string;
+  smartBuys24h: number;
+  smartSells24h: number;
+  netSmartMoney: number;
+  smartMoneyHolding: number;
+  isSmartMoneyBullish: boolean;
+}
 
 export const FILTER_PRESETS: Record<Exclude<FilterProfile, 'custom'>, Omit<FilterSettings, 'profile' | 'alertsEnabled' | 'quietHoursStart' | 'quietHoursEnd' | 'timezone'>> = {
   conservative: {

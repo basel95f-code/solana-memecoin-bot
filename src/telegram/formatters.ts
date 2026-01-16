@@ -5,6 +5,7 @@ import {
   WatchedToken,
   FilterSettings,
   DexScreenerPair,
+  SmartMoneyActivity,
 } from '../types';
 
 // ============================================
@@ -67,6 +68,26 @@ export function getSentimentLabel(score: number): string {
   return 'Very Negative';
 }
 
+export function getSmartMoneyEmoji(netBuys: number): string {
+  if (netBuys >= 5) return '🐋🔥'; // Whales accumulating heavily
+  if (netBuys >= 2) return '🐋'; // Whales accumulating
+  if (netBuys >= 1) return '👀'; // Slight interest
+  if (netBuys === 0) return '⚪'; // Neutral
+  return '🚨'; // Dumping
+}
+
+export function formatSmartMoney(smartMoney: SmartMoneyActivity): string {
+  const netBuys = smartMoney.netSmartMoney;
+  const emoji = getSmartMoneyEmoji(netBuys);
+
+  if (netBuys > 0) {
+    return `${emoji} +${netBuys} net (${smartMoney.smartBuys24h} buys, ${smartMoney.smartSells24h} sells)`;
+  } else if (netBuys < 0) {
+    return `${emoji} ${netBuys} net (${smartMoney.smartSells24h} sells > ${smartMoney.smartBuys24h} buys)`;
+  }
+  return `${emoji} Neutral (${smartMoney.smartBuys24h}B/${smartMoney.smartSells24h}S)`;
+}
+
 export function truncateAddress(address: string, chars: number = 4): string {
   return `${address.slice(0, chars)}...${address.slice(-chars)}`;
 }
@@ -97,7 +118,7 @@ export function formatTokenAlert(
   dexData?: DexScreenerPair,
   mlPrediction?: MLPrediction
 ): string {
-  const { token, pool, liquidity, holders, contract, social, sentiment, risk } = analysis;
+  const { token, pool, liquidity, holders, contract, social, sentiment, smartMoney, risk } = analysis;
 
   const priceUsd = dexData?.priceUsd ? parseFloat(dexData.priceUsd) : 0;
   const volume24h = dexData?.volume?.h24 || 0;
@@ -129,6 +150,12 @@ export function formatTokenAlert(
     `🏆 Top 10 own: ${holders.top10HoldersPercent.toFixed(1)}%`,
     buys24h > 0 || sells24h > 0 ? `🛒 Buys: ${buys24h} | 🏷️ Sells: ${sells24h} (${buyRatio}x)` : null,
     ``,
+    // Smart Money section from GMGN
+    smartMoney && (smartMoney.smartBuys24h > 0 || smartMoney.smartSells24h > 0) ? `🐋 ━━━ SMART MONEY ━━━` : null,
+    smartMoney && (smartMoney.smartBuys24h > 0 || smartMoney.smartSells24h > 0) ? formatSmartMoney(smartMoney) : null,
+    smartMoney && smartMoney.isSmartMoneyBullish ? `✨ Smart money is ACCUMULATING!` : null,
+    smartMoney && smartMoney.netSmartMoney < 0 ? `⚠️ Smart money is DUMPING!` : null,
+    smartMoney && (smartMoney.smartBuys24h > 0 || smartMoney.smartSells24h > 0) ? `` : null,
     `🛡️ ━━━ SAFETY ━━━`,
     `${contract.mintAuthorityRevoked ? '✅' : '❌'} Mint ${contract.mintAuthorityRevoked ? 'Revoked' : 'Active ⚠️'}`,
     `${contract.freezeAuthorityRevoked ? '✅' : '❌'} Freeze ${contract.freezeAuthorityRevoked ? 'Revoked' : 'Active ⚠️'}`,
@@ -234,7 +261,7 @@ export function formatDexScreenerAnalysis(dexData: DexScreenerPair): string {
 }
 
 export function formatFullAnalysis(analysis: TokenAnalysis, dexData?: DexScreenerPair): string {
-  const { token, pool, liquidity, holders, contract, social, sentiment, risk } = analysis;
+  const { token, pool, liquidity, holders, contract, social, sentiment, smartMoney, risk } = analysis;
 
   const priceUsd = dexData?.priceUsd ? parseFloat(dexData.priceUsd) : 0;
 
@@ -285,6 +312,21 @@ export function formatFullAnalysis(analysis: TokenAnalysis, dexData?: DexScreene
     `${social.hasWebsite ? '✅ 🌍' : '❌'} Website${social.websiteUrl ? `: ${social.websiteUrl}` : ''}`,
     ``,
   ];
+
+  // Add smart money section if available
+  if (smartMoney && (smartMoney.smartBuys24h > 0 || smartMoney.smartSells24h > 0)) {
+    lines.push(`🐋 ━━━ SMART MONEY (GMGN) ━━━`);
+    lines.push(`${getSmartMoneyEmoji(smartMoney.netSmartMoney)} Activity: ${formatSmartMoney(smartMoney)}`);
+    lines.push(`📊 24h Buys: ${smartMoney.smartBuys24h} | 24h Sells: ${smartMoney.smartSells24h}`);
+    if (smartMoney.isSmartMoneyBullish) {
+      lines.push(`✨ Status: Smart money is ACCUMULATING!`);
+    } else if (smartMoney.netSmartMoney < 0) {
+      lines.push(`⚠️ Status: Smart money is DUMPING!`);
+    } else {
+      lines.push(`⚪ Status: Neutral activity`);
+    }
+    lines.push(``);
+  }
 
   // Add sentiment section if available
   if (sentiment?.hasSentimentData) {
@@ -412,6 +454,47 @@ export function formatTrendingList(tokens: TrendingToken[], title: string): stri
 
   lines.push(``);
   lines.push(`<i>Updated: ${new Date().toLocaleTimeString()}</i>`);
+
+  return lines.join('\n');
+}
+
+export interface SmartMoneyPick extends TrendingToken {
+  smartMoney: SmartMoneyActivity;
+}
+
+export function formatSmartMoneyList(tokens: SmartMoneyPick[], title: string): string {
+  if (tokens.length === 0) {
+    return `${title}\n\nNo smart money activity detected.\n\n<i>Smart money data from GMGN.ai</i>`;
+  }
+
+  const lines = [
+    `${title}`,
+    ``,
+  ];
+
+  tokens.forEach((token, i) => {
+    const sm = token.smartMoney;
+    const emoji = getSmartMoneyEmoji(sm.netSmartMoney);
+    const priceEmoji = getPriceChangeEmoji(token.priceChange24h);
+
+    lines.push(
+      `${i + 1}. ${emoji} <b>${token.symbol}</b> ${priceEmoji} ${formatPercent(token.priceChange24h)}`
+    );
+    lines.push(
+      `   💰 ${formatPrice(token.priceUsd)} | Liq: $${formatNumber(token.liquidity)}`
+    );
+    lines.push(
+      `   🐋 Smart: +${sm.smartBuys24h} buys / -${sm.smartSells24h} sells (net <b>+${sm.netSmartMoney}</b>)`
+    );
+    lines.push(
+      `   <code>${token.mint}</code>`
+    );
+    lines.push(``);
+  });
+
+  lines.push(`━━━━━━━━━━━━━━━━━━━━━`);
+  lines.push(`<i>🐋 = Smart money accumulating</i>`);
+  lines.push(`<i>Data from GMGN.ai | ${new Date().toLocaleTimeString()}</i>`);
 
   return lines.join('\n');
 }
@@ -555,6 +638,8 @@ export function formatHelp(): string {
     `/gainers - Top gainers`,
     `/losers - Top losers`,
     `/volume - Volume leaders`,
+    `/smartmoney - Smart money picks (GMGN)`,
+    `/whales - Whale accumulation`,
     ``,
     `━━━ <b>SETTINGS</b> ━━━`,
     `/timezone [tz] - Set timezone`,

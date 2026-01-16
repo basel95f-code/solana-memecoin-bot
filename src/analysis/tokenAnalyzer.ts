@@ -1,6 +1,7 @@
 import { solanaService } from '../services/solana';
 import { rugCheckService } from '../services/rugcheck';
 import { dexScreenerService } from '../services/dexscreener';
+import { gmgnService } from '../services/gmgn';
 import { tokenCache } from '../services/cache';
 import { analyzeLiquidity } from './liquidityCheck';
 import { analyzeHolders } from './holderAnalysis';
@@ -8,7 +9,7 @@ import { analyzeContract } from './contractCheck';
 import { analyzeSocials } from './socialCheck';
 import { analyzeSentiment, getDefaultSentiment } from './sentimentAnalysis';
 import { classifyRisk } from '../risk/classifier';
-import { TokenAnalysis, PoolInfo, TokenInfo, LiquidityAnalysis, HolderAnalysis, ContractAnalysis, SocialAnalysis, SentimentAnalysis, RugCheckResult } from '../types';
+import { TokenAnalysis, PoolInfo, TokenInfo, LiquidityAnalysis, HolderAnalysis, ContractAnalysis, SocialAnalysis, SentimentAnalysis, RugCheckResult, SmartMoneyActivity } from '../types';
 import { config } from '../config';
 
 // Track in-flight analysis requests to prevent duplicates
@@ -82,7 +83,7 @@ async function performAnalysis(
     }
 
     // Run all analyses in parallel with individual timeouts
-    const [liquidity, holders, contract, social, sentiment, rugcheck, dexData] = await Promise.all([
+    const [liquidity, holders, contract, social, sentiment, rugcheck, dexData, gmgnSmartMoney] = await Promise.all([
       withTimeout(analyzeLiquidity(pool), 15000, getDefaultLiquidity()),
       withTimeout(analyzeHolders(tokenInfo), 15000, getDefaultHolders()),
       withTimeout(analyzeContract(tokenMint), 15000, getDefaultContract()),
@@ -90,6 +91,7 @@ async function performAnalysis(
       withTimeout(analyzeSentiment(tokenInfo), 10000, getDefaultSentiment()),
       withTimeout(rugCheckService.getTokenReport(tokenMint), 10000, null),
       withTimeout(dexScreenerService.getTokenData(tokenMint), 10000, null),
+      withTimeout(gmgnService.getSmartMoneyForToken(tokenMint), 10000, null),
     ]);
 
     // Enhance liquidity data with DexScreener if available
@@ -128,6 +130,7 @@ async function performAnalysis(
       social,
       sentiment,
       rugcheck: rugcheck || undefined,
+      smartMoney: gmgnSmartMoney || undefined,
     });
 
     const analysis: TokenAnalysis = {
@@ -139,6 +142,7 @@ async function performAnalysis(
       social,
       sentiment,
       rugcheck: rugcheck || undefined,
+      smartMoney: gmgnSmartMoney || undefined,
       risk,
       analyzedAt: new Date(),
     };

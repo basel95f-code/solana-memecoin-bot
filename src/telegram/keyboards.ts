@@ -119,6 +119,20 @@ export function trendingKeyboard(): Markup.Markup<InlineKeyboardMarkup> {
     [
       Markup.button.callback('Volume', 'show_volume'),
       Markup.button.callback('New', 'show_new'),
+      Markup.button.callback('🐋 Whales', 'show_smartmoney'),
+    ],
+  ]);
+}
+
+export function smartMoneyKeyboard(): Markup.Markup<InlineKeyboardMarkup> {
+  return Markup.inlineKeyboard([
+    [
+      Markup.button.callback('🔄 Refresh', 'smartmoney_refresh'),
+      Markup.button.callback('📈 Trending', 'show_trending'),
+    ],
+    [
+      Markup.button.callback('6h View', 'smartmoney_6h'),
+      Markup.button.callback('24h View', 'smartmoney_24h'),
     ],
   ]);
 }

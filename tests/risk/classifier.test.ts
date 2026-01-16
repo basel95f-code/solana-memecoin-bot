@@ -1,5 +1,5 @@
 import { classifyRisk, getRiskEmoji, getRiskDescription } from '../../src/risk/classifier';
-import { LiquidityAnalysis, HolderAnalysis, ContractAnalysis, SocialAnalysis, RiskLevel } from '../../src/types';
+import { LiquidityAnalysis, HolderAnalysis, ContractAnalysis, SocialAnalysis, RiskLevel, SmartMoneyActivity } from '../../src/types';
 
 describe('Risk Classifier', () => {
   // Default analysis objects for testing
@@ -364,8 +364,8 @@ describe('Risk Classifier', () => {
         social: defaultSocial,
       });
 
-      // Score adjusted for sentiment scoring (adds 5 points for neutral/no data)
-      expect(result.score).toBeLessThan(65);
+      // Score adjusted for sentiment (5 pts) and smart money (3 pts) for neutral/no data
+      expect(result.score).toBeLessThan(70);
     });
   });
 
@@ -389,6 +389,118 @@ describe('Risk Classifier', () => {
 
       // Good rugcheck should score same or better than bad rugcheck
       expect(withGoodRugcheck.score).toBeGreaterThanOrEqual(withBadRugcheck.score);
+    });
+  });
+
+  describe('Smart Money Activity', () => {
+    const defaultSmartMoney: SmartMoneyActivity = {
+      mint: 'test',
+      symbol: 'TEST',
+      smartBuys24h: 0,
+      smartSells24h: 0,
+      netSmartMoney: 0,
+      smartMoneyHolding: 0,
+      isSmartMoneyBullish: false,
+    };
+
+    it('should reward strong smart money accumulation', () => {
+      const bullishSmartMoney: SmartMoneyActivity = {
+        ...defaultSmartMoney,
+        smartBuys24h: 10,
+        smartSells24h: 2,
+        netSmartMoney: 8,
+        isSmartMoneyBullish: true,
+      };
+
+      const noSmartMoney = classifyRisk({
+        liquidity: defaultLiquidity,
+        holders: defaultHolders,
+        contract: defaultContract,
+        social: defaultSocial,
+      });
+
+      const withSmartMoney = classifyRisk({
+        liquidity: defaultLiquidity,
+        holders: defaultHolders,
+        contract: defaultContract,
+        social: defaultSocial,
+        smartMoney: bullishSmartMoney,
+      });
+
+      expect(withSmartMoney.score).toBeGreaterThan(noSmartMoney.score);
+    });
+
+    it('should penalize smart money dumping', () => {
+      const dumpingSmartMoney: SmartMoneyActivity = {
+        ...defaultSmartMoney,
+        smartBuys24h: 1,
+        smartSells24h: 5,
+        netSmartMoney: -4,
+        isSmartMoneyBullish: false,
+      };
+
+      const neutralSmartMoney: SmartMoneyActivity = {
+        ...defaultSmartMoney,
+        smartBuys24h: 2,
+        smartSells24h: 2,
+        netSmartMoney: 0,
+        isSmartMoneyBullish: false,
+      };
+
+      const resultDumping = classifyRisk({
+        liquidity: defaultLiquidity,
+        holders: defaultHolders,
+        contract: defaultContract,
+        social: defaultSocial,
+        smartMoney: dumpingSmartMoney,
+      });
+
+      const resultNeutral = classifyRisk({
+        liquidity: defaultLiquidity,
+        holders: defaultHolders,
+        contract: defaultContract,
+        social: defaultSocial,
+        smartMoney: neutralSmartMoney,
+      });
+
+      expect(resultDumping.score).toBeLessThan(resultNeutral.score);
+    });
+
+    it('should include smart money factor in result', () => {
+      const smartMoney: SmartMoneyActivity = {
+        ...defaultSmartMoney,
+        smartBuys24h: 5,
+        smartSells24h: 1,
+        netSmartMoney: 4,
+        isSmartMoneyBullish: true,
+      };
+
+      const result = classifyRisk({
+        liquidity: defaultLiquidity,
+        holders: defaultHolders,
+        contract: defaultContract,
+        social: defaultSocial,
+        smartMoney,
+      });
+
+      const smartMoneyFactor = result.factors.find(f => f.name === 'Smart Money');
+      expect(smartMoneyFactor).toBeDefined();
+      expect(smartMoneyFactor?.passed).toBe(true);
+    });
+
+    it('should handle no smart money data gracefully', () => {
+      const result = classifyRisk({
+        liquidity: defaultLiquidity,
+        holders: defaultHolders,
+        contract: defaultContract,
+        social: defaultSocial,
+        smartMoney: undefined,
+      });
+
+      // Should still work and include a smart money factor
+      const smartMoneyFactor = result.factors.find(f => f.name === 'Smart Money');
+      expect(smartMoneyFactor).toBeDefined();
+      expect(smartMoneyFactor?.description).toContain('No smart money data');
     });
   });
 });

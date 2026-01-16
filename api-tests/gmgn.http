@@ -1,0 +1,272 @@
+### GMGN.ai API Tests
+### REST Client extension required (humao.rest-client)
+###
+### ⚠️ IMPORTANT: CLOUDFLARE PROTECTION
+### GMGN.ai uses aggressive Cloudflare protection.
+### - Requests from residential IPs are often blocked
+### - Works better from cloud servers (VPS, AWS, etc.)
+### - May work in browser but fail from curl/scripts
+### - The bot handles this gracefully with fallback to DexScreener
+###
+### If you get 403 Forbidden errors, this is expected behavior.
+### The bot will automatically retry every 60 seconds.
+
+### ========================================
+### TRENDING / RANKING ENDPOINTS
+### Base: https://gmgn.ai/defi/quotation/v1/rank/{chain}/swaps/{timeframe}
+### ========================================
+
+### Trending by Volume (1 hour) - Solana
+GET https://gmgn.ai/defi/quotation/v1/rank/sol/swaps/1h?orderby=volume&direction=desc&filters[]=not_honeypot
+Accept: application/json
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+Origin: https://gmgn.ai
+Referer: https://gmgn.ai/
+
+###
+
+### Trending by Volume (24 hours) - Solana
+GET https://gmgn.ai/defi/quotation/v1/rank/sol/swaps/24h?orderby=volume&direction=desc&filters[]=not_honeypot
+Accept: application/json
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+Origin: https://gmgn.ai
+Referer: https://gmgn.ai/
+
+###
+
+### ========================================
+### SMART MONEY TRACKING
+### orderby=smartmoney shows tokens smart money is buying
+### ========================================
+
+### Smart Money Activity (6 hours) - RECOMMENDED
+GET https://gmgn.ai/defi/quotation/v1/rank/sol/swaps/6h?orderby=smartmoney&direction=desc&filters[]=not_honeypot
+Accept: application/json
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+Origin: https://gmgn.ai
+Referer: https://gmgn.ai/
+
+###
+
+### Smart Money Activity (1 hour) - Recent activity
+GET https://gmgn.ai/defi/quotation/v1/rank/sol/swaps/1h?orderby=smartmoney&direction=desc&filters[]=not_honeypot
+Accept: application/json
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+Origin: https://gmgn.ai
+Referer: https://gmgn.ai/
+
+###
+
+### Smart Money with Verified Filter
+GET https://gmgn.ai/defi/quotation/v1/rank/sol/swaps/6h?orderby=smartmoney&direction=desc&filters[]=not_honeypot&filters[]=verified
+Accept: application/json
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+Origin: https://gmgn.ai
+Referer: https://gmgn.ai/
+
+###
+
+### Smart Money with Renounced Filter (safer tokens)
+GET https://gmgn.ai/defi/quotation/v1/rank/sol/swaps/6h?orderby=smartmoney&direction=desc&filters[]=not_honeypot&filters[]=renounced
+Accept: application/json
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+Origin: https://gmgn.ai
+Referer: https://gmgn.ai/
+
+###
+
+### ========================================
+### NEW TOKEN DISCOVERY
+### orderby=open_timestamp shows newest tokens
+### ========================================
+
+### Newest Tokens (1 hour)
+GET https://gmgn.ai/defi/quotation/v1/rank/sol/swaps/1h?orderby=open_timestamp&direction=desc&filters[]=not_honeypot
+Accept: application/json
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+Origin: https://gmgn.ai
+Referer: https://gmgn.ai/
+
+###
+
+### Newest Tokens (5 minutes) - Very fresh
+GET https://gmgn.ai/defi/quotation/v1/rank/sol/swaps/5m?orderby=open_timestamp&direction=desc&filters[]=not_honeypot
+Accept: application/json
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+Origin: https://gmgn.ai
+Referer: https://gmgn.ai/
+
+###
+
+### ========================================
+### OTHER SORTING OPTIONS
+### ========================================
+
+### By Market Cap
+GET https://gmgn.ai/defi/quotation/v1/rank/sol/swaps/24h?orderby=marketcap&direction=desc&filters[]=not_honeypot
+Accept: application/json
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+Origin: https://gmgn.ai
+Referer: https://gmgn.ai/
+
+###
+
+### By Holder Count (growing communities)
+GET https://gmgn.ai/defi/quotation/v1/rank/sol/swaps/6h?orderby=holder_count&direction=desc&filters[]=not_honeypot
+Accept: application/json
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+Origin: https://gmgn.ai
+Referer: https://gmgn.ai/
+
+###
+
+### By Swap Count (high activity)
+GET https://gmgn.ai/defi/quotation/v1/rank/sol/swaps/1h?orderby=swaps&direction=desc&filters[]=not_honeypot
+Accept: application/json
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+Origin: https://gmgn.ai
+Referer: https://gmgn.ai/
+
+###
+
+### By Liquidity
+GET https://gmgn.ai/defi/quotation/v1/rank/sol/swaps/24h?orderby=liquidity&direction=desc&filters[]=not_honeypot
+Accept: application/json
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+Origin: https://gmgn.ai
+Referer: https://gmgn.ai/
+
+###
+
+### ========================================
+### DIFFERENT TIMEFRAMES
+### Available: 1m, 5m, 1h, 6h, 24h
+### ========================================
+
+### 1 Minute - Ultra fresh
+GET https://gmgn.ai/defi/quotation/v1/rank/sol/swaps/1m?orderby=volume&direction=desc&filters[]=not_honeypot
+Accept: application/json
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+Origin: https://gmgn.ai
+Referer: https://gmgn.ai/
+
+###
+
+### 5 Minutes
+GET https://gmgn.ai/defi/quotation/v1/rank/sol/swaps/5m?orderby=volume&direction=desc&filters[]=not_honeypot
+Accept: application/json
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+Origin: https://gmgn.ai
+Referer: https://gmgn.ai/
+
+###
+
+### ========================================
+### OTHER CHAINS (for reference)
+### Available: sol, eth, base, bsc, tron
+### ========================================
+
+### Ethereum Trending
+GET https://gmgn.ai/defi/quotation/v1/rank/eth/swaps/1h?orderby=volume&direction=desc&filters[]=not_honeypot
+Accept: application/json
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+Origin: https://gmgn.ai
+Referer: https://gmgn.ai/
+
+###
+
+### Base Chain Trending
+GET https://gmgn.ai/defi/quotation/v1/rank/base/swaps/1h?orderby=volume&direction=desc&filters[]=not_honeypot
+Accept: application/json
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+Origin: https://gmgn.ai
+Referer: https://gmgn.ai/
+
+###
+
+### ========================================
+### TOKEN INFO ENDPOINT (may require auth)
+### ========================================
+
+### Get Token Info by Address
+@tokenAddress = DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263
+
+GET https://gmgn.ai/defi/quotation/v1/tokens/sol/{{tokenAddress}}
+Accept: application/json
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+Origin: https://gmgn.ai
+Referer: https://gmgn.ai/
+
+###
+
+### ========================================
+### COMBINED FILTERS (Safest Tokens)
+### ========================================
+
+### Smart Money + Verified + Renounced + Not Honeypot
+GET https://gmgn.ai/defi/quotation/v1/rank/sol/swaps/6h?orderby=smartmoney&direction=desc&filters[]=not_honeypot&filters[]=verified&filters[]=renounced
+Accept: application/json
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+Origin: https://gmgn.ai
+Referer: https://gmgn.ai/
+
+###
+
+### ========================================
+### EXPECTED RESPONSE STRUCTURE
+### ========================================
+# {
+#   "code": 0,
+#   "msg": "success",
+#   "data": {
+#     "rank": [
+#       {
+#         "address": "token_mint_address",
+#         "symbol": "TOKEN",
+#         "name": "Token Name",
+#         "decimals": 9,
+#         "logo": "https://...",
+#         "price": 0.001234,
+#         "price_change_percent": 15.5,
+#         "price_change_1h": 5.2,
+#         "price_change_6h": 12.3,
+#         "price_change_24h": 25.0,
+#         "volume_24h": 500000,
+#         "swaps": 1234,
+#         "buys": 800,
+#         "sells": 434,
+#         "liquidity": 150000,
+#         "market_cap": 5000000,
+#         "fdv": 10000000,
+#         "holder_count": 5000,
+#         "smart_buy_24h": 10,      <-- Smart money buys
+#         "smart_sell_24h": 2,      <-- Smart money sells
+#         "smart_net_buy_24h": 8,   <-- Net smart money activity
+#         "is_honeypot": false,
+#         "is_verified": true,
+#         "is_renounced": true,
+#         "open_timestamp": 1700000000,
+#         "pool_address": "pool_address",
+#         "dex": "raydium"
+#       }
+#     ]
+#   }
+# }
+
+###
+
+### ========================================
+### TROUBLESHOOTING
+### ========================================
+# If you get 403 Forbidden:
+# - GMGN uses Cloudflare protection
+# - The User-Agent and Origin headers are required
+# - Some endpoints may be rate limited
+# - Try again after a few seconds
+#
+# Key fields for smart money analysis:
+# - smart_buy_24h: Number of smart money wallets buying in 24h
+# - smart_sell_24h: Number of smart money wallets selling in 24h
+# - smart_net_buy_24h: Net buys (buys - sells)
+#
+# A positive net indicates accumulation by smart money
