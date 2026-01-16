@@ -1,6 +1,6 @@
 import { Telegraf } from 'telegraf';
 import { config } from '../config';
-import { TokenAnalysis, RiskLevel, WatchedToken, DexScreenerPair } from '../types';
+import { TokenAnalysis, RiskLevel, WatchedToken, DexScreenerPair, WalletActivityAlert, TrackedWallet, WalletTransaction } from '../types';
 import { registerAllCommands, incrementAlertsSent } from '../telegram/commands';
 import { formatTokenAlert, formatWatchlistAlert } from '../telegram/formatters';
 import { alertActionKeyboard } from '../telegram/keyboards';
@@ -101,6 +101,90 @@ class TelegramService {
     } catch (error) {
       console.error('Failed to send watchlist alert:', error);
     }
+  }
+
+  async sendWalletActivityAlert(alert: WalletActivityAlert): Promise<void> {
+    const { wallet, transaction, chatId } = alert;
+
+    // Check if alerts are muted
+    if (storageService.isAlertsMuted(chatId)) {
+      return;
+    }
+
+    // Check quiet hours
+    if (storageService.isQuietHours(chatId)) {
+      return;
+    }
+
+    try {
+      const message = this.formatWalletActivityAlert(wallet, transaction);
+
+      await this.bot.telegram.sendMessage(chatId, message, {
+        parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+      });
+
+      incrementAlertsSent();
+    } catch (error) {
+      console.error('Failed to send wallet activity alert:', error);
+    }
+  }
+
+  private formatWalletActivityAlert(wallet: TrackedWallet, tx: WalletTransaction): string {
+    const typeEmoji = tx.type === 'buy' ? '🟢' : tx.type === 'sell' ? '🔴' : '↔️';
+    const actionText = tx.type === 'buy' ? 'BOUGHT' : tx.type === 'sell' ? 'SOLD' : 'TRANSFERRED';
+
+    let msg = `<b>Wallet Activity Alert</b>\n\n`;
+
+    // Wallet info
+    msg += `<b>${wallet.label}</b>\n`;
+    msg += `<code>${wallet.address.slice(0, 4)}...${wallet.address.slice(-4)}</code>\n\n`;
+
+    // Transaction details
+    msg += `${typeEmoji} <b>${actionText}</b>`;
+
+    // Token amount
+    if (tx.amount) {
+      const formattedAmount = tx.amount >= 1000000
+        ? `${(tx.amount / 1000000).toFixed(2)}M`
+        : tx.amount >= 1000
+        ? `${(tx.amount / 1000).toFixed(2)}K`
+        : tx.amount.toLocaleString(undefined, { maximumFractionDigits: 4 });
+
+      msg += ` ${formattedAmount}`;
+      if (tx.tokenSymbol) {
+        msg += ` ${tx.tokenSymbol}`;
+      }
+    }
+    msg += `\n`;
+
+    // Token info
+    if (tx.tokenName && tx.tokenSymbol) {
+      msg += `Token: <b>${tx.tokenName}</b> ($${tx.tokenSymbol})\n`;
+    } else if (tx.tokenMint) {
+      msg += `Mint: <code>${tx.tokenMint.slice(0, 8)}...${tx.tokenMint.slice(-4)}</code>\n`;
+    }
+
+    // Value
+    if (tx.solAmount) {
+      msg += `Value: <b>${tx.solAmount.toFixed(4)} SOL</b>`;
+      if (tx.priceUsd) {
+        msg += ` (~$${tx.priceUsd.toFixed(2)})`;
+      }
+      msg += `\n`;
+    }
+
+    msg += `\n`;
+
+    // Links
+    msg += `<a href="https://solscan.io/tx/${tx.signature}">View Transaction</a>`;
+    if (tx.tokenMint) {
+      msg += ` | <a href="https://dexscreener.com/solana/${tx.tokenMint}">Chart</a>`;
+    }
+    msg += `\n`;
+    msg += `Analyze: <code>/check ${tx.tokenMint}</code>`;
+
+    return msg;
   }
 
   async sendMessage(message: string, chatId?: string): Promise<void> {

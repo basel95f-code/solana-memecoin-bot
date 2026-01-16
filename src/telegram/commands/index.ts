@@ -8,6 +8,7 @@ import { registerDiscoveryCommands } from './discovery';
 import { registerSettingsCommands } from './settings';
 import { registerAdvancedCommands } from './advanced';
 import { registerBlacklistCommands } from './blacklist';
+import { registerWalletCommands } from './wallets';
 
 export function registerAllCommands(bot: Telegraf): void {
   // Register all command handlers
@@ -20,6 +21,7 @@ export function registerAllCommands(bot: Telegraf): void {
   registerSettingsCommands(bot);
   registerAdvancedCommands(bot);
   registerBlacklistCommands(bot);
+  registerWalletCommands(bot);
 
   // Set up bot commands menu
   bot.telegram.setMyCommands([
@@ -70,6 +72,11 @@ export function registerAllCommands(bot: Telegraf): void {
     { command: 'buy', description: 'Add position' },
     { command: 'sell', description: 'Record sale' },
     { command: 'pnl', description: 'P&L summary' },
+    // Wallet Tracking
+    { command: 'track', description: 'Track a wallet' },
+    { command: 'untrack', description: 'Stop tracking wallet' },
+    { command: 'wallets', description: 'List tracked wallets' },
+    { command: 'wallet', description: 'Wallet activity' },
   ]).catch(err => console.error('Failed to set bot commands:', err));
 
   console.log('All Telegram commands registered');

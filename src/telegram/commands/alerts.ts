@@ -19,6 +19,7 @@ const CATEGORY_INFO: Record<AlertCategory, { emoji: string; name: string; desc: 
   authority_change: { emoji: '🔐', name: 'Authority Changes', desc: 'Mint/freeze changes' },
   price_alert: { emoji: '💰', name: 'Price Alerts', desc: 'Watchlist price moves' },
   smart_money: { emoji: '🧠', name: 'Smart Money', desc: 'Smart money activity' },
+  wallet_activity: { emoji: '👛', name: 'Wallet Activity', desc: 'Tracked wallet trades' },
 };
 
 const ALL_CATEGORIES: AlertCategory[] = [
@@ -29,6 +30,7 @@ const ALL_CATEGORIES: AlertCategory[] = [
   'authority_change',
   'price_alert',
   'smart_money',
+  'wallet_activity',
 ];
 
 // Priority display info

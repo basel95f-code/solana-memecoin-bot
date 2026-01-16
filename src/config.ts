@@ -81,6 +81,13 @@ export function loadConfig(): ExtendedBotConfig {
     storage: {
       dataDir: getEnvVar('DATA_DIR', false) || 'data',
     },
+
+    // Wallet monitoring
+    walletMonitor: {
+      enabled: getEnvBoolean('WALLET_MONITOR_ENABLED', true),
+      pollIntervalMs: getEnvNumber('WALLET_MONITOR_INTERVAL', 60000), // 60 seconds
+      maxWalletsPerUser: getEnvNumber('WALLET_MAX_PER_USER', 10),
+    },
   };
 }
 

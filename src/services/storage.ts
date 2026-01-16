@@ -16,7 +16,11 @@ import {
   AlertPrioritySettings,
   DEFAULT_PRIORITY_SETTINGS,
   PRIORITY_ORDER,
+  TrackedWallet,
 } from '../types';
+
+// Configuration constants
+const MAX_WALLETS_PER_USER = 10;
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
@@ -27,6 +31,7 @@ const BACKUP_FILE = path.join(DATA_DIR, 'settings.backup.json');
  * Validate that an object is a valid UserSettings
  */
 function isValidUserSettings(obj: any): obj is UserSettings {
+  // Note: trackedWallets is optional for backward compatibility
   return (
     typeof obj === 'object' &&
     obj !== null &&
@@ -131,6 +136,10 @@ class StorageService {
           if (!entry.filters.alertPriority) {
             entry.filters.alertPriority = { ...DEFAULT_PRIORITY_SETTINGS };
           }
+          // Ensure trackedWallets exists (migrate old settings)
+          if (!Array.isArray(entry.trackedWallets)) {
+            entry.trackedWallets = [];
+          }
           this.settings.set(entry.chatId, entry);
           validCount++;
         } else {
@@ -219,6 +228,7 @@ class StorageService {
         filters: this.getDefaultFilters(),
         watchlist: [],
         blacklist: [],
+        trackedWallets: [],
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
@@ -228,6 +238,10 @@ class StorageService {
     // Ensure blacklist exists (migrate old settings)
     if (!settings.blacklist) {
       settings.blacklist = [];
+    }
+    // Ensure trackedWallets exists (migrate old settings)
+    if (!settings.trackedWallets) {
+      settings.trackedWallets = [];
     }
     // Ensure alertPriority exists (migrate old settings)
     if (!settings.filters.alertPriority) {
@@ -381,6 +395,7 @@ class StorageService {
       authority_change: enabled,
       price_alert: enabled,
       smart_money: enabled,
+      wallet_activity: enabled,
     };
     const current = this.getUserSettings(chatId);
     this.updateUserSettings(chatId, {
@@ -534,6 +549,73 @@ class StorageService {
   // Force an immediate save (useful for shutdown)
   async flush(): Promise<void> {
     await this.saveQueue;
+  }
+
+  // ============================================
+  // Wallet Tracking Methods
+  // ============================================
+
+  // Add wallet to track
+  addTrackedWallet(chatId: string, wallet: TrackedWallet): TrackedWallet[] {
+    const current = this.getUserSettings(chatId);
+
+    // Check if already at limit
+    if (current.trackedWallets.length >= MAX_WALLETS_PER_USER) {
+      throw new Error(`Maximum ${MAX_WALLETS_PER_USER} wallets per user`);
+    }
+
+    // Check if already tracked
+    const exists = current.trackedWallets.find(w => w.address === wallet.address);
+    if (exists) {
+      return current.trackedWallets;
+    }
+
+    const newTrackedWallets = [...current.trackedWallets, wallet];
+    this.updateUserSettings(chatId, { trackedWallets: newTrackedWallets });
+    return newTrackedWallets;
+  }
+
+  // Remove tracked wallet
+  removeTrackedWallet(chatId: string, address: string): TrackedWallet[] {
+    const current = this.getUserSettings(chatId);
+    const newTrackedWallets = current.trackedWallets.filter(w => w.address !== address);
+    this.updateUserSettings(chatId, { trackedWallets: newTrackedWallets });
+    return newTrackedWallets;
+  }
+
+  // Get user's tracked wallets
+  getTrackedWallets(chatId: string): TrackedWallet[] {
+    return this.getUserSettings(chatId).trackedWallets;
+  }
+
+  // Update wallet (lastChecked, lastSignature, etc.)
+  updateTrackedWallet(chatId: string, address: string, updates: Partial<TrackedWallet>): void {
+    const current = this.getUserSettings(chatId);
+    const newTrackedWallets = current.trackedWallets.map(w => {
+      if (w.address === address) {
+        return { ...w, ...updates };
+      }
+      return w;
+    });
+    this.updateUserSettings(chatId, { trackedWallets: newTrackedWallets });
+  }
+
+  // Get all chat IDs with tracked wallets (for batch processing)
+  getAllTrackedWalletChatIds(): string[] {
+    return Array.from(this.settings.entries())
+      .filter(([_, settings]) => settings.trackedWallets && settings.trackedWallets.length > 0)
+      .map(([chatId]) => chatId);
+  }
+
+  // Check if wallet is already tracked
+  isWalletTracked(chatId: string, address: string): boolean {
+    const trackedWallets = this.getTrackedWallets(chatId);
+    return trackedWallets.some(w => w.address === address);
+  }
+
+  // Get wallet tracking config
+  getMaxWalletsPerUser(): number {
+    return MAX_WALLETS_PER_USER;
   }
 }
 

@@ -198,7 +198,8 @@ export type AlertCategory =
   | 'liquidity_drain' // Liquidity removal alerts
   | 'authority_change'// Mint/freeze authority changes
   | 'price_alert'     // Watchlist price alerts
-  | 'smart_money';    // Smart money activity
+  | 'smart_money'     // Smart money activity
+  | 'wallet_activity';// Tracked wallet activity
 
 export interface AlertCategories {
   new_token: boolean;
@@ -208,6 +209,7 @@ export interface AlertCategories {
   authority_change: boolean;
   price_alert: boolean;
   smart_money: boolean;
+  wallet_activity: boolean;
 }
 
 export const DEFAULT_ALERT_CATEGORIES: AlertCategories = {
@@ -218,6 +220,7 @@ export const DEFAULT_ALERT_CATEGORIES: AlertCategories = {
   authority_change: true,
   price_alert: true,
   smart_money: true,
+  wallet_activity: true,
 };
 
 // ============================================
@@ -248,6 +251,7 @@ export const DEFAULT_CATEGORY_PRIORITIES: Record<AlertCategory, AlertPriority> =
   authority_change: 'critical',
   price_alert: 'normal',
   smart_money: 'high',
+  wallet_activity: 'high',
 };
 
 // ============================================
@@ -303,6 +307,8 @@ export interface FilterSettings {
   quietHoursStart?: number; // 0-23
   quietHoursEnd?: number; // 0-23
   timezone: string;
+  // Wallet tracking settings
+  walletAlertMinSol?: number;  // Minimum SOL value to alert (default: 0)
 }
 
 export interface WatchedToken {
@@ -327,11 +333,43 @@ export interface BlacklistEntry {
   reason?: string;      // Optional reason for blacklisting
 }
 
+// ============================================
+// Wallet Tracking Types
+// ============================================
+
+export interface TrackedWallet {
+  address: string;           // Wallet public key
+  label: string;             // User-defined label (e.g., "Whale #1", "Influencer X")
+  addedAt: number;           // Timestamp
+  lastChecked: number;       // Last poll timestamp
+  lastSignature?: string;    // Last processed tx signature (for pagination)
+  lastAlertedAt?: number;    // Cooldown tracking
+}
+
+export interface WalletTransaction {
+  signature: string;
+  timestamp: number;
+  type: 'buy' | 'sell' | 'transfer';
+  tokenMint: string;
+  tokenSymbol?: string;
+  tokenName?: string;
+  amount: number;            // Token amount
+  solAmount?: number;        // SOL value if swap
+  priceUsd?: number;         // USD value if available
+}
+
+export interface WalletActivityAlert {
+  wallet: TrackedWallet;
+  transaction: WalletTransaction;
+  chatId: string;
+}
+
 export interface UserSettings {
   chatId: string;
   filters: FilterSettings;
   watchlist: WatchedToken[];
   blacklist: BlacklistEntry[];
+  trackedWallets: TrackedWallet[];
   muteUntil?: number; // timestamp
   createdAt: number;
   updatedAt: number;
@@ -449,11 +487,18 @@ export interface StorageConfig {
   dataDir: string;
 }
 
+export interface WalletMonitorConfig {
+  enabled: boolean;
+  pollIntervalMs: number;
+  maxWalletsPerUser: number;
+}
+
 export interface ExtendedBotConfig extends BotConfig {
   watchlist: WatchlistConfig;
   rateLimit: RateLimitConfig;
   discovery: DiscoveryConfig;
   storage: StorageConfig;
+  walletMonitor: WalletMonitorConfig;
 }
 
 // ============================================

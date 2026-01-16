@@ -6,13 +6,14 @@ import { rateLimitService } from './services/ratelimit';
 import { watchlistService } from './services/watchlist';
 import { storageService } from './services/storage';
 import { advancedMonitor, AdvancedAlert } from './services/advancedMonitor';
+import { walletMonitorService } from './services/walletMonitor';
 import { raydiumMonitor } from './monitors/raydium';
 import { pumpFunMonitor } from './monitors/pumpfun';
 import { jupiterMonitor } from './monitors/jupiter';
 import { analyzeToken } from './analysis/tokenAnalyzer';
 import { incrementTokensAnalyzed } from './telegram/commands';
 import { formatAdvancedAlert } from './telegram/commands/advanced';
-import { PoolInfo, FilterSettings, TokenAnalysis, DEFAULT_CATEGORY_PRIORITIES, AlertCategory } from './types';
+import { PoolInfo, FilterSettings, TokenAnalysis, DEFAULT_CATEGORY_PRIORITIES, AlertCategory, WalletActivityAlert } from './types';
 import { logger } from './utils/logger';
 import { QUEUE, CLEANUP } from './constants';
 import { database } from './database';
@@ -113,6 +114,12 @@ class SolanaMemecoinBot {
       // Start watchlist monitoring
       if (config.watchlist.enabled) {
         await watchlistService.start();
+      }
+
+      // Start wallet monitoring
+      if (config.walletMonitor.enabled) {
+        await walletMonitorService.start();
+        this.setupWalletMonitorListeners();
       }
 
       // Start advanced monitoring (volume spikes, whale alerts, etc.)
@@ -234,6 +241,32 @@ class SolanaMemecoinBot {
         console.log(`📢 Advanced alert: ${alert.type} for ${alert.symbol}`);
       } catch (error) {
         console.error('Error sending advanced alert:', error);
+      }
+    });
+  }
+
+  private setupWalletMonitorListeners(): void {
+    walletMonitorService.on('walletActivity', async (alert: WalletActivityAlert) => {
+      try {
+        // Enrich the transaction with token metadata
+        await walletMonitorService.enrichTransaction(alert.transaction);
+
+        // Send alert via Telegram
+        await telegramService.sendWalletActivityAlert(alert);
+
+        // Add to dashboard alerts
+        const typeEmoji = alert.transaction.type === 'buy' ? '🟢' : alert.transaction.type === 'sell' ? '🔴' : '↔️';
+        apiServer.addAlert({
+          type: 'wallet_activity',
+          title: `${alert.wallet.label} ${alert.transaction.type.toUpperCase()}`,
+          description: `${alert.transaction.tokenSymbol || 'Token'} - ${alert.transaction.amount?.toLocaleString() || 'N/A'}`,
+          emoji: typeEmoji,
+          timestamp: Date.now(),
+        });
+
+        console.log(`👛 Wallet alert: ${alert.wallet.label} ${alert.transaction.type} ${alert.transaction.tokenSymbol || alert.transaction.tokenMint.slice(0, 8)}`);
+      } catch (error) {
+        logger.silentError('WalletMonitor', 'Error handling wallet activity alert', error as Error);
       }
     });
   }
@@ -580,6 +613,9 @@ class SolanaMemecoinBot {
 
     // Stop watchlist monitoring
     watchlistService.stop();
+
+    // Stop wallet monitoring
+    walletMonitorService.stop();
 
     // Stop Telegram bot
     telegramService.stop();
