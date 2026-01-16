@@ -68,10 +68,18 @@ export class JupiterMonitor extends EventEmitter {
 
     // Start polling for new tokens
     const interval = config.monitors.jupiter.pollInterval || 30000;
-    this.pollInterval = setInterval(() => this.checkNewTokens(), interval);
+    this.pollInterval = setInterval(() => {
+      this.checkNewTokens().catch((error) => {
+        console.warn('Error in Jupiter polling:', error);
+      });
+    }, interval);
 
     // Start auto-recovery interval (check every 2 minutes if circuit breaker needs reset)
-    this.recoveryInterval = setInterval(() => this.attemptAutoRecovery(), 120000);
+    this.recoveryInterval = setInterval(() => {
+      this.attemptAutoRecovery().catch((error) => {
+        console.warn('Error in Jupiter auto-recovery:', error);
+      });
+    }, 120000);
 
     console.log(`Jupiter monitor started - polling every ${interval}ms`);
   }

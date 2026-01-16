@@ -85,9 +85,9 @@ export class WalletMonitorService extends EventEmitter {
   private async initializeWebSocket(): Promise<void> {
     try {
       // Create a separate connection for WebSocket subscriptions
-      this.wsConnection = new Connection(config.solanaWsUrl, {
+      // Let the library derive the WebSocket URL from the HTTP URL automatically
+      this.wsConnection = new Connection(config.solanaRpcUrl, {
         commitment: 'confirmed',
-        wsEndpoint: config.solanaWsUrl,
       });
 
       // Subscribe to all tracked wallets
@@ -134,8 +134,10 @@ export class WalletMonitorService extends EventEmitter {
       // Subscribe to logs mentioning this wallet
       const subscriptionId = this.wsConnection.onLogs(
         pubkey,
-        async (logs: Logs) => {
-          await this.handleWalletLogs(logs, wallet, chatId);
+        (logs: Logs) => {
+          this.handleWalletLogs(logs, wallet, chatId).catch((error) => {
+            logger.silentError('WalletMonitor', `Unhandled error in logs handler for ${wallet.label}`, error as Error);
+          });
         },
         'confirmed'
       );

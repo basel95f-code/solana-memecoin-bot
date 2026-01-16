@@ -64,7 +64,11 @@ export function registerBacktestCommands(bot: Telegraf): void {
   bot.command('outcomes', handleOutcomes);
 
   // Handle text input for wizard
-  bot.on('text', handleWizardInput);
+  bot.on('text', (ctx) => {
+    handleWizardInput(ctx).catch((error) => {
+      logger.error('Backtest', 'Error in wizard input handler', error as Error);
+    });
+  });
 
   logger.info('Commands', 'Backtest commands registered');
 }

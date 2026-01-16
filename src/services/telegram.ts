@@ -93,7 +93,7 @@ class TelegramService {
       // Start bot in polling mode (non-blocking, runs in background)
       // launch() returns a promise that resolves only when bot stops
       this.bot.launch().catch((error) => {
-        console.error('Telegram bot polling error:', error);
+        logger.error('Telegram', 'Bot polling error', error as Error);
       });
 
       this.initialized = true;

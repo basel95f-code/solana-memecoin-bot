@@ -29,7 +29,11 @@ export class RaydiumMonitor extends EventEmitter {
       // Subscribe to Raydium AMM program account changes
       this.subscriptionId = solanaService.subscribeToProgram(
         RAYDIUM_AMM_PROGRAM,
-        (accountInfo, pubkey) => this.handleAccountChange(accountInfo, pubkey)
+        (accountInfo, pubkey) => {
+          this.handleAccountChange(accountInfo, pubkey).catch((error) => {
+            // Silently ignore parsing errors for non-pool accounts
+          });
+        }
       );
 
       console.log('Raydium monitor started - watching for new pools');

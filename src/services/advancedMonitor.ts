@@ -62,7 +62,11 @@ export class AdvancedMonitorService extends EventEmitter {
     await this.refreshSnapshots();
 
     // Poll every 2 minutes
-    this.pollInterval = setInterval(() => this.checkForAlerts(), 120000);
+    this.pollInterval = setInterval(() => {
+      this.checkForAlerts().catch((error) => {
+        console.error('Error in advanced monitor polling:', error);
+      });
+    }, 120000);
 
     console.log('Advanced monitor started');
   }

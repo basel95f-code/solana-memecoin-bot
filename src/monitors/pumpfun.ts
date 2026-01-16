@@ -63,7 +63,11 @@ export class PumpFunMonitor extends EventEmitter {
 
     // Start polling for new tokens
     const interval = config.monitors.pumpfun.pollInterval || 10000;
-    this.pollInterval = setInterval(() => this.fetchRecentTokens(), interval);
+    this.pollInterval = setInterval(() => {
+      this.fetchRecentTokens().catch((error) => {
+        console.error('Error in Pump.fun polling:', error);
+      });
+    }, interval);
 
     // Start periodic cleanup of seen tokens
     this.cleanupInterval = setInterval(() => this.cleanupSeenTokens(), 300000); // Every 5 minutes
