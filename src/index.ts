@@ -12,7 +12,7 @@ import { jupiterMonitor } from './monitors/jupiter';
 import { analyzeToken } from './analysis/tokenAnalyzer';
 import { incrementTokensAnalyzed } from './telegram/commands';
 import { formatAdvancedAlert } from './telegram/commands/advanced';
-import { PoolInfo, FilterSettings, TokenAnalysis } from './types';
+import { PoolInfo, FilterSettings, TokenAnalysis, DEFAULT_CATEGORY_PRIORITIES, AlertCategory } from './types';
 import { logger } from './utils/logger';
 import { QUEUE, CLEANUP } from './constants';
 import { database } from './database';
@@ -201,6 +201,15 @@ class SolanaMemecoinBot {
           if (category && !categories[category]) {
             logger.debug('Alerts', `Skipping ${alert.type} alert - category disabled`);
             return;
+          }
+
+          // Check priority level
+          if (category) {
+            const alertPriority = DEFAULT_CATEGORY_PRIORITIES[category as AlertCategory];
+            if (!storageService.shouldAlertForPriority(config.telegramChatId, alertPriority)) {
+              logger.debug('Alerts', `Skipping ${alert.type} alert - below priority threshold`);
+              return;
+            }
           }
         }
 
@@ -427,6 +436,12 @@ class SolanaMemecoinBot {
 
     // Check if new_token category is enabled
     if (filters.alertCategories && !filters.alertCategories.new_token) {
+      return false;
+    }
+
+    // Check priority level for new_token alerts
+    const alertPriority = DEFAULT_CATEGORY_PRIORITIES.new_token;
+    if (!storageService.shouldAlertForPriority(chatId, alertPriority)) {
       return false;
     }
 

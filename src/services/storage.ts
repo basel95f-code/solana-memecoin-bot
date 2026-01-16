@@ -12,6 +12,10 @@ import {
   DEFAULT_ALERT_CATEGORIES,
   BlacklistEntry,
   BlacklistType,
+  AlertPriority,
+  AlertPrioritySettings,
+  DEFAULT_PRIORITY_SETTINGS,
+  PRIORITY_ORDER,
 } from '../types';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -123,6 +127,10 @@ class StorageService {
           if (!entry.filters.alertCategories) {
             entry.filters.alertCategories = { ...DEFAULT_ALERT_CATEGORIES };
           }
+          // Ensure alertPriority exists (migrate old settings)
+          if (!entry.filters.alertPriority) {
+            entry.filters.alertPriority = { ...DEFAULT_PRIORITY_SETTINGS };
+          }
           this.settings.set(entry.chatId, entry);
           validCount++;
         } else {
@@ -198,6 +206,7 @@ class StorageService {
       ...FILTER_PRESETS.balanced,
       alertsEnabled: true,
       alertCategories: { ...DEFAULT_ALERT_CATEGORIES },
+      alertPriority: { ...DEFAULT_PRIORITY_SETTINGS },
       timezone: 'UTC',
     };
   }
@@ -219,6 +228,10 @@ class StorageService {
     // Ensure blacklist exists (migrate old settings)
     if (!settings.blacklist) {
       settings.blacklist = [];
+    }
+    // Ensure alertPriority exists (migrate old settings)
+    if (!settings.filters.alertPriority) {
+      settings.filters.alertPriority = { ...DEFAULT_PRIORITY_SETTINGS };
     }
     return settings;
   }
@@ -374,6 +387,43 @@ class StorageService {
       filters: { ...current.filters, alertCategories: newCategories },
     });
     return newCategories;
+  }
+
+  // Alert Priority
+  getAlertPriority(chatId: string): AlertPrioritySettings {
+    const settings = this.getUserSettings(chatId);
+    return settings.filters.alertPriority || { ...DEFAULT_PRIORITY_SETTINGS };
+  }
+
+  setMinPriority(chatId: string, priority: AlertPriority): AlertPrioritySettings {
+    const current = this.getUserSettings(chatId);
+    const newPriority: AlertPrioritySettings = {
+      ...current.filters.alertPriority,
+      minPriority: priority,
+    };
+    this.updateUserSettings(chatId, {
+      filters: { ...current.filters, alertPriority: newPriority },
+    });
+    return newPriority;
+  }
+
+  setSoundEnabled(chatId: string, enabled: boolean): AlertPrioritySettings {
+    const current = this.getUserSettings(chatId);
+    const newPriority: AlertPrioritySettings = {
+      ...current.filters.alertPriority,
+      soundEnabled: enabled,
+    };
+    this.updateUserSettings(chatId, {
+      filters: { ...current.filters, alertPriority: newPriority },
+    });
+    return newPriority;
+  }
+
+  shouldAlertForPriority(chatId: string, priority: AlertPriority): boolean {
+    const settings = this.getAlertPriority(chatId);
+    const minIndex = PRIORITY_ORDER.indexOf(settings.minPriority);
+    const alertIndex = PRIORITY_ORDER.indexOf(priority);
+    return alertIndex >= minIndex;
   }
 
   // Watchlist

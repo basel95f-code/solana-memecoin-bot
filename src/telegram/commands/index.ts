@@ -32,6 +32,7 @@ export function registerAllCommands(bot: Telegraf): void {
     { command: 'alerts', description: 'Toggle alerts on/off' },
     { command: 'mute', description: 'Mute alerts temporarily' },
     { command: 'quiet', description: 'Set quiet hours' },
+    { command: 'priority', description: 'Set alert priority' },
     { command: 'bl', description: 'Manage blacklist' },
     // Filters
     { command: 'filter', description: 'Set filter profile' },

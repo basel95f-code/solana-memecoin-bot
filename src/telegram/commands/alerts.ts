@@ -1,6 +1,13 @@
 import { Context, Telegraf } from 'telegraf';
 import { storageService } from '../../services/storage';
-import { AlertCategory, AlertCategories, DEFAULT_ALERT_CATEGORIES } from '../../types';
+import {
+  AlertCategory,
+  AlertCategories,
+  DEFAULT_ALERT_CATEGORIES,
+  AlertPriority,
+  PRIORITY_ORDER,
+  DEFAULT_PRIORITY_SETTINGS,
+} from '../../types';
 import { Markup } from 'telegraf';
 
 // Category display info
@@ -24,6 +31,14 @@ const ALL_CATEGORIES: AlertCategory[] = [
   'smart_money',
 ];
 
+// Priority display info
+const PRIORITY_INFO: Record<AlertPriority, { emoji: string; name: string; desc: string }> = {
+  critical: { emoji: '🔴', name: 'Critical', desc: 'Liquidity drains, authority changes' },
+  high: { emoji: '🟠', name: 'High', desc: 'Whale moves, smart money' },
+  normal: { emoji: '🟡', name: 'Normal', desc: 'New tokens, volume spikes, price alerts' },
+  low: { emoji: '🟢', name: 'Low', desc: 'All alerts including minor ones' },
+};
+
 // Common quiet hour presets
 const QUIET_PRESETS = [
   { label: 'Night (22:00-08:00)', start: 22, end: 8 },
@@ -41,6 +56,7 @@ function formatAlertStatus(chatId: string): string {
   const isMuted = storageService.isAlertsMuted(chatId);
   const isQuiet = storageService.isQuietHours(chatId);
   const categories = settings.filters.alertCategories || DEFAULT_ALERT_CATEGORIES;
+  const priority = settings.filters.alertPriority || DEFAULT_PRIORITY_SETTINGS;
 
   let msg = '<b>🔔 Alert Settings</b>\n\n';
 
@@ -55,6 +71,10 @@ function formatAlertStatus(chatId: string): string {
   } else {
     msg += '🟢 Master: <b>ON</b>\n';
   }
+
+  // Priority level
+  const prioInfo = PRIORITY_INFO[priority.minPriority];
+  msg += `${prioInfo.emoji} Priority: <b>${prioInfo.name}+</b>\n`;
 
   // Quiet hours status
   const { quietHoursStart, quietHoursEnd } = settings.filters;
@@ -105,6 +125,13 @@ function getCategoryKeyboard(chatId: string) {
     Markup.button.callback('❌ Disable All', 'alert_cat_all_off'),
   ]);
 
+  // Priority and quiet hours buttons
+  const priority = settings.filters.alertPriority || DEFAULT_PRIORITY_SETTINGS;
+  const prioInfo = PRIORITY_INFO[priority.minPriority];
+  buttons.push([
+    Markup.button.callback(`${prioInfo.emoji} Priority: ${prioInfo.name}`, 'alert_priority_menu'),
+  ]);
+
   // Quiet hours button
   const hasQuiet = settings.filters.quietHoursStart !== undefined;
   buttons.push([
@@ -118,6 +145,59 @@ function getCategoryKeyboard(chatId: string) {
   buttons.push([masterBtn]);
 
   return Markup.inlineKeyboard(buttons);
+}
+
+function getPriorityKeyboard(chatId: string) {
+  const priority = storageService.getAlertPriority(chatId);
+  const buttons: any[][] = [];
+
+  // Priority level buttons
+  for (const level of [...PRIORITY_ORDER].reverse()) { // Show critical first
+    const info = PRIORITY_INFO[level];
+    const isSelected = priority.minPriority === level;
+    const check = isSelected ? ' ✓' : '';
+    buttons.push([
+      Markup.button.callback(`${info.emoji} ${info.name}+ only${check}`, `alert_prio_set_${level}`),
+    ]);
+  }
+
+  // Sound toggle
+  buttons.push([
+    Markup.button.callback(
+      priority.soundEnabled ? '🔊 Sound: ON' : '🔇 Sound: OFF',
+      'alert_prio_sound'
+    ),
+  ]);
+
+  // Back button
+  buttons.push([
+    Markup.button.callback('« Back to Alerts', 'alert_back'),
+  ]);
+
+  return Markup.inlineKeyboard(buttons);
+}
+
+function formatPriorityMenu(chatId: string): string {
+  const priority = storageService.getAlertPriority(chatId);
+  const prioInfo = PRIORITY_INFO[priority.minPriority];
+
+  let msg = '<b>⚡ Alert Priority</b>\n\n';
+  msg += `Current: ${prioInfo.emoji} <b>${prioInfo.name}+</b>\n`;
+  msg += `Sound: ${priority.soundEnabled ? '🔊 ON' : '🔇 OFF'}\n\n`;
+
+  msg += '<b>Priority Levels:</b>\n';
+  for (const level of [...PRIORITY_ORDER].reverse()) {
+    const info = PRIORITY_INFO[level];
+    const minIndex = PRIORITY_ORDER.indexOf(priority.minPriority);
+    const levelIndex = PRIORITY_ORDER.indexOf(level);
+    const willReceive = levelIndex >= minIndex ? '✓' : '✗';
+    msg += `${info.emoji} <b>${info.name}</b> ${willReceive}\n`;
+    msg += `   <i>${info.desc}</i>\n`;
+  }
+
+  msg += '\n<i>Higher priority = fewer but more important alerts</i>';
+
+  return msg;
 }
 
 function getQuietHoursKeyboard(chatId: string) {
@@ -218,6 +298,7 @@ export function registerAlertCommands(bot: Telegraf): void {
       helpMsg += '<code>/alerts</code> - Interactive settings menu\n';
       helpMsg += '<code>/alerts on</code> - Enable all alerts\n';
       helpMsg += '<code>/alerts off</code> - Disable all alerts\n';
+      helpMsg += '<code>/priority [level]</code> - Set min priority\n';
       helpMsg += '<code>/quiet HH HH</code> - Set quiet hours\n';
       helpMsg += '<code>/mute [mins]</code> - Mute for X minutes\n\n';
       helpMsg += '<b>Toggle specific categories:</b>\n';
@@ -232,6 +313,39 @@ export function registerAlertCommands(bot: Telegraf): void {
     await ctx.replyWithHTML(
       `Unknown option: <code>${action}</code>\n\n` +
       `Use <code>/alerts</code> for settings or <code>/alerts help</code> for commands.`
+    );
+  });
+
+  // /priority command - set minimum priority level
+  bot.command('priority', async (ctx: Context) => {
+    const chatId = ctx.chat?.id.toString();
+    if (!chatId) return;
+
+    const text = ctx.message && 'text' in ctx.message ? ctx.message.text : '';
+    const args = text.split(' ').slice(1);
+
+    // No args - show menu
+    if (args.length === 0) {
+      const menuMsg = formatPriorityMenu(chatId);
+      await ctx.replyWithHTML(menuMsg, getPriorityKeyboard(chatId));
+      return;
+    }
+
+    const level = args[0].toLowerCase() as AlertPriority;
+    if (PRIORITY_ORDER.includes(level)) {
+      storageService.setMinPriority(chatId, level);
+      const info = PRIORITY_INFO[level];
+      await ctx.replyWithHTML(
+        `${info.emoji} Priority set to <b>${info.name}+</b>\n\n` +
+        `You'll only receive ${info.name} and higher priority alerts.`
+      );
+      return;
+    }
+
+    await ctx.replyWithHTML(
+      `Invalid priority level.\n\n` +
+      `Available: <code>critical</code>, <code>high</code>, <code>normal</code>, <code>low</code>\n\n` +
+      `Example: <code>/priority high</code>`
     );
   });
 
@@ -316,6 +430,55 @@ export function registerAlertCommands(bot: Telegraf): void {
     await ctx.editMessageText(statusMsg, {
       parse_mode: 'HTML',
       ...getCategoryKeyboard(chatId),
+    });
+  });
+
+  // Handle priority menu
+  bot.action('alert_priority_menu', async (ctx) => {
+    const chatId = ctx.chat?.id.toString();
+    if (!chatId) return;
+
+    await ctx.answerCbQuery();
+    const menuMsg = formatPriorityMenu(chatId);
+    await ctx.editMessageText(menuMsg, {
+      parse_mode: 'HTML',
+      ...getPriorityKeyboard(chatId),
+    });
+  });
+
+  // Handle priority level change
+  bot.action(/^alert_prio_set_(.+)$/, async (ctx) => {
+    const chatId = ctx.chat?.id.toString();
+    if (!chatId) return;
+
+    const level = ctx.match[1] as AlertPriority;
+    if (PRIORITY_ORDER.includes(level)) {
+      storageService.setMinPriority(chatId, level);
+      const info = PRIORITY_INFO[level];
+      await ctx.answerCbQuery(`Priority: ${info.name}+`);
+
+      const menuMsg = formatPriorityMenu(chatId);
+      await ctx.editMessageText(menuMsg, {
+        parse_mode: 'HTML',
+        ...getPriorityKeyboard(chatId),
+      });
+    }
+  });
+
+  // Handle sound toggle
+  bot.action('alert_prio_sound', async (ctx) => {
+    const chatId = ctx.chat?.id.toString();
+    if (!chatId) return;
+
+    const current = storageService.getAlertPriority(chatId);
+    const newState = !current.soundEnabled;
+    storageService.setSoundEnabled(chatId, newState);
+    await ctx.answerCbQuery(`Sound: ${newState ? 'ON' : 'OFF'}`);
+
+    const menuMsg = formatPriorityMenu(chatId);
+    await ctx.editMessageText(menuMsg, {
+      parse_mode: 'HTML',
+      ...getPriorityKeyboard(chatId),
     });
   });
 

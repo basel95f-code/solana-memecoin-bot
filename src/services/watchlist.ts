@@ -2,7 +2,7 @@ import { config } from '../config';
 import { storageService } from './storage';
 import { dexScreenerService } from './dexscreener';
 import { telegramService } from './telegram';
-import { WatchedToken } from '../types';
+import { WatchedToken, DEFAULT_CATEGORY_PRIORITIES } from '../types';
 import { withRetry } from '../utils/retry';
 import axios from 'axios';
 
@@ -240,6 +240,12 @@ class WatchlistService {
         const categories = settings.filters.alertCategories;
         if (categories && !categories.price_alert) {
           continue; // Skip if price alerts are disabled
+        }
+
+        // Check priority level
+        const alertPriority = DEFAULT_CATEGORY_PRIORITIES.price_alert;
+        if (!storageService.shouldAlertForPriority(chatId, alertPriority)) {
+          continue; // Skip if below priority threshold
         }
 
         console.log(`Watchlist alert: ${token.symbol} moved ${priceChangeFromLast.toFixed(1)}%`);

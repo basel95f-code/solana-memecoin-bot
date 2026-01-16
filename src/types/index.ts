@@ -221,6 +221,36 @@ export const DEFAULT_ALERT_CATEGORIES: AlertCategories = {
 };
 
 // ============================================
+// Alert Priority Levels
+// ============================================
+
+export type AlertPriority = 'critical' | 'high' | 'normal' | 'low';
+
+export interface AlertPrioritySettings {
+  minPriority: AlertPriority;  // Only show alerts at or above this level
+  soundEnabled: boolean;       // Play sound for critical alerts (Telegram notification)
+}
+
+export const DEFAULT_PRIORITY_SETTINGS: AlertPrioritySettings = {
+  minPriority: 'low',          // Show all alerts by default
+  soundEnabled: true,
+};
+
+// Priority level order (higher index = higher priority)
+export const PRIORITY_ORDER: AlertPriority[] = ['low', 'normal', 'high', 'critical'];
+
+// Default priority for each alert category
+export const DEFAULT_CATEGORY_PRIORITIES: Record<AlertCategory, AlertPriority> = {
+  new_token: 'normal',
+  volume_spike: 'normal',
+  whale_movement: 'high',
+  liquidity_drain: 'critical',
+  authority_change: 'critical',
+  price_alert: 'normal',
+  smart_money: 'high',
+};
+
+// ============================================
 // Filter Profiles & User Settings
 // ============================================
 
@@ -269,6 +299,7 @@ export interface FilterSettings {
   fastMode?: boolean;
   alertsEnabled: boolean;
   alertCategories: AlertCategories;
+  alertPriority: AlertPrioritySettings;
   quietHoursStart?: number; // 0-23
   quietHoursEnd?: number; // 0-23
   timezone: string;
@@ -496,7 +527,7 @@ export interface SmartMoneyActivity {
 }
 
 // Base filter settings type for presets (excludes user-specific fields)
-type FilterPreset = Omit<FilterSettings, 'profile' | 'alertsEnabled' | 'alertCategories' | 'quietHoursStart' | 'quietHoursEnd' | 'timezone'>;
+type FilterPreset = Omit<FilterSettings, 'profile' | 'alertsEnabled' | 'alertCategories' | 'alertPriority' | 'quietHoursStart' | 'quietHoursEnd' | 'timezone'>;
 
 export const FILTER_PRESETS: Record<Exclude<FilterProfile, 'custom'>, FilterPreset> = {
   // ==========================================
