@@ -7,6 +7,7 @@ import { registerWatchlistCommands } from './watchlist';
 import { registerDiscoveryCommands } from './discovery';
 import { registerSettingsCommands } from './settings';
 import { registerAdvancedCommands } from './advanced';
+import { registerBlacklistCommands } from './blacklist';
 
 export function registerAllCommands(bot: Telegraf): void {
   // Register all command handlers
@@ -18,6 +19,7 @@ export function registerAllCommands(bot: Telegraf): void {
   registerDiscoveryCommands(bot);
   registerSettingsCommands(bot);
   registerAdvancedCommands(bot);
+  registerBlacklistCommands(bot);
 
   // Set up bot commands menu
   bot.telegram.setMyCommands([
@@ -29,6 +31,8 @@ export function registerAllCommands(bot: Telegraf): void {
     // Alerts
     { command: 'alerts', description: 'Toggle alerts on/off' },
     { command: 'mute', description: 'Mute alerts temporarily' },
+    { command: 'quiet', description: 'Set quiet hours' },
+    { command: 'bl', description: 'Manage blacklist' },
     // Filters
     { command: 'filter', description: 'Set filter profile' },
     { command: 'settings', description: 'Show all settings' },

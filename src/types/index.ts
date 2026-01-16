@@ -188,6 +188,39 @@ export const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 export const USDT_MINT = 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB';
 
 // ============================================
+// Alert Categories
+// ============================================
+
+export type AlertCategory =
+  | 'new_token'       // New token discovered
+  | 'volume_spike'    // Volume spike detection
+  | 'whale_movement'  // Whale buy/sell alerts
+  | 'liquidity_drain' // Liquidity removal alerts
+  | 'authority_change'// Mint/freeze authority changes
+  | 'price_alert'     // Watchlist price alerts
+  | 'smart_money';    // Smart money activity
+
+export interface AlertCategories {
+  new_token: boolean;
+  volume_spike: boolean;
+  whale_movement: boolean;
+  liquidity_drain: boolean;
+  authority_change: boolean;
+  price_alert: boolean;
+  smart_money: boolean;
+}
+
+export const DEFAULT_ALERT_CATEGORIES: AlertCategories = {
+  new_token: true,
+  volume_spike: true,
+  whale_movement: true,
+  liquidity_drain: true,
+  authority_change: true,
+  price_alert: true,
+  smart_money: true,
+};
+
+// ============================================
 // Filter Profiles & User Settings
 // ============================================
 
@@ -235,6 +268,7 @@ export interface FilterSettings {
   // Mode settings
   fastMode?: boolean;
   alertsEnabled: boolean;
+  alertCategories: AlertCategories;
   quietHoursStart?: number; // 0-23
   quietHoursEnd?: number; // 0-23
   timezone: string;
@@ -252,10 +286,21 @@ export interface WatchedToken {
   priceChangePercent: number;
 }
 
+export type BlacklistType = 'token' | 'creator';
+
+export interface BlacklistEntry {
+  address: string;      // Token mint or creator wallet address
+  type: BlacklistType;  // 'token' or 'creator'
+  label?: string;       // Optional label (symbol, name, or note)
+  addedAt: number;      // timestamp
+  reason?: string;      // Optional reason for blacklisting
+}
+
 export interface UserSettings {
   chatId: string;
   filters: FilterSettings;
   watchlist: WatchedToken[];
+  blacklist: BlacklistEntry[];
   muteUntil?: number; // timestamp
   createdAt: number;
   updatedAt: number;
@@ -451,7 +496,7 @@ export interface SmartMoneyActivity {
 }
 
 // Base filter settings type for presets (excludes user-specific fields)
-type FilterPreset = Omit<FilterSettings, 'profile' | 'alertsEnabled' | 'quietHoursStart' | 'quietHoursEnd' | 'timezone'>;
+type FilterPreset = Omit<FilterSettings, 'profile' | 'alertsEnabled' | 'alertCategories' | 'quietHoursStart' | 'quietHoursEnd' | 'timezone'>;
 
 export const FILTER_PRESETS: Record<Exclude<FilterProfile, 'custom'>, FilterPreset> = {
   // ==========================================

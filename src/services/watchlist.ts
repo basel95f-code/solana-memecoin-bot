@@ -222,6 +222,26 @@ class WatchlistService {
       const canAlert = Date.now() - lastAlerted >= cooldownMs;
 
       if (shouldAlert && canAlert) {
+        // Check if alerts are enabled and not in quiet hours
+        const settings = storageService.getUserSettings(chatId);
+        if (!settings.filters.alertsEnabled) {
+          continue;
+        }
+        if (storageService.isQuietHours(chatId)) {
+          continue; // Skip during quiet hours
+        }
+
+        // Check if token is blacklisted
+        if (storageService.isTokenBlacklisted(chatId, token.mint)) {
+          continue; // Skip blacklisted tokens
+        }
+
+        // Check if price_alert category is enabled
+        const categories = settings.filters.alertCategories;
+        if (categories && !categories.price_alert) {
+          continue; // Skip if price alerts are disabled
+        }
+
         console.log(`Watchlist alert: ${token.symbol} moved ${priceChangeFromLast.toFixed(1)}%`);
 
         // Send alert

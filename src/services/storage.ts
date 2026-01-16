@@ -7,6 +7,11 @@ import {
   FilterProfile,
   WatchedToken,
   FILTER_PRESETS,
+  AlertCategories,
+  AlertCategory,
+  DEFAULT_ALERT_CATEGORIES,
+  BlacklistEntry,
+  BlacklistType,
 } from '../types';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -114,6 +119,10 @@ class StorageService {
           if (!isValidFilterSettings(entry.filters)) {
             entry.filters = this.getDefaultFilters();
           }
+          // Ensure alertCategories exists (migrate old settings)
+          if (!entry.filters.alertCategories) {
+            entry.filters.alertCategories = { ...DEFAULT_ALERT_CATEGORIES };
+          }
           this.settings.set(entry.chatId, entry);
           validCount++;
         } else {
@@ -188,6 +197,7 @@ class StorageService {
       profile: 'balanced',
       ...FILTER_PRESETS.balanced,
       alertsEnabled: true,
+      alertCategories: { ...DEFAULT_ALERT_CATEGORIES },
       timezone: 'UTC',
     };
   }
@@ -199,11 +209,16 @@ class StorageService {
         chatId,
         filters: this.getDefaultFilters(),
         watchlist: [],
+        blacklist: [],
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
       this.settings.set(chatId, settings);
       this.save();
+    }
+    // Ensure blacklist exists (migrate old settings)
+    if (!settings.blacklist) {
+      settings.blacklist = [];
     }
     return settings;
   }
@@ -312,6 +327,55 @@ class StorageService {
     });
   }
 
+  // Alert Categories
+  setAlertCategory(chatId: string, category: AlertCategory, enabled: boolean): AlertCategories {
+    const current = this.getUserSettings(chatId);
+    const categories = current.filters.alertCategories || { ...DEFAULT_ALERT_CATEGORIES };
+    const newCategories: AlertCategories = {
+      ...categories,
+      [category]: enabled,
+    };
+    this.updateUserSettings(chatId, {
+      filters: { ...current.filters, alertCategories: newCategories },
+    });
+    return newCategories;
+  }
+
+  toggleAlertCategory(chatId: string, category: AlertCategory): boolean {
+    const current = this.getUserSettings(chatId);
+    const categories = current.filters.alertCategories || { ...DEFAULT_ALERT_CATEGORIES };
+    const newState = !categories[category];
+    this.setAlertCategory(chatId, category, newState);
+    return newState;
+  }
+
+  getAlertCategories(chatId: string): AlertCategories {
+    const settings = this.getUserSettings(chatId);
+    return settings.filters.alertCategories || { ...DEFAULT_ALERT_CATEGORIES };
+  }
+
+  isAlertCategoryEnabled(chatId: string, category: AlertCategory): boolean {
+    const categories = this.getAlertCategories(chatId);
+    return categories[category] ?? true;
+  }
+
+  setAllAlertCategories(chatId: string, enabled: boolean): AlertCategories {
+    const newCategories: AlertCategories = {
+      new_token: enabled,
+      volume_spike: enabled,
+      whale_movement: enabled,
+      liquidity_drain: enabled,
+      authority_change: enabled,
+      price_alert: enabled,
+      smart_money: enabled,
+    };
+    const current = this.getUserSettings(chatId);
+    this.updateUserSettings(chatId, {
+      filters: { ...current.filters, alertCategories: newCategories },
+    });
+    return newCategories;
+  }
+
   // Watchlist
   addToWatchlist(chatId: string, token: WatchedToken): WatchedToken[] {
     const current = this.getUserSettings(chatId);
@@ -355,6 +419,55 @@ class StorageService {
     return Array.from(this.settings.entries())
       .filter(([_, settings]) => settings.watchlist.length > 0)
       .map(([chatId]) => chatId);
+  }
+
+  // Blacklist management
+  addToBlacklist(chatId: string, entry: BlacklistEntry): BlacklistEntry[] {
+    const current = this.getUserSettings(chatId);
+    const exists = current.blacklist.find(
+      e => e.address === entry.address && e.type === entry.type
+    );
+    if (exists) {
+      return current.blacklist;
+    }
+    const newBlacklist = [...current.blacklist, entry];
+    this.updateUserSettings(chatId, { blacklist: newBlacklist });
+    return newBlacklist;
+  }
+
+  removeFromBlacklist(chatId: string, address: string): BlacklistEntry[] {
+    const current = this.getUserSettings(chatId);
+    const newBlacklist = current.blacklist.filter(e => e.address !== address);
+    this.updateUserSettings(chatId, { blacklist: newBlacklist });
+    return newBlacklist;
+  }
+
+  getBlacklist(chatId: string): BlacklistEntry[] {
+    return this.getUserSettings(chatId).blacklist || [];
+  }
+
+  getBlacklistByType(chatId: string, type: BlacklistType): BlacklistEntry[] {
+    const blacklist = this.getBlacklist(chatId);
+    return blacklist.filter(e => e.type === type);
+  }
+
+  clearBlacklist(chatId: string): void {
+    this.updateUserSettings(chatId, { blacklist: [] });
+  }
+
+  isBlacklisted(chatId: string, address: string): boolean {
+    const blacklist = this.getBlacklist(chatId);
+    return blacklist.some(e => e.address === address);
+  }
+
+  isTokenBlacklisted(chatId: string, mint: string): boolean {
+    const blacklist = this.getBlacklist(chatId);
+    return blacklist.some(e => e.type === 'token' && e.address === mint);
+  }
+
+  isCreatorBlacklisted(chatId: string, creator: string): boolean {
+    const blacklist = this.getBlacklist(chatId);
+    return blacklist.some(e => e.type === 'creator' && e.address === creator);
   }
 
   // Delete user settings

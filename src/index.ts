@@ -167,6 +167,43 @@ class SolanaMemecoinBot {
     // Advanced monitor alerts (volume spikes, whale movements, etc.)
     advancedMonitor.on('alert', async (alert: AdvancedAlert) => {
       try {
+        // Check if this alert category is enabled
+        const settings = storageService.getUserSettings(config.telegramChatId);
+        const categories = settings.filters.alertCategories;
+
+        // Check if alerts are enabled
+        if (!settings.filters.alertsEnabled) {
+          return;
+        }
+
+        // Check if in quiet hours
+        if (storageService.isQuietHours(config.telegramChatId)) {
+          logger.debug('Alerts', `Skipping ${alert.type} alert - quiet hours active`);
+          return;
+        }
+
+        // Check if token is blacklisted
+        if (storageService.isTokenBlacklisted(config.telegramChatId, alert.tokenMint)) {
+          logger.debug('Alerts', `Skipping ${alert.type} alert - token blacklisted`);
+          return;
+        }
+
+        if (categories) {
+          // Map alert types to categories
+          const categoryMap: Record<string, keyof typeof categories> = {
+            'volume_spike': 'volume_spike',
+            'whale_movement': 'whale_movement',
+            'liquidity_drain': 'liquidity_drain',
+            'authority_change': 'authority_change',
+          };
+
+          const category = categoryMap[alert.type];
+          if (category && !categories[category]) {
+            logger.debug('Alerts', `Skipping ${alert.type} alert - category disabled`);
+            return;
+          }
+        }
+
         const message = formatAdvancedAlert(alert);
         await telegramService.sendMessage(message, config.telegramChatId);
 
@@ -380,6 +417,21 @@ class SolanaMemecoinBot {
 
     // Check if alerts are enabled
     if (!filters.alertsEnabled) {
+      return false;
+    }
+
+    // Check if currently in quiet hours
+    if (storageService.isQuietHours(chatId)) {
+      return false;
+    }
+
+    // Check if new_token category is enabled
+    if (filters.alertCategories && !filters.alertCategories.new_token) {
+      return false;
+    }
+
+    // Check if token is blacklisted
+    if (storageService.isTokenBlacklisted(chatId, analysis.token.mint)) {
       return false;
     }
 
