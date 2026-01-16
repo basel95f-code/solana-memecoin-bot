@@ -9,6 +9,8 @@ interface CooldownEntry {
 class RateLimitService {
   // chatId -> (tokenMint -> cooldown info)
   private tokenCooldowns: Map<string, Map<string, CooldownEntry>> = new Map();
+  // chatId -> array of alert timestamps for sliding window counting
+  private alertTimestamps: Map<string, number[]> = new Map();
 
   private getCooldownMs(): number {
     return config.rateLimit.tokenCooldownMinutes * 60 * 1000;
@@ -43,20 +45,21 @@ class RateLimitService {
   }
 
   canSendAnyAlert(chatId: string): boolean {
-    const chatCooldowns = this.getOrCreateChatCooldowns(chatId);
+    // Use sliding window for O(1) amortized counting
+    const timestamps = this.alertTimestamps.get(chatId);
+    if (!timestamps || timestamps.length === 0) {
+      return true;
+    }
+
     const now = Date.now();
     const oneHourAgo = now - 3600000;
 
-    // Count alerts in the last hour
-    let alertsInLastHour = 0;
+    // Prune old timestamps from the front (they're sorted)
+    while (timestamps.length > 0 && timestamps[0] < oneHourAgo) {
+      timestamps.shift();
+    }
 
-    chatCooldowns.forEach(entry => {
-      if (entry.lastAlertTime >= oneHourAgo) {
-        alertsInLastHour++;
-      }
-    });
-
-    return alertsInLastHour < config.rateLimit.maxAlertsPerHour;
+    return timestamps.length < config.rateLimit.maxAlertsPerHour;
   }
 
   markAlertSent(chatId: string, tokenMint: string): void {
@@ -70,6 +73,14 @@ class RateLimitService {
       alertCount: (existing?.alertCount || 0) + 1,
       hourStartTime: existing?.hourStartTime || now,
     });
+
+    // Add to sliding window timestamps
+    let timestamps = this.alertTimestamps.get(chatId);
+    if (!timestamps) {
+      timestamps = [];
+      this.alertTimestamps.set(chatId, timestamps);
+    }
+    timestamps.push(now);
   }
 
   getCooldownRemaining(chatId: string, tokenMint: string): number {
@@ -87,26 +98,25 @@ class RateLimitService {
   }
 
   getAlertsRemainingThisHour(chatId: string): number {
-    const chatCooldowns = this.tokenCooldowns.get(chatId);
-    if (!chatCooldowns) return config.rateLimit.maxAlertsPerHour;
+    const timestamps = this.alertTimestamps.get(chatId);
+    if (!timestamps) return config.rateLimit.maxAlertsPerHour;
 
     const now = Date.now();
     const oneHourAgo = now - 3600000;
 
-    let alertsInLastHour = 0;
-    chatCooldowns.forEach(entry => {
-      if (entry.lastAlertTime >= oneHourAgo) {
-        alertsInLastHour++;
-      }
-    });
+    // Prune old timestamps
+    while (timestamps.length > 0 && timestamps[0] < oneHourAgo) {
+      timestamps.shift();
+    }
 
-    return Math.max(0, config.rateLimit.maxAlertsPerHour - alertsInLastHour);
+    return Math.max(0, config.rateLimit.maxAlertsPerHour - timestamps.length);
   }
 
   // Clean up old cooldown entries (call periodically)
   cleanup(): void {
     const now = Date.now();
     const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+    const oneHourAgo = now - 3600000;
 
     this.tokenCooldowns.forEach((chatCooldowns, chatId) => {
       chatCooldowns.forEach((entry, tokenMint) => {
@@ -118,6 +128,16 @@ class RateLimitService {
       // Remove empty chat maps
       if (chatCooldowns.size === 0) {
         this.tokenCooldowns.delete(chatId);
+      }
+    });
+
+    // Cleanup alert timestamps (remove old entries)
+    this.alertTimestamps.forEach((timestamps, chatId) => {
+      while (timestamps.length > 0 && timestamps[0] < oneHourAgo) {
+        timestamps.shift();
+      }
+      if (timestamps.length === 0) {
+        this.alertTimestamps.delete(chatId);
       }
     });
   }

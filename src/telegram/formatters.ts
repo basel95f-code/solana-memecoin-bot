@@ -51,6 +51,22 @@ export function getPriceChangeEmoji(change: number): string {
   return '💀';
 }
 
+export function getSentimentEmoji(score: number): string {
+  if (score > 0.5) return '🟢';
+  if (score > 0.2) return '🌱';
+  if (score >= -0.2) return '⚪';
+  if (score >= -0.5) return '🟠';
+  return '🔴';
+}
+
+export function getSentimentLabel(score: number): string {
+  if (score > 0.5) return 'Very Positive';
+  if (score > 0.2) return 'Positive';
+  if (score >= -0.2) return 'Neutral';
+  if (score >= -0.5) return 'Negative';
+  return 'Very Negative';
+}
+
 export function truncateAddress(address: string, chars: number = 4): string {
   return `${address.slice(0, chars)}...${address.slice(-chars)}`;
 }
@@ -81,39 +97,61 @@ export function formatTokenAlert(
   dexData?: DexScreenerPair,
   mlPrediction?: MLPrediction
 ): string {
-  const { token, pool, liquidity, holders, contract, social, risk } = analysis;
+  const { token, pool, liquidity, holders, contract, social, sentiment, risk } = analysis;
 
   const priceUsd = dexData?.priceUsd ? parseFloat(dexData.priceUsd) : 0;
   const volume24h = dexData?.volume?.h24 || 0;
   const priceChange24h = dexData?.priceChange?.h24 || 0;
   const buys24h = dexData?.txns?.h24?.buys || 0;
   const sells24h = dexData?.txns?.h24?.sells || 0;
-  const buyRatio = sells24h > 0 ? (buys24h / sells24h).toFixed(2) : 'N/A';
+  const buyRatio = sells24h > 0 ? (buys24h / sells24h).toFixed(2) : '∞';
+
+  // Fun header based on risk
+  const header = risk.level === 'LOW' ? '🎯 GEM ALERT!' :
+                 risk.level === 'MEDIUM' ? '👀 NEW TOKEN SPOTTED!' :
+                 risk.level === 'HIGH' ? '⚠️ RISKY TOKEN DETECTED' :
+                 '🚨 DEGEN ALERT';
 
   const lines = [
-    `${getRiskEmoji(risk.level)} <b>NEW TOKEN</b> | Score: ${risk.score}/100`,
+    `${getRiskEmoji(risk.level)} <b>${header}</b>`,
     ``,
-    `<b>${token.name}</b> ($${token.symbol})`,
+    `🪙 <b>${token.name}</b> ($${token.symbol})`,
     `<code>${token.mint}</code>`,
     ``,
-    `💰 <b>Market</b>`,
-    priceUsd > 0 ? `├ Price: ${formatPrice(priceUsd)} ${getPriceChangeEmoji(priceChange24h)} ${formatPercent(priceChange24h)}` : null,
-    dexData?.marketCap ? `├ MCap: $${formatNumber(dexData.marketCap)}` : null,
-    `├ Liq: $${formatNumber(liquidity.totalLiquidityUsd)} ${liquidity.lpBurned ? '🔥' : liquidity.lpLocked ? '🔒' : ''}`,
-    volume24h > 0 ? `└ Vol 24h: $${formatNumber(volume24h)}` : null,
+    `💵 ━━━ MARKET ━━━`,
+    priceUsd > 0 ? `💲 Price: ${formatPrice(priceUsd)} ${getPriceChangeEmoji(priceChange24h)} ${formatPercent(priceChange24h)}` : null,
+    dexData?.marketCap ? `📊 MCap: $${formatNumber(dexData.marketCap)}` : null,
+    `💧 Liquidity: $${formatNumber(liquidity.totalLiquidityUsd)} ${liquidity.lpBurned ? '🔥' : liquidity.lpLocked ? '🔒' : ''}`,
+    volume24h > 0 ? `📈 Volume 24h: $${formatNumber(volume24h)}` : null,
     ``,
-    `📊 <b>Activity</b>`,
-    buys24h > 0 || sells24h > 0 ? `├ Buys: ${buys24h} | Sells: ${sells24h} (${buyRatio})` : null,
-    `└ Holders: ${holders.totalHolders} | Top 10: ${holders.top10HoldersPercent.toFixed(1)}%`,
+    `👥 ━━━ COMMUNITY ━━━`,
+    `🧑‍🤝‍🧑 Holders: ${holders.totalHolders > 0 ? holders.totalHolders.toLocaleString() : 'Loading...'}`,
+    `🏆 Top 10 own: ${holders.top10HoldersPercent.toFixed(1)}%`,
+    buys24h > 0 || sells24h > 0 ? `🛒 Buys: ${buys24h} | 🏷️ Sells: ${sells24h} (${buyRatio}x)` : null,
     ``,
-    `🔒 <b>Security</b>`,
-    `├ Mint: ${contract.mintAuthorityRevoked ? '✅ Revoked' : '❌ Active'}`,
-    `├ Freeze: ${contract.freezeAuthorityRevoked ? '✅ Revoked' : '❌ Active'}`,
-    liquidity.lpBurnedPercent > 0 ? `└ LP: ${liquidity.lpBurnedPercent.toFixed(0)}% Burned 🔥` :
-      liquidity.lpLockedPercent > 0 ? `└ LP: ${liquidity.lpLockedPercent.toFixed(0)}% Locked 🔒` :
-      `└ LP: Not burned/locked ⚠️`,
+    `🛡️ ━━━ SAFETY ━━━`,
+    `${contract.mintAuthorityRevoked ? '✅' : '❌'} Mint ${contract.mintAuthorityRevoked ? 'Revoked' : 'Active ⚠️'}`,
+    `${contract.freezeAuthorityRevoked ? '✅' : '❌'} Freeze ${contract.freezeAuthorityRevoked ? 'Revoked' : 'Active ⚠️'}`,
+    liquidity.lpBurnedPercent > 0 ? `🔥 LP ${liquidity.lpBurnedPercent.toFixed(0)}% Burned!` :
+      liquidity.lpLockedPercent > 0 ? `🔒 LP ${liquidity.lpLockedPercent.toFixed(0)}% Locked` :
+      `⚠️ LP not burned/locked`,
+    ``,
+    `🌐 ━━━ SOCIALS ━━━`,
+    `${social.hasTwitter ? '✅' : '❌'} Twitter ${social.hasTwitter ? '🐦' : ''}`,
+    `${social.hasTelegram ? '✅' : '❌'} Telegram ${social.hasTelegram ? '💬' : ''}`,
+    `${social.hasWebsite ? '✅' : '❌'} Website ${social.hasWebsite ? '🌍' : ''}`,
     ``,
   ];
+
+  // Add sentiment section if available
+  if (sentiment?.hasSentimentData) {
+    lines.push(`📊 ━━━ SENTIMENT ━━━`);
+    lines.push(`${getSentimentEmoji(sentiment.sentimentScore)} Twitter: ${getSentimentLabel(sentiment.sentimentScore)} (${sentiment.tweetCount} tweets)`);
+    if (sentiment.topNegativeTerms.length > 0 && sentiment.sentimentScore < 0) {
+      lines.push(`⚠️ Warnings: ${sentiment.topNegativeTerms.slice(0, 2).join(', ')}`);
+    }
+    lines.push(``);
+  }
 
   // Add ML prediction if available
   if (mlPrediction) {
@@ -121,27 +159,34 @@ export function formatTokenAlert(
     const confPct = (mlPrediction.confidence * 100).toFixed(0);
     const rugEmoji = mlPrediction.rugProbability > 0.7 ? '🚨' :
                      mlPrediction.rugProbability > 0.4 ? '⚠️' : '✅';
-    lines.push(`🤖 <b>ML Analysis</b>`);
+    lines.push(`🤖 ━━━ AI ANALYSIS ━━━`);
     lines.push(`${rugEmoji} Rug Risk: ${rugPct}% (${confPct}% conf)`);
-    lines.push(`└ ${mlPrediction.recommendation}`);
+    lines.push(`💡 ${mlPrediction.recommendation}`);
     lines.push(``);
   }
 
   // Add risk factors (top 3 failed)
   const failedFactors = risk.factors.filter(f => !f.passed).slice(0, 3);
   if (failedFactors.length > 0) {
-    lines.push(`⚠️ <b>Risks</b>`);
-    failedFactors.forEach(f => lines.push(`• ${f.name}`));
+    lines.push(`⚠️ ━━━ WATCH OUT ━━━`);
+    failedFactors.forEach(f => lines.push(`❗ ${f.name}`));
     lines.push(``);
   }
 
-  // Links
+  // Score badge
+  const scoreBadge = risk.score >= 75 ? '🏆 SOLID' :
+                     risk.score >= 50 ? '👍 OKAY' :
+                     risk.score >= 25 ? '🤔 RISKY' : '💀 DEGEN';
+  lines.push(`📋 Score: ${risk.score}/100 ${scoreBadge}`);
+  lines.push(``);
+
+  // Links with emojis
   lines.push(
-    `🔗 <a href="https://dexscreener.com/solana/${token.mint}">DexScreener</a> | ` +
-    `<a href="https://rugcheck.xyz/tokens/${token.mint}">RugCheck</a> | ` +
-    `<a href="https://jup.ag/swap/SOL-${token.mint}">Jupiter</a>`
+    `🔗 <a href="https://dexscreener.com/solana/${token.mint}">📊 Chart</a> | ` +
+    `<a href="https://rugcheck.xyz/tokens/${token.mint}">🔍 RugCheck</a> | ` +
+    `<a href="https://jup.ag/swap/SOL-${token.mint}">💱 Buy</a>`
   );
-  lines.push(`📍 ${pool.source.toUpperCase()} | ${new Date().toLocaleTimeString()}`);
+  lines.push(`📍 Found on ${pool.source.toUpperCase()} • ${new Date().toLocaleTimeString()}`);
 
   return lines.filter(l => l !== null).join('\n');
 }
@@ -189,71 +234,104 @@ export function formatDexScreenerAnalysis(dexData: DexScreenerPair): string {
 }
 
 export function formatFullAnalysis(analysis: TokenAnalysis, dexData?: DexScreenerPair): string {
-  const { token, pool, liquidity, holders, contract, social, risk } = analysis;
+  const { token, pool, liquidity, holders, contract, social, sentiment, risk } = analysis;
 
   const priceUsd = dexData?.priceUsd ? parseFloat(dexData.priceUsd) : 0;
 
+  // Score badge
+  const scoreBadge = risk.score >= 75 ? '🏆 SOLID' :
+                     risk.score >= 50 ? '👍 DECENT' :
+                     risk.score >= 25 ? '🤔 RISKY' : '💀 DEGEN';
+
   const lines = [
-    `📋 <b>TOKEN ANALYSIS</b>`,
+    `🔍 <b>TOKEN ANALYSIS</b>`,
     ``,
-    `<b>${token.name}</b> ($${token.symbol})`,
+    `🪙 <b>${token.name}</b> ($${token.symbol})`,
     `<code>${token.mint}</code>`,
     ``,
-    `━━━ <b>OVERVIEW</b> ━━━`,
-    `Score: ${getRiskEmoji(risk.level)} ${risk.score}/100 (${risk.level})`,
-    dexData?.pairCreatedAt ? `Age: ${timeAgo(dexData.pairCreatedAt)}` : null,
-    priceUsd > 0 ? `Price: ${formatPrice(priceUsd)}` : null,
-    dexData?.marketCap ? `MCap: $${formatNumber(dexData.marketCap)}` : null,
-    dexData?.fdv ? `FDV: $${formatNumber(dexData.fdv)}` : null,
+    `📊 ━━━ OVERVIEW ━━━`,
+    `${getRiskEmoji(risk.level)} Score: ${risk.score}/100 ${scoreBadge}`,
+    dexData?.pairCreatedAt ? `⏰ Age: ${timeAgo(dexData.pairCreatedAt)}` : null,
+    priceUsd > 0 ? `💲 Price: ${formatPrice(priceUsd)}` : null,
+    dexData?.marketCap ? `📈 MCap: $${formatNumber(dexData.marketCap)}` : null,
+    dexData?.fdv ? `💎 FDV: $${formatNumber(dexData.fdv)}` : null,
     ``,
-    `━━━ <b>LIQUIDITY</b> ━━━`,
-    `Total: $${formatNumber(liquidity.totalLiquidityUsd)}`,
-    `LP Burned: ${liquidity.lpBurned ? `✅ ${liquidity.lpBurnedPercent.toFixed(1)}%` : '❌ No'}`,
-    `LP Locked: ${liquidity.lpLocked ? `✅ ${liquidity.lpLockedPercent.toFixed(1)}%` : '❌ No'}`,
+    `💧 ━━━ LIQUIDITY ━━━`,
+    `💰 Total: $${formatNumber(liquidity.totalLiquidityUsd)}`,
+    `${liquidity.lpBurned ? '🔥' : '❌'} LP Burned: ${liquidity.lpBurned ? `${liquidity.lpBurnedPercent.toFixed(1)}%` : 'No'}`,
+    `${liquidity.lpLocked ? '🔒' : '❌'} LP Locked: ${liquidity.lpLocked ? `${liquidity.lpLockedPercent.toFixed(1)}%` : 'No'}`,
     ``,
-    `━━━ <b>VOLUME</b> ━━━`,
-    dexData?.volume?.h24 ? `24h: $${formatNumber(dexData.volume.h24)}` : 'N/A',
-    dexData?.volume?.h1 ? `1h: $${formatNumber(dexData.volume.h1)}` : null,
-    dexData?.txns?.h24 ? `Buys/Sells: ${dexData.txns.h24.buys}/${dexData.txns.h24.sells}` : null,
+    `📈 ━━━ VOLUME ━━━`,
+    dexData?.volume?.h24 ? `📊 24h: $${formatNumber(dexData.volume.h24)}` : '📊 24h: N/A',
+    dexData?.volume?.h1 ? `⏱️ 1h: $${formatNumber(dexData.volume.h1)}` : null,
+    dexData?.txns?.h24 ? `🛒 Buys: ${dexData.txns.h24.buys} | 🏷️ Sells: ${dexData.txns.h24.sells}` : null,
     ``,
-    `━━━ <b>HOLDERS</b> ━━━`,
-    `Total: ${holders.totalHolders}`,
-    `Top 10: ${holders.top10HoldersPercent.toFixed(1)}%`,
-    `Largest: ${holders.largestHolderPercent.toFixed(1)}%`,
-    `Dev: ${holders.devWalletPercent.toFixed(1)}%`,
-    holders.whaleAddresses.length > 0 ? `Whales (>5%): ${holders.whaleAddresses.length}` : null,
+    `👥 ━━━ HOLDERS ━━━`,
+    `🧑‍🤝‍🧑 Total: ${holders.totalHolders > 0 ? holders.totalHolders.toLocaleString() : 'Loading...'}`,
+    `🏆 Top 10: ${holders.top10HoldersPercent.toFixed(1)}%`,
+    `👑 Largest: ${holders.largestHolderPercent.toFixed(1)}%`,
+    `🎮 Dev Wallet: ${holders.devWalletPercent.toFixed(1)}%`,
+    holders.whaleAddresses.length > 0 ? `🐋 Whales (>5%): ${holders.whaleAddresses.length}` : `🐋 Whales: 0`,
     ``,
-    `━━━ <b>SECURITY</b> ━━━`,
-    `Mint Authority: ${contract.mintAuthorityRevoked ? '✅ Revoked' : '❌ Active'}`,
-    `Freeze Authority: ${contract.freezeAuthorityRevoked ? '✅ Revoked' : '❌ Active'}`,
-    `Honeypot: ${contract.isHoneypot ? '⚠️ DETECTED' : '✅ No'}`,
-    contract.hasTransferFee ? `Transfer Fee: ${contract.transferFeePercent}%` : null,
+    `🛡️ ━━━ SECURITY ━━━`,
+    `${contract.mintAuthorityRevoked ? '✅' : '❌'} Mint: ${contract.mintAuthorityRevoked ? 'Revoked 👍' : 'Active ⚠️'}`,
+    `${contract.freezeAuthorityRevoked ? '✅' : '❌'} Freeze: ${contract.freezeAuthorityRevoked ? 'Revoked 👍' : 'Active ⚠️'}`,
+    `${contract.isHoneypot ? '🚨' : '✅'} Honeypot: ${contract.isHoneypot ? 'DETECTED! 🚫' : 'Not detected 👍'}`,
+    contract.hasTransferFee ? `💸 Transfer Fee: ${contract.transferFeePercent}%` : null,
     ``,
-    `━━━ <b>SOCIALS</b> ━━━`,
-    social.hasTwitter ? `Twitter: ${social.twitterUrl || '✅ Found'}` : 'Twitter: ❌',
-    social.hasTelegram ? `Telegram: ${social.telegramUrl || '✅ Found'}` : 'Telegram: ❌',
-    social.hasWebsite ? `Website: ${social.websiteUrl || '✅ Found'}` : 'Website: ❌',
+    `🌐 ━━━ SOCIALS ━━━`,
+    `${social.hasTwitter ? '✅ 🐦' : '❌'} Twitter${social.twitterUrl ? `: ${social.twitterUrl}` : ''}`,
+    `${social.hasTelegram ? '✅ 💬' : '❌'} Telegram${social.telegramUrl ? `: ${social.telegramUrl}` : ''}`,
+    `${social.hasWebsite ? '✅ 🌍' : '❌'} Website${social.websiteUrl ? `: ${social.websiteUrl}` : ''}`,
     ``,
-    `━━━ <b>RISK FACTORS</b> ━━━`,
   ];
+
+  // Add sentiment section if available
+  if (sentiment?.hasSentimentData) {
+    lines.push(`📊 ━━━ TWITTER SENTIMENT ━━━`);
+    lines.push(`${getSentimentEmoji(sentiment.sentimentScore)} Score: ${getSentimentLabel(sentiment.sentimentScore)}`);
+    lines.push(`📈 Positive: ${sentiment.positivePercent.toFixed(0)}%`);
+    lines.push(`📉 Negative: ${sentiment.negativePercent.toFixed(0)}%`);
+    lines.push(`🔢 Tweets analyzed: ${sentiment.tweetCount}`);
+    if (sentiment.topPositiveTerms.length > 0) {
+      lines.push(`✅ Bullish terms: ${sentiment.topPositiveTerms.slice(0, 3).join(', ')}`);
+    }
+    if (sentiment.topNegativeTerms.length > 0) {
+      lines.push(`⚠️ Warning terms: ${sentiment.topNegativeTerms.slice(0, 3).join(', ')}`);
+    }
+    lines.push(``);
+  }
+
+  lines.push(`⚠️ ━━━ RISK FACTORS ━━━`);
 
   // Add all risk factors
   const passedFactors = risk.factors.filter(f => f.passed);
   const failedFactors = risk.factors.filter(f => !f.passed);
 
-  failedFactors.slice(0, 5).forEach(f => {
-    lines.push(`⚠️ ${f.name}: ${f.description}`);
-  });
-  passedFactors.slice(0, 3).forEach(f => {
-    lines.push(`✅ ${f.name}`);
-  });
+  if (failedFactors.length > 0) {
+    failedFactors.slice(0, 5).forEach(f => {
+      lines.push(`❗ ${f.name}: ${f.description}`);
+    });
+  } else {
+    lines.push(`✅ No major risks detected!`);
+  }
+
+  if (passedFactors.length > 0) {
+    lines.push(``);
+    lines.push(`✅ ━━━ GOOD SIGNS ━━━`);
+    passedFactors.slice(0, 4).forEach(f => {
+      lines.push(`👍 ${f.name}`);
+    });
+  }
 
   lines.push(``);
   lines.push(
-    `🔗 <a href="https://dexscreener.com/solana/${token.mint}">DexScreener</a> | ` +
-    `<a href="https://birdeye.so/token/${token.mint}">Birdeye</a> | ` +
-    `<a href="https://solscan.io/token/${token.mint}">Solscan</a>`
+    `🔗 <a href="https://dexscreener.com/solana/${token.mint}">📊 Chart</a> | ` +
+    `<a href="https://birdeye.so/token/${token.mint}">🦅 Birdeye</a> | ` +
+    `<a href="https://solscan.io/token/${token.mint}">🔎 Solscan</a>`
   );
+  lines.push(``);
+  lines.push(`🤖 Analyzed at ${new Date().toLocaleTimeString()}`);
 
   return lines.filter(l => l !== null).join('\n');
 }

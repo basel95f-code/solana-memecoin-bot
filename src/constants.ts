@@ -10,9 +10,11 @@ export const QUEUE = {
   MAX_SIZE: 500,
   WARNING_THRESHOLD: 400,
   OVERFLOW_EVICTION_COUNT: 50,
-  PROCESS_DELAY_MS: 1000,
+  PROCESS_DELAY_MS: 200, // Reduced from 1000ms - delay between batches
   EMPTY_QUEUE_CHECK_MS: 100,
   RATE_LIMIT_WAIT_MS: 5000,
+  CONCURRENCY: 5, // Process up to 5 tokens in parallel
+  LOCK_TIMEOUT_MS: 1000, // Max wait for queue lock
 } as const;
 
 // ============================================
@@ -190,6 +192,23 @@ export const SOCIAL = {
   LOW_TWITTER_FOLLOWERS: 1000,
   LOW_TELEGRAM_MEMBERS: 500,
   WEBSITE_MIN_AGE_DAYS: 30,
+} as const;
+
+// ============================================
+// Sentiment Analysis Settings
+// ============================================
+export const SENTIMENT = {
+  CACHE_TTL_MS: 5 * 60 * 1000, // 5 minutes
+  STALE_CACHE_TTL_MS: 30 * 60 * 1000, // 30 minutes for rate limit fallback
+  MAX_TWEETS: 100,
+  MIN_TWEETS_FOR_CONFIDENCE: 10,
+  HIGH_CONFIDENCE_TWEETS: 50,
+  VERY_POSITIVE_THRESHOLD: 0.5,
+  POSITIVE_THRESHOLD: 0.2,
+  NEGATIVE_THRESHOLD: -0.2,
+  VERY_NEGATIVE_THRESHOLD: -0.5,
+  TWITTER_RATE_LIMIT: 450, // requests per 15-minute window
+  TWITTER_RATE_LIMIT_BUFFER: 10, // reserve some capacity
 } as const;
 
 // ============================================

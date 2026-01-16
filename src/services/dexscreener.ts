@@ -75,6 +75,77 @@ class DexScreenerService {
     });
   }
 
+  /**
+   * Batch fetch multiple tokens in a single API call
+   * DexScreener supports up to 30 tokens per request
+   */
+  async getMultipleTokensData(tokenAddresses: string[]): Promise<Map<string, DexScreenerPair>> {
+    const results = new Map<string, DexScreenerPair>();
+    if (tokenAddresses.length === 0) return results;
+
+    // DexScreener supports comma-separated addresses (up to 30)
+    const batchSize = 30;
+    const batches: string[][] = [];
+    for (let i = 0; i < tokenAddresses.length; i += batchSize) {
+      batches.push(tokenAddresses.slice(i, i + batchSize));
+    }
+
+    for (const batch of batches) {
+      // Check cache first
+      const uncached: string[] = [];
+      for (const addr of batch) {
+        const cached = this.getCached<DexScreenerPair[]>(`token:${addr}`);
+        if (cached && cached.length > 0) {
+          // Get best pair by liquidity
+          const best = cached.reduce((a, b) =>
+            (b.liquidity?.usd || 0) > (a.liquidity?.usd || 0) ? b : a
+          );
+          results.set(addr, best);
+        } else {
+          uncached.push(addr);
+        }
+      }
+
+      if (uncached.length === 0) continue;
+
+      try {
+        await rateLimiter.acquire();
+        const response = await withRetry(
+          () => this.client.get<DexScreenerResponse>(`/tokens/${uncached.join(',')}`),
+          { maxRetries: 2, initialDelayMs: 500 }
+        );
+
+        const pairs = response.data.pairs || [];
+        const solanaPairs = pairs.filter(p => p.chainId === 'solana');
+
+        // Group pairs by token address
+        const pairsByToken = new Map<string, DexScreenerPair[]>();
+        for (const pair of solanaPairs) {
+          const addr = pair.baseToken.address;
+          if (!pairsByToken.has(addr)) {
+            pairsByToken.set(addr, []);
+          }
+          pairsByToken.get(addr)!.push(pair);
+        }
+
+        // Cache and get best pair for each token
+        for (const [addr, tokenPairs] of pairsByToken) {
+          this.setCache(`token:${addr}`, tokenPairs);
+          if (tokenPairs.length > 0) {
+            const best = tokenPairs.reduce((a, b) =>
+              (b.liquidity?.usd || 0) > (a.liquidity?.usd || 0) ? b : a
+            );
+            results.set(addr, best);
+          }
+        }
+      } catch (error) {
+        console.error(`DexScreener: Batch fetch failed for ${uncached.length} tokens:`, error);
+      }
+    }
+
+    return results;
+  }
+
   async searchTokens(query: string): Promise<DexScreenerPair[]> {
     const cacheKey = `search:${query}`;
     const cached = this.getCached<DexScreenerPair[]>(cacheKey);
@@ -120,17 +191,16 @@ class DexScreenerService {
         return await this.getTrendingFromProfiles(limit);
       }
 
-      // Fetch pair data for each boosted token
+      // Batch fetch all token data at once instead of one-by-one
+      const tokenAddresses = solanaTokens.map((t: any) => t.tokenAddress);
+      const pairDataMap = await this.getMultipleTokensData(tokenAddresses);
+
       const trending: TrendingToken[] = [];
       for (const token of solanaTokens) {
         if (trending.length >= limit) break;
-        try {
-          const pairData = await this.getTokenData(token.tokenAddress);
-          if (pairData && pairData.baseToken.symbol !== 'SOL' && (pairData.liquidity?.usd || 0) >= 1000) {
-            trending.push(this.pairToTrendingToken(pairData));
-          }
-        } catch (e) {
-          // Skip failed tokens
+        const pairData = pairDataMap.get(token.tokenAddress);
+        if (pairData && pairData.baseToken.symbol !== 'SOL' && (pairData.liquidity?.usd || 0) >= 1000) {
+          trending.push(this.pairToTrendingToken(pairData));
         }
       }
 
@@ -155,16 +225,16 @@ class DexScreenerService {
         .filter((p: any) => p.chainId === 'solana')
         .slice(0, limit * 2);
 
+      // Batch fetch all token data
+      const tokenAddresses = solanaProfiles.map((p: any) => p.tokenAddress);
+      const pairDataMap = await this.getMultipleTokensData(tokenAddresses);
+
       const trending: TrendingToken[] = [];
       for (const profile of solanaProfiles) {
         if (trending.length >= limit) break;
-        try {
-          const pairData = await this.getTokenData(profile.tokenAddress);
-          if (pairData && pairData.baseToken.symbol !== 'SOL' && (pairData.liquidity?.usd || 0) >= 1000) {
-            trending.push(this.pairToTrendingToken(pairData));
-          }
-        } catch (e) {
-          // Skip failed tokens
+        const pairData = pairDataMap.get(profile.tokenAddress);
+        if (pairData && pairData.baseToken.symbol !== 'SOL' && (pairData.liquidity?.usd || 0) >= 1000) {
+          trending.push(this.pairToTrendingToken(pairData));
         }
       }
 
@@ -281,15 +351,20 @@ class DexScreenerService {
       const boosts = boostsResponse.data || [];
       const solanaTokens = boosts.filter((b: any) => b.chainId === 'solana').slice(0, 30);
 
+      // Batch fetch all token data
+      const tokenAddresses = solanaTokens.map((t: any) => t.tokenAddress);
+      const pairDataMap = await this.getMultipleTokensData(tokenAddresses);
+
       const pairs: DexScreenerPair[] = [];
+      const seenAddresses = new Set<string>();
+
       for (const token of solanaTokens) {
-        try {
-          const pairData = await this.getTokenData(token.tokenAddress);
-          if (pairData && pairData.baseToken.symbol !== 'SOL' && (pairData.liquidity?.usd || 0) >= 500) {
+        const pairData = pairDataMap.get(token.tokenAddress);
+        if (pairData && pairData.baseToken.symbol !== 'SOL' && (pairData.liquidity?.usd || 0) >= 500) {
+          if (!seenAddresses.has(pairData.baseToken.address)) {
             pairs.push(pairData);
+            seenAddresses.add(pairData.baseToken.address);
           }
-        } catch (e) {
-          // Skip failed tokens
         }
       }
 
@@ -303,17 +378,17 @@ class DexScreenerService {
         const profiles = profilesResponse.data || [];
         const solanaProfiles = profiles.filter((p: any) => p.chainId === 'solana').slice(0, 30);
 
+        // Batch fetch profiles tokens
+        const profileAddresses = solanaProfiles.map((p: any) => p.tokenAddress);
+        const profilePairMap = await this.getMultipleTokensData(profileAddresses);
+
         for (const profile of solanaProfiles) {
-          try {
-            const pairData = await this.getTokenData(profile.tokenAddress);
-            if (pairData && pairData.baseToken.symbol !== 'SOL' && (pairData.liquidity?.usd || 0) >= 500) {
-              // Check if not already in pairs
-              if (!pairs.find(p => p.baseToken.address === pairData.baseToken.address)) {
-                pairs.push(pairData);
-              }
+          const pairData = profilePairMap.get(profile.tokenAddress);
+          if (pairData && pairData.baseToken.symbol !== 'SOL' && (pairData.liquidity?.usd || 0) >= 500) {
+            if (!seenAddresses.has(pairData.baseToken.address)) {
+              pairs.push(pairData);
+              seenAddresses.add(pairData.baseToken.address);
             }
-          } catch (e) {
-            // Skip failed tokens
           }
         }
       }

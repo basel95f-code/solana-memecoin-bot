@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Memecoin Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Fraunces:wght@600&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg: #fafaf9;
+      --card: #ffffff;
+      --text: #1a1a1a;
+      --text-muted: #6b6b6b;
+      --border: #e8e8e6;
+      --accent: #1a1a1a;
+      --profit: #16a34a;
+      --loss: #dc2626;
+      --warning: #d97706;
+      --radius: 16px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f0f0f;
+        --card: #1a1a1a;
+        --text: #fafafa;
+        --text-muted: #888;
+        --border: #2a2a2a;
+        --accent: #fafafa;
+      }
+    }
+
+    body {
+      font-family: 'DM Sans', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 20px 16px 100px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 28px;
+      padding-top: 8px;
+    }
+
+    .logo {
+      font-family: 'Fraunces', serif;
+      font-size: 1.4rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.85rem;
+      color: var(--profit);
+      font-weight: 500;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--profit);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* Portfolio Card */
+    .portfolio-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .portfolio-label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .portfolio-value {
+      font-family: 'Fraunces', serif;
+      font-size: 2.5rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      margin-bottom: 12px;
+    }
+
+    .portfolio-change {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+
+    .portfolio-change.positive {
+      background: rgba(22, 163, 74, 0.1);
+      color: var(--profit);
+    }
+
+    .portfolio-change.negative {
+      background: rgba(220, 38, 38, 0.1);
+      color: var(--loss);
+    }
+
+    /* Stats Row */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      text-align: center;
+    }
+
+    .stat-emoji {
+      font-size: 1.5rem;
+      margin-bottom: 6px;
+    }
+
+    .stat-value {
+      font-weight: 600;
+      font-size: 1.1rem;
+      margin-bottom: 2px;
+    }
+
+    .stat-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+
+    /* Section */
+    .section {
+      margin-bottom: 24px;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .section-action {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-decoration: none;
+    }
+
+    /* Token Row */
+    .token-list {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .token-row {
+      display: flex;
+      align-items: center;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.15s;
+    }
+
+    .token-row:last-child {
+      border-bottom: none;
+    }
+
+    .token-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #f0f0f0 0%, #e0e0e0 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      margin-right: 12px;
+      flex-shrink: 0;
+    }
+
+    .token-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .token-name {
+      font-weight: 600;
+      font-size: 0.95rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .token-meta {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .token-values {
+      text-align: right;
+    }
+
+    .token-price {
+      font-weight: 500;
+      font-size: 0.95rem;
+    }
+
+    .token-change {
+      font-size: 0.8rem;
+      font-weight: 500;
+    }
+
+    .token-change.positive { color: var(--profit); }
+    .token-change.negative { color: var(--loss); }
+
+    /* Alert Row */
+    .alert-row {
+      display: flex;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      align-items: flex-start;
+    }
+
+    .alert-row:last-child {
+      border-bottom: none;
+    }
+
+    .alert-emoji {
+      font-size: 1.3rem;
+      flex-shrink: 0;
+    }
+
+    .alert-content {
+      flex: 1;
+    }
+
+    .alert-title {
+      font-weight: 500;
+      font-size: 0.9rem;
+      margin-bottom: 2px;
+    }
+
+    .alert-desc {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .alert-time {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    /* Risk Badge */
+    .risk-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .risk-low {
+      background: rgba(22, 163, 74, 0.12);
+      color: var(--profit);
+    }
+    .risk-medium {
+      background: rgba(217, 119, 6, 0.12);
+      color: var(--warning);
+    }
+    .risk-high {
+      background: rgba(220, 38, 38, 0.12);
+      color: var(--loss);
+    }
+
+    /* Bottom Nav */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--card);
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-around;
+      padding: 10px 0 calc(10px + env(safe-area-inset-bottom));
+    }
+
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.15s;
+      padding: 4px 12px;
+    }
+
+    .nav-item.active {
+      color: var(--text);
+    }
+
+    .nav-emoji {
+      font-size: 1.4rem;
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text-muted);
+    }
+
+    /* Responsive */
+    @media (min-width: 768px) {
+      .container {
+        max-width: 540px;
+        padding: 40px 24px 120px;
+      }
+
+      .portfolio-value {
+        font-size: 3rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">🚀 Memecoin</div>
+      <div class="status">
+        <span class="status-dot"></span>
+        Live
+      </div>
+    </header>
+
+    <!-- Portfolio Summary -->
+    <div class="portfolio-card">
+      <div class="portfolio-label">💰 Portfolio Value</div>
+      <div class="portfolio-value" id="portfolioValue">$2,847.32</div>
+      <span class="portfolio-change positive" id="portfolioChange">
+        📈 +$347.20 (13.9%)
+      </span>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-emoji">🎯</div>
+        <div class="stat-value">8</div>
+        <div class="stat-label">Tokens</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-emoji">🏆</div>
+        <div class="stat-value">5</div>
+        <div class="stat-label">Winners</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-emoji">🔔</div>
+        <div class="stat-value">23</div>
+        <div class="stat-label">Alerts</div>
+      </div>
+    </div>
+
+    <!-- Watchlist -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">👀 Watchlist</span>
+        <a href="#" class="section-action">See all →</a>
+      </div>
+      <div class="token-list" id="watchlist">
+        <div class="token-row">
+          <div class="token-icon">🐕</div>
+          <div class="token-info">
+            <div class="token-name">BONK</div>
+            <div class="token-meta">1.2M tokens</div>
+          </div>
+          <div class="token-values">
+            <div class="token-price">$0.0000234</div>
+            <div class="token-change positive">+12.4% 🔥</div>
+          </div>
+        </div>
+        <div class="token-row">
+          <div class="token-icon">🐶</div>
+          <div class="token-info">
+            <div class="token-name">WIF</div>
+            <div class="token-meta">890 tokens</div>
+          </div>
+          <div class="token-values">
+            <div class="token-price">$2.34</div>
+            <div class="token-change negative">-3.2%</div>
+          </div>
+        </div>
+        <div class="token-row">
+          <div class="token-icon">🐱</div>
+          <div class="token-info">
+            <div class="token-name">POPCAT</div>
+            <div class="token-meta">5.4K tokens</div>
+          </div>
+          <div class="token-values">
+            <div class="token-price">$0.892</div>
+            <div class="token-change positive">+28.7% 🚀</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Alerts -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">🔔 Recent Alerts</span>
+        <a href="#" class="section-action">Clear</a>
+      </div>
+      <div class="token-list" id="alerts">
+        <div class="alert-row">
+          <div class="alert-emoji">🐋</div>
+          <div class="alert-content">
+            <div class="alert-title">Whale Movement!</div>
+            <div class="alert-desc">BONK - 2.3% supply moved</div>
+          </div>
+          <div class="alert-time">2m</div>
+        </div>
+        <div class="alert-row">
+          <div class="alert-emoji">✨</div>
+          <div class="alert-content">
+            <div class="alert-title">New Token Launched</div>
+            <div class="alert-desc">MOCHI <span class="risk-badge risk-medium">⚠️ 72</span></div>
+          </div>
+          <div class="alert-time">8m</div>
+        </div>
+        <div class="alert-row">
+          <div class="alert-emoji">📊</div>
+          <div class="alert-content">
+            <div class="alert-title">Volume Spike 340%</div>
+            <div class="alert-desc">WIF is pumping!</div>
+          </div>
+          <div class="alert-time">15m</div>
+        </div>
+        <div class="alert-row">
+          <div class="alert-emoji">💧</div>
+          <div class="alert-content">
+            <div class="alert-title">Liquidity Added</div>
+            <div class="alert-desc">SNAIL +$45K LP</div>
+          </div>
+          <div class="alert-time">23m</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- New Discoveries -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">🔍 New Discoveries</span>
+        <a href="#" class="section-action">Filter</a>
+      </div>
+      <div class="token-list" id="discoveries">
+        <div class="token-row">
+          <div class="token-icon">🍡</div>
+          <div class="token-info">
+            <div class="token-name">MOCHI</div>
+            <div class="token-meta">Pump.fun · 8m ago</div>
+          </div>
+          <div class="token-values">
+            <div class="risk-badge risk-medium">⚠️ 72</div>
+          </div>
+        </div>
+        <div class="token-row">
+          <div class="token-icon">🐌</div>
+          <div class="token-info">
+            <div class="token-name">SNAIL</div>
+            <div class="token-meta">Raydium · 23m ago</div>
+          </div>
+          <div class="token-values">
+            <div class="risk-badge risk-low">✅ 85</div>
+          </div>
+        </div>
+        <div class="token-row">
+          <div class="token-icon">🐸</div>
+          <div class="token-info">
+            <div class="token-name">FROG</div>
+            <div class="token-meta">Pump.fun · 1h ago</div>
+          </div>
+          <div class="token-values">
+            <div class="risk-badge risk-high">⛔ 31</div>
+          </div>
+        </div>
+        <div class="token-row">
+          <div class="token-icon">🦊</div>
+          <div class="token-info">
+            <div class="token-name">FOXIE</div>
+            <div class="token-meta">Jupiter · 2h ago</div>
+          </div>
+          <div class="token-values">
+            <div class="risk-badge risk-low">✅ 91</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Navigation -->
+  <nav class="bottom-nav">
+    <a href="#" class="nav-item active">
+      <span class="nav-emoji">🏠</span>
+      Home
+    </a>
+    <a href="#" class="nav-item">
+      <span class="nav-emoji">🔍</span>
+      Search
+    </a>
+    <a href="#" class="nav-item">
+      <span class="nav-emoji">🔔</span>
+      Alerts
+    </a>
+    <a href="#" class="nav-item">
+      <span class="nav-emoji">💼</span>
+      Portfolio
+    </a>
+    <a href="#" class="nav-item">
+      <span class="nav-emoji">⚙️</span>
+      Settings
+    </a>
+  </nav>
+
+  <script>
+    const API_BASE = 'http://localhost:3001';
+    let isConnected = false;
+
+    // Emoji map for tokens
+    const tokenEmojis = {
+      'BONK': '🐕', 'WIF': '🐶', 'POPCAT': '🐱', 'PEPE': '🐸',
+      'DOGE': '🐕', 'SHIB': '🐕', 'CAT': '🐱', 'DOG': '🐶',
+    };
+
+    function getTokenEmoji(symbol) {
+      return tokenEmojis[symbol?.toUpperCase()] || symbol?.charAt(0) || '🪙';
+    }
+
+    function getRiskBadge(score) {
+      if (score >= 75) return `<span class="risk-badge risk-low">✅ ${score}</span>`;
+      if (score >= 50) return `<span class="risk-badge risk-medium">⚠️ ${score}</span>`;
+      return `<span class="risk-badge risk-high">⛔ ${score}</span>`;
+    }
+
+    async function fetchStats() {
+      try {
+        const stats = await fetch(`${API_BASE}/api/stats`).then(r => r.json());
+        document.querySelector('.stats-row').innerHTML = `
+          <div class="stat-card">
+            <div class="stat-emoji">🎯</div>
+            <div class="stat-value">${stats.tokenCount}</div>
+            <div class="stat-label">Tokens</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-emoji">🏆</div>
+            <div class="stat-value">${stats.winners}</div>
+            <div class="stat-label">Winners</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-emoji">🔔</div>
+            <div class="stat-value">${stats.alertsToday}</div>
+            <div class="stat-label">Today</div>
+          </div>
+        `;
+      } catch (e) {}
+    }
+
+    async function fetchWatchlist() {
+      try {
+        const data = await fetch(`${API_BASE}/api/watchlist`).then(r => r.json());
+        if (data.tokens?.length > 0) {
+          document.getElementById('watchlist').innerHTML = data.tokens.slice(0, 5).map(token => `
+            <div class="token-row">
+              <div class="token-icon">${getTokenEmoji(token.symbol)}</div>
+              <div class="token-info">
+                <div class="token-name">${token.symbol}</div>
+                <div class="token-meta">${token.name?.slice(0, 20) || ''}</div>
+              </div>
+              <div class="token-values">
+                <div class="token-price">$${token.price?.toFixed(8) || '0.00'}</div>
+                <div class="token-change ${token.priceChange >= 0 ? 'positive' : 'negative'}">
+                  ${token.priceChange >= 0 ? '+' : ''}${token.priceChange?.toFixed(1) || 0}%${token.priceChange > 20 ? ' 🔥' : token.priceChange > 50 ? ' 🚀' : ''}
+                </div>
+              </div>
+            </div>
+          `).join('');
+        }
+      } catch (e) {}
+    }
+
+    async function fetchAlerts() {
+      try {
+        const data = await fetch(`${API_BASE}/api/alerts`).then(r => r.json());
+        if (data.alerts?.length > 0) {
+          document.getElementById('alerts').innerHTML = data.alerts.slice(0, 5).map(alert => `
+            <div class="alert-row">
+              <div class="alert-emoji">${alert.emoji}</div>
+              <div class="alert-content">
+                <div class="alert-title">${alert.title}</div>
+                <div class="alert-desc">${alert.description}</div>
+              </div>
+              <div class="alert-time">${alert.timeAgo}</div>
+            </div>
+          `).join('');
+        }
+      } catch (e) {}
+    }
+
+    async function fetchDiscoveries() {
+      try {
+        const data = await fetch(`${API_BASE}/api/discoveries`).then(r => r.json());
+        if (data.discoveries?.length > 0) {
+          document.getElementById('discoveries').innerHTML = data.discoveries.slice(0, 5).map(d => `
+            <div class="token-row">
+              <div class="token-icon">${getTokenEmoji(d.symbol)}</div>
+              <div class="token-info">
+                <div class="token-name">${d.symbol}</div>
+                <div class="token-meta">${d.source} · ${d.timeAgo}</div>
+              </div>
+              <div class="token-values">
+                ${getRiskBadge(d.riskScore)}
+              </div>
+            </div>
+          `).join('');
+        }
+      } catch (e) {}
+    }
+
+    async function fetchPortfolio() {
+      try {
+        const portfolio = await fetch(`${API_BASE}/api/portfolio`).then(r => r.json());
+        if (portfolio) {
+          isConnected = true;
+          document.querySelector('.status').innerHTML = '<span class="status-dot"></span> Live';
+
+          const value = parseFloat(portfolio.totalValue) || 0;
+          const change = parseFloat(portfolio.change) || 0;
+          const isPositive = change >= 0;
+
+          document.getElementById('portfolioValue').textContent = value > 0 ? `$${value.toLocaleString()}` : '$0.00';
+          document.getElementById('portfolioChange').className = `portfolio-change ${isPositive ? 'positive' : 'negative'}`;
+          document.getElementById('portfolioChange').textContent = `${isPositive ? '📈' : '📉'} ${isPositive ? '+' : ''}$${Math.abs(change).toFixed(2)} (${portfolio.changePercent}%)`;
+        }
+      } catch (e) {
+        if (!isConnected) {
+          document.querySelector('.status').innerHTML = '<span class="status-dot" style="background: #d97706"></span> Demo';
+        }
+      }
+    }
+
+    async function fetchAll() {
+      await Promise.all([
+        fetchPortfolio(),
+        fetchStats(),
+        fetchWatchlist(),
+        fetchAlerts(),
+        fetchDiscoveries(),
+      ]);
+    }
+
+    // Initial fetch
+    fetchAll();
+
+    // Refresh every 10 seconds
+    setInterval(fetchAll, 10000);
+  </script>
+</body>
+</html>

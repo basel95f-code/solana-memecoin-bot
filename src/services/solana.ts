@@ -205,13 +205,19 @@ class SolanaService {
 
   async getTokenHolders(mintAddress: string, limit: number = 20): Promise<Array<{ address: string; balance: number }>> {
     try {
-      // Try Helius DAS API first (much faster and handles large datasets)
+      // Method 1: Use getTokenLargestAccounts (most reliable standard RPC method)
+      const largestAccounts = await this.getTokenLargestAccountsRPC(mintAddress, limit);
+      if (largestAccounts.length > 0) {
+        return largestAccounts;
+      }
+
+      // Method 2: Try Helius DAS API
       const heliusHolders = await this.getTokenHoldersHelius(mintAddress, limit);
       if (heliusHolders.length > 0) {
         return heliusHolders;
       }
 
-      // Fallback to standard RPC (may fail for large token sets)
+      // Method 3: Fallback to getParsedProgramAccounts (slowest, may timeout)
       const mintPubkey = new PublicKey(mintAddress);
 
       const accounts = await rpcExecutor.execute(
@@ -247,6 +253,51 @@ class SolanaService {
   }
 
   /**
+   * Use standard Solana RPC getTokenLargestAccounts - most reliable method
+   * Note: This returns token account addresses, we need to resolve owners
+   */
+  private async getTokenLargestAccountsRPC(mintAddress: string, limit: number = 20): Promise<Array<{ address: string; balance: number }>> {
+    try {
+      const mintPubkey = new PublicKey(mintAddress);
+      const response = await this.connection.getTokenLargestAccounts(mintPubkey);
+
+      if (response.value && response.value.length > 0) {
+        // Need to get owner addresses for each token account
+        const holders: Array<{ address: string; balance: number }> = [];
+
+        // Batch fetch account info to get owners
+        const accountPubkeys = response.value.slice(0, limit).map(acc => acc.address);
+        const accountInfos = await this.connection.getMultipleParsedAccounts(accountPubkeys);
+
+        for (let i = 0; i < accountInfos.value.length; i++) {
+          const accountInfo = accountInfos.value[i];
+          const largestAccount = response.value[i];
+
+          if (accountInfo && accountInfo.data && 'parsed' in accountInfo.data) {
+            const parsed = accountInfo.data.parsed;
+            const owner = parsed?.info?.owner;
+            const balance = parseFloat(largestAccount.uiAmountString || '0');
+
+            if (owner && balance > 0) {
+              holders.push({
+                address: owner,
+                balance: balance,
+              });
+            }
+          }
+        }
+
+        return holders;
+      }
+
+      return [];
+    } catch (error) {
+      console.error(`getTokenLargestAccounts failed for ${mintAddress}:`, (error as Error).message);
+      return [];
+    }
+  }
+
+  /**
    * Get token holders using Helius DAS API (handles large datasets with pagination)
    */
   private async getTokenHoldersHelius(mintAddress: string, limit: number = 20): Promise<Array<{ address: string; balance: number }>> {
@@ -257,42 +308,48 @@ class SolanaService {
         return []; // Not using Helius, skip
       }
 
+      const apiKey = apiKeyMatch[1];
+
       // First get token decimals
       const mintInfo = await this.getMintInfo(mintAddress);
-      const decimals = mintInfo?.decimals ?? 6; // Default to 6 (most common for pump.fun tokens)
+      const decimals = mintInfo?.decimals ?? 6;
 
-      const response = await axios.post(
-        config.solanaRpcUrl,
-        {
-          jsonrpc: '2.0',
-          id: 'helius-holders',
-          method: 'getTokenAccounts',
-          params: {
-            mint: mintAddress,
-            limit: Math.min(limit * 2, 100), // Get extra to filter
-            options: {
-              showZeroBalance: false,
-            },
-          },
-        },
+      // Use Helius REST API for token holders (more reliable)
+      const response = await axios.get(
+        `https://api.helius.xyz/v0/addresses/${mintAddress}/balances?api-key=${apiKey}`,
         { timeout: 15000 }
       );
 
-      if (response.data?.result?.token_accounts) {
-        const accounts = response.data.result.token_accounts;
-        return accounts
-          .map((acc: any) => ({
-            address: acc.owner,
-            balance: acc.amount / Math.pow(10, decimals),
-          }))
-          .filter((h: any) => h.balance > 0)
-          .sort((a: any, b: any) => b.balance - a.balance)
-          .slice(0, limit);
+      // If that doesn't work, try the RPC method with proper params
+      if (!response.data?.tokens) {
+        // Fallback: use getTokenLargestAccounts RPC method
+        const rpcResponse = await axios.post(
+          config.solanaRpcUrl,
+          {
+            jsonrpc: '2.0',
+            id: 'largest-accounts',
+            method: 'getTokenLargestAccounts',
+            params: [mintAddress],
+          },
+          { timeout: 15000 }
+        );
+
+        if (rpcResponse.data?.result?.value) {
+          const accounts = rpcResponse.data.result.value;
+          return accounts
+            .map((acc: any) => ({
+              address: acc.address,
+              balance: parseFloat(acc.uiAmountString) || (acc.amount / Math.pow(10, decimals)),
+            }))
+            .filter((h: any) => h.balance > 0)
+            .sort((a: any, b: any) => b.balance - a.balance)
+            .slice(0, limit);
+        }
       }
 
       return [];
     } catch (error) {
-      // Silently fail and let fallback handle it
+      console.error(`Helius holder fetch failed for ${mintAddress}:`, (error as Error).message);
       return [];
     }
   }

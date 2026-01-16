@@ -6,7 +6,11 @@ import { PoolInfo, PUMPFUN_PROGRAM, SOL_MINT } from '../types';
 import { config } from '../config';
 import { EventEmitter } from 'events';
 
-const PUMPFUN_API_BASE = 'https://frontend-api.pump.fun';
+// Multiple endpoints for fallback
+const PUMPFUN_API_ENDPOINTS = [
+  'https://frontend-api.pump.fun',
+  'https://client-api-2-74b1891ee9f9.herokuapp.com',
+];
 
 interface PumpFunToken {
   mint: string;
@@ -79,13 +83,26 @@ export class PumpFunMonitor extends EventEmitter {
       }
     }
 
-    // If still too large, remove oldest entries
-    if (this.seenTokens.size > MAX_SEEN_TOKENS) {
-      const sorted = Array.from(this.seenTokens.entries())
-        .sort((a, b) => a[1] - b[1]);
+    // If still too large, remove oldest entries using partial selection (O(n*k) instead of O(n log n))
+    const excess = this.seenTokens.size - MAX_SEEN_TOKENS;
+    if (excess > 0) {
+      // Find k oldest entries without full sort
+      const k = excess;
+      const oldest: Array<{ mint: string; time: number }> = [];
 
-      const toRemove = sorted.slice(0, this.seenTokens.size - MAX_SEEN_TOKENS);
-      for (const [mint] of toRemove) {
+      for (const [mint, time] of this.seenTokens.entries()) {
+        if (oldest.length < k) {
+          // Binary insert to maintain sorted order
+          const pos = this.binarySearchInsertPos(oldest, time);
+          oldest.splice(pos, 0, { mint, time });
+        } else if (time < oldest[k - 1].time) {
+          oldest.pop();
+          const pos = this.binarySearchInsertPos(oldest, time);
+          oldest.splice(pos, 0, { mint, time });
+        }
+      }
+
+      for (const { mint } of oldest) {
         this.seenTokens.delete(mint);
         removed++;
       }
@@ -94,6 +111,20 @@ export class PumpFunMonitor extends EventEmitter {
     if (removed > 0) {
       console.log(`Pump.fun cleanup: removed ${removed} old tokens, ${this.seenTokens.size} remaining`);
     }
+  }
+
+  private binarySearchInsertPos(arr: Array<{ time: number }>, time: number): number {
+    let low = 0;
+    let high = arr.length;
+    while (low < high) {
+      const mid = (low + high) >>> 1;
+      if (arr[mid].time < time) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+    return low;
   }
 
   async stop(): Promise<void> {
@@ -151,48 +182,73 @@ export class PumpFunMonitor extends EventEmitter {
   }
 
   private async fetchGraduatedTokens(): Promise<PumpFunToken[]> {
-    try {
-      const response = await axios.get(`${PUMPFUN_API_BASE}/coins/king-of-the-hill`, {
-        params: {
-          includeNsfw: false,
-          limit: 20,
-        },
-        timeout: 10000,
-      });
+    for (const baseUrl of PUMPFUN_API_ENDPOINTS) {
+      try {
+        const response = await axios.get(`${baseUrl}/coins/king-of-the-hill`, {
+          params: {
+            includeNsfw: false,
+            limit: 20,
+          },
+          timeout: 10000,
+          headers: {
+            'Accept': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          },
+        });
 
-      return response.data || [];
-    } catch (error) {
-      // API might not be available or rate limited
-      return [];
+        if (response.data && Array.isArray(response.data)) {
+          return response.data;
+        }
+      } catch (error) {
+        // Try next endpoint
+        continue;
+      }
     }
+    return [];
   }
 
   private async fetchNewTokens(): Promise<PumpFunToken[]> {
-    try {
-      const response = await axios.get(`${PUMPFUN_API_BASE}/coins`, {
-        params: {
-          offset: 0,
-          limit: 50,
-          sort: 'created_timestamp',
-          order: 'DESC',
-          includeNsfw: false,
-        },
-        timeout: 10000,
-      });
-
-      return response.data || [];
-    } catch (error) {
-      // Fallback: try alternative endpoint
+    for (const baseUrl of PUMPFUN_API_ENDPOINTS) {
       try {
-        const response = await axios.get(
-          `${PUMPFUN_API_BASE}/coins/latest`,
-          { timeout: 10000 }
-        );
-        return response.data || [];
-      } catch {
-        return [];
+        // Try main coins endpoint
+        const response = await axios.get(`${baseUrl}/coins`, {
+          params: {
+            offset: 0,
+            limit: 50,
+            sort: 'created_timestamp',
+            order: 'DESC',
+            includeNsfw: false,
+          },
+          timeout: 10000,
+          headers: {
+            'Accept': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          },
+        });
+
+        if (response.data && Array.isArray(response.data)) {
+          return response.data;
+        }
+      } catch (error) {
+        // Try latest endpoint as fallback
+        try {
+          const response = await axios.get(`${baseUrl}/coins/latest`, {
+            timeout: 10000,
+            headers: {
+              'Accept': 'application/json',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            },
+          });
+          if (response.data && Array.isArray(response.data)) {
+            return response.data;
+          }
+        } catch {
+          // Continue to next base URL
+          continue;
+        }
       }
     }
+    return [];
   }
 
   private createPoolInfo(token: PumpFunToken): PoolInfo {
@@ -210,15 +266,23 @@ export class PumpFunMonitor extends EventEmitter {
   }
 
   async getTokenDetails(mint: string): Promise<PumpFunToken | null> {
-    try {
-      const response = await axios.get(
-        `${PUMPFUN_API_BASE}/coins/${mint}`,
-        { timeout: 10000 }
-      );
-      return response.data;
-    } catch {
-      return null;
+    for (const baseUrl of PUMPFUN_API_ENDPOINTS) {
+      try {
+        const response = await axios.get(`${baseUrl}/coins/${mint}`, {
+          timeout: 10000,
+          headers: {
+            'Accept': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          },
+        });
+        if (response.data) {
+          return response.data;
+        }
+      } catch {
+        continue;
+      }
     }
+    return null;
   }
 
   isActive(): boolean {

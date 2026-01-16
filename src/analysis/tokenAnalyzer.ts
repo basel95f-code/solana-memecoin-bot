@@ -1,12 +1,14 @@
 import { solanaService } from '../services/solana';
 import { rugCheckService } from '../services/rugcheck';
+import { dexScreenerService } from '../services/dexscreener';
 import { tokenCache } from '../services/cache';
 import { analyzeLiquidity } from './liquidityCheck';
 import { analyzeHolders } from './holderAnalysis';
 import { analyzeContract } from './contractCheck';
 import { analyzeSocials } from './socialCheck';
+import { analyzeSentiment, getDefaultSentiment } from './sentimentAnalysis';
 import { classifyRisk } from '../risk/classifier';
-import { TokenAnalysis, PoolInfo, TokenInfo, LiquidityAnalysis, HolderAnalysis, ContractAnalysis, SocialAnalysis, RugCheckResult } from '../types';
+import { TokenAnalysis, PoolInfo, TokenInfo, LiquidityAnalysis, HolderAnalysis, ContractAnalysis, SocialAnalysis, SentimentAnalysis, RugCheckResult } from '../types';
 import { config } from '../config';
 
 // Track in-flight analysis requests to prevent duplicates
@@ -80,13 +82,43 @@ async function performAnalysis(
     }
 
     // Run all analyses in parallel with individual timeouts
-    const [liquidity, holders, contract, social, rugcheck] = await Promise.all([
+    const [liquidity, holders, contract, social, sentiment, rugcheck, dexData] = await Promise.all([
       withTimeout(analyzeLiquidity(pool), 15000, getDefaultLiquidity()),
       withTimeout(analyzeHolders(tokenInfo), 15000, getDefaultHolders()),
       withTimeout(analyzeContract(tokenMint), 15000, getDefaultContract()),
       withTimeout(analyzeSocials(tokenInfo.metadata), 10000, getDefaultSocial()),
+      withTimeout(analyzeSentiment(tokenInfo), 10000, getDefaultSentiment()),
       withTimeout(rugCheckService.getTokenReport(tokenMint), 10000, null),
+      withTimeout(dexScreenerService.getTokenData(tokenMint), 10000, null),
     ]);
+
+    // Enhance liquidity data with DexScreener if available
+    if (dexData && dexData.liquidity?.usd) {
+      // Use DexScreener liquidity if it's higher (more accurate)
+      if (dexData.liquidity.usd > liquidity.totalLiquidityUsd) {
+        liquidity.totalLiquidityUsd = dexData.liquidity.usd;
+      }
+    }
+
+    // Enhance social data with DexScreener info
+    if (dexData?.info) {
+      if (dexData.info.socials) {
+        for (const s of dexData.info.socials) {
+          if (s.type === 'twitter' && !social.hasTwitter) {
+            social.hasTwitter = true;
+            social.twitterUrl = s.url;
+          }
+          if (s.type === 'telegram' && !social.hasTelegram) {
+            social.hasTelegram = true;
+            social.telegramUrl = s.url;
+          }
+        }
+      }
+      if (dexData.info.websites && dexData.info.websites.length > 0 && !social.hasWebsite) {
+        social.hasWebsite = true;
+        social.websiteUrl = dexData.info.websites[0].url;
+      }
+    }
 
     // Classify risk based on all analyses
     const risk = classifyRisk({
@@ -94,6 +126,7 @@ async function performAnalysis(
       holders,
       contract,
       social,
+      sentiment,
       rugcheck: rugcheck || undefined,
     });
 
@@ -104,6 +137,7 @@ async function performAnalysis(
       holders,
       contract,
       social,
+      sentiment,
       rugcheck: rugcheck || undefined,
       risk,
       analyzedAt: new Date(),

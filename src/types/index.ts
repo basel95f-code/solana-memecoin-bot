@@ -82,6 +82,19 @@ export interface SocialAnalysis {
   websiteAge?: number;
 }
 
+export interface SentimentAnalysis {
+  hasSentimentData: boolean;
+  tweetCount: number;
+  sentimentScore: number; // -1 (very negative) to 1 (very positive)
+  positivePercent: number;
+  negativePercent: number;
+  neutralPercent: number;
+  confidence: number; // 0 to 1
+  topPositiveTerms: string[];
+  topNegativeTerms: string[];
+  analyzedAt: Date;
+}
+
 export interface RugCheckResult {
   score: number;
   risks: RugCheckRisk[];
@@ -117,6 +130,7 @@ export interface TokenAnalysis {
   holders: HolderAnalysis;
   contract: ContractAnalysis;
   social: SocialAnalysis;
+  sentiment?: SentimentAnalysis;
   rugcheck?: RugCheckResult;
   risk: RiskClassification;
   analyzedAt: Date;

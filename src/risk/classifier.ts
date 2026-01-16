@@ -6,20 +6,23 @@ import {
   HolderAnalysis,
   ContractAnalysis,
   SocialAnalysis,
+  SentimentAnalysis,
   RugCheckResult,
 } from '../types';
+import { SENTIMENT } from '../constants';
 
 interface AnalysisInputs {
   liquidity: LiquidityAnalysis;
   holders: HolderAnalysis;
   contract: ContractAnalysis;
   social: SocialAnalysis;
+  sentiment?: SentimentAnalysis;
   rugcheck?: RugCheckResult;
   tokenAge?: number; // seconds since creation
 }
 
 /*
- * NEW RISK SCORING SYSTEM (0-100 points)
+ * RISK SCORING SYSTEM (0-110 points, capped at 100)
  *
  * Liquidity Score (25 points max):
  *   $50K+ = 25pts, $20K+ = 20pts, $10K+ = 15pts, $5K+ = 10pts, $1K+ = 5pts
@@ -38,6 +41,14 @@ interface AnalysisInputs {
  *
  * Token Maturity (15 points max):
  *   >24h = 15pts, >6h = 12pts, >1h = 8pts, >10min = 4pts
+ *
+ * Twitter Sentiment (10 points max):
+ *   Very positive (>0.5) = 10pts
+ *   Positive (>0.2) = 7pts
+ *   Neutral = 5pts
+ *   Negative (<-0.2) = 2pts
+ *   Very negative (<-0.5) = 0pts
+ *   No data = 5pts (neutral)
  *
  * Risk Levels:
  *   80-100 = LOW (green)
@@ -75,6 +86,11 @@ export function classifyRisk(inputs: AnalysisInputs): RiskClassification {
   const maturityResult = assessMaturity(inputs.tokenAge);
   factors.push(...maturityResult.factors);
   totalScore += maturityResult.score;
+
+  // Twitter Sentiment (10 points max)
+  const sentimentResult = assessSentiment(inputs.sentiment);
+  factors.push(...sentimentResult.factors);
+  totalScore += sentimentResult.score;
 
   // Honeypot is an instant failure - no partial score
   if (inputs.contract.isHoneypot) {
@@ -418,6 +434,84 @@ function assessMaturity(tokenAge?: number): {
       name: 'Token Age',
       impact: 15,
       description: `${Math.floor(minutes)}m old (extremely new)`,
+      passed: false,
+    });
+  }
+
+  return { score, factors };
+}
+
+function assessSentiment(sentiment?: SentimentAnalysis): {
+  score: number;
+  factors: RiskFactor[];
+} {
+  const factors: RiskFactor[] = [];
+
+  // No sentiment data - give neutral score
+  if (!sentiment || !sentiment.hasSentimentData) {
+    return {
+      score: 5, // Neutral default
+      factors: [
+        {
+          name: 'Twitter Sentiment',
+          impact: 10,
+          description: 'No sentiment data available',
+          passed: true,
+        },
+      ],
+    };
+  }
+
+  let score = 5; // Start neutral
+  const sentScore = sentiment.sentimentScore;
+  const confidence = sentiment.confidence;
+
+  // Low confidence = less weight to sentiment
+  const confidenceMultiplier = Math.max(0.5, confidence);
+
+  if (sentScore > SENTIMENT.VERY_POSITIVE_THRESHOLD) {
+    // Very positive sentiment
+    score = Math.round(10 * confidenceMultiplier);
+    factors.push({
+      name: 'Twitter Sentiment',
+      impact: 10,
+      description: `Very positive (${sentiment.tweetCount} tweets, ${sentiment.positivePercent.toFixed(0)}% positive)`,
+      passed: true,
+    });
+  } else if (sentScore > SENTIMENT.POSITIVE_THRESHOLD) {
+    // Positive sentiment
+    score = Math.round(7 * confidenceMultiplier);
+    factors.push({
+      name: 'Twitter Sentiment',
+      impact: 10,
+      description: `Positive sentiment (${sentiment.tweetCount} tweets)`,
+      passed: true,
+    });
+  } else if (sentScore >= SENTIMENT.NEGATIVE_THRESHOLD) {
+    // Neutral sentiment
+    score = 5;
+    factors.push({
+      name: 'Twitter Sentiment',
+      impact: 10,
+      description: `Neutral sentiment (${sentiment.tweetCount} tweets)`,
+      passed: true,
+    });
+  } else if (sentScore >= SENTIMENT.VERY_NEGATIVE_THRESHOLD) {
+    // Negative sentiment
+    score = 2;
+    factors.push({
+      name: 'Twitter Sentiment',
+      impact: 10,
+      description: `Negative sentiment - ${sentiment.topNegativeTerms.slice(0, 2).join(', ')} detected`,
+      passed: false,
+    });
+  } else {
+    // Very negative sentiment
+    score = 0;
+    factors.push({
+      name: 'Twitter Sentiment',
+      impact: 10,
+      description: `Very negative! Warnings: ${sentiment.topNegativeTerms.slice(0, 3).join(', ')}`,
       passed: false,
     });
   }

@@ -364,7 +364,8 @@ describe('Risk Classifier', () => {
         social: defaultSocial,
       });
 
-      expect(result.score).toBeLessThan(60);
+      // Score adjusted for sentiment scoring (adds 5 points for neutral/no data)
+      expect(result.score).toBeLessThan(65);
     });
   });
 
