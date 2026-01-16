@@ -1331,6 +1331,65 @@ class DatabaseService {
   }
 
   /**
+   * Clean up old token outcomes
+   */
+  cleanupOldOutcomes(cutoffTimestamp: number): { deletedCount: number } {
+    if (!this.db) return { deletedCount: 0 };
+
+    try {
+      // Get count before deletion
+      const countResult = this.db.exec(
+        'SELECT COUNT(*) FROM token_outcomes WHERE outcome_recorded_at IS NOT NULL AND outcome_recorded_at < ?',
+        [cutoffTimestamp]
+      );
+      const count = countResult.length > 0 ? (countResult[0].values[0][0] as number) : 0;
+
+      // Delete old records
+      this.db.run(
+        'DELETE FROM token_outcomes WHERE outcome_recorded_at IS NOT NULL AND outcome_recorded_at < ?',
+        [cutoffTimestamp]
+      );
+
+      if (count > 0) {
+        this.dirty = true;
+      }
+
+      return { deletedCount: count };
+    } catch (error) {
+      logger.silentError('Database', 'Failed to clean up old outcomes', error as Error);
+      return { deletedCount: 0 };
+    }
+  }
+
+  /**
+   * Clean up old token snapshots
+   */
+  cleanupOldSnapshots(cutoffTimestamp: number): { deletedCount: number } {
+    if (!this.db) return { deletedCount: 0 };
+
+    try {
+      // Get count before deletion
+      const countResult = this.db.exec(
+        'SELECT COUNT(*) FROM token_snapshots WHERE recorded_at < ?',
+        [cutoffTimestamp]
+      );
+      const count = countResult.length > 0 ? (countResult[0].values[0][0] as number) : 0;
+
+      // Delete old records
+      this.db.run('DELETE FROM token_snapshots WHERE recorded_at < ?', [cutoffTimestamp]);
+
+      if (count > 0) {
+        this.dirty = true;
+      }
+
+      return { deletedCount: count };
+    } catch (error) {
+      logger.silentError('Database', 'Failed to clean up old snapshots', error as Error);
+      return { deletedCount: 0 };
+    }
+  }
+
+  /**
    * Close the database connection
    */
   close(): void {

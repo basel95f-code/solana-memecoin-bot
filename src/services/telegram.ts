@@ -6,6 +6,8 @@ import { formatTokenAlert, formatWatchlistAlert } from '../telegram/formatters';
 import { alertActionKeyboard } from '../telegram/keyboards';
 import { storageService } from './storage';
 import { dexScreenerService } from './dexscreener';
+import { TELEGRAM } from '../constants';
+import { logger } from '../utils/logger';
 
 class TelegramService {
   private bot: Telegraf;
@@ -15,6 +17,62 @@ class TelegramService {
   constructor() {
     this.bot = new Telegraf(config.telegramBotToken);
     this.defaultChatId = config.telegramChatId;
+  }
+
+  /**
+   * Retry a function with exponential backoff
+   */
+  private async withRetry<T>(
+    fn: () => Promise<T>,
+    context: string,
+    maxRetries: number = TELEGRAM.MAX_RETRIES
+  ): Promise<T> {
+    let lastError: Error | undefined;
+    let delay = TELEGRAM.RETRY_DELAY_MS;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await fn();
+      } catch (error) {
+        lastError = error as Error;
+        const isRetryable = this.isRetryableError(error);
+
+        if (!isRetryable || attempt === maxRetries) {
+          logger.silentError('Telegram', `${context} failed after ${attempt} attempts`, lastError);
+          throw lastError;
+        }
+
+        logger.debug('Telegram', `${context} attempt ${attempt} failed, retrying in ${delay}ms...`);
+        await this.sleep(delay);
+        delay *= TELEGRAM.RETRY_BACKOFF_MULTIPLIER;
+      }
+    }
+
+    throw lastError;
+  }
+
+  /**
+   * Check if an error is retryable (network/timeout issues)
+   */
+  private isRetryableError(error: unknown): boolean {
+    if (error instanceof Error) {
+      const message = error.message.toLowerCase();
+      // Retry on network errors, rate limits, and timeouts
+      return (
+        message.includes('etimedout') ||
+        message.includes('econnreset') ||
+        message.includes('econnrefused') ||
+        message.includes('network') ||
+        message.includes('429') || // Rate limited
+        message.includes('timeout') ||
+        message.includes('socket hang up')
+      );
+    }
+    return false;
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   getBot(): Telegraf {
@@ -72,15 +130,18 @@ class TelegramService {
       // Format the alert with ML prediction
       const message = formatTokenAlert(analysis, dexData || undefined, mlPrediction);
 
-      await this.bot.telegram.sendMessage(targetChatId, message, {
-        parse_mode: 'HTML',
-        link_preview_options: { is_disabled: true },
-        ...alertActionKeyboard(analysis.token.mint),
-      });
+      await this.withRetry(
+        () => this.bot.telegram.sendMessage(targetChatId, message, {
+          parse_mode: 'HTML',
+          link_preview_options: { is_disabled: true },
+          ...alertActionKeyboard(analysis.token.mint),
+        }),
+        `sendAlert for ${analysis.token.symbol}`
+      );
 
       incrementAlertsSent();
     } catch (error) {
-      console.error('Failed to send Telegram alert:', error);
+      logger.silentError('Telegram', `Failed to send alert for ${analysis.token.symbol}`, error as Error);
     }
   }
 
@@ -93,13 +154,16 @@ class TelegramService {
     try {
       const message = formatWatchlistAlert(token);
 
-      await this.bot.telegram.sendMessage(chatId, message, {
-        parse_mode: 'HTML',
-        link_preview_options: { is_disabled: true },
-        ...alertActionKeyboard(token.mint),
-      });
+      await this.withRetry(
+        () => this.bot.telegram.sendMessage(chatId, message, {
+          parse_mode: 'HTML',
+          link_preview_options: { is_disabled: true },
+          ...alertActionKeyboard(token.mint),
+        }),
+        `sendWatchlistAlert for ${token.symbol}`
+      );
     } catch (error) {
-      console.error('Failed to send watchlist alert:', error);
+      logger.silentError('Telegram', `Failed to send watchlist alert for ${token.symbol}`, error as Error);
     }
   }
 
@@ -119,14 +183,17 @@ class TelegramService {
     try {
       const message = this.formatWalletActivityAlert(wallet, transaction);
 
-      await this.bot.telegram.sendMessage(chatId, message, {
-        parse_mode: 'HTML',
-        link_preview_options: { is_disabled: true },
-      });
+      await this.withRetry(
+        () => this.bot.telegram.sendMessage(chatId, message, {
+          parse_mode: 'HTML',
+          link_preview_options: { is_disabled: true },
+        }),
+        `sendWalletActivityAlert for ${wallet.label}`
+      );
 
       incrementAlertsSent();
     } catch (error) {
-      console.error('Failed to send wallet activity alert:', error);
+      logger.silentError('Telegram', `Failed to send wallet activity alert for ${wallet.label}`, error as Error);
     }
   }
 
@@ -134,41 +201,39 @@ class TelegramService {
     const typeEmoji = tx.type === 'buy' ? '🟢' : tx.type === 'sell' ? '🔴' : '↔️';
     const actionText = tx.type === 'buy' ? 'BOUGHT' : tx.type === 'sell' ? 'SOLD' : 'TRANSFERRED';
 
-    let msg = `<b>Wallet Activity Alert</b>\n\n`;
+    let msg = `<b>👛 Wallet Activity</b>\n\n`;
 
     // Wallet info
     msg += `<b>${wallet.label}</b>\n`;
     msg += `<code>${wallet.address.slice(0, 4)}...${wallet.address.slice(-4)}</code>\n\n`;
 
-    // Transaction details
+    // Transaction type and token
     msg += `${typeEmoji} <b>${actionText}</b>`;
 
-    // Token amount
+    // Token amount with symbol
     if (tx.amount) {
       const formattedAmount = tx.amount >= 1000000
         ? `${(tx.amount / 1000000).toFixed(2)}M`
         : tx.amount >= 1000
         ? `${(tx.amount / 1000).toFixed(2)}K`
-        : tx.amount.toLocaleString(undefined, { maximumFractionDigits: 4 });
+        : tx.amount.toLocaleString(undefined, { maximumFractionDigits: 2 });
 
       msg += ` ${formattedAmount}`;
       if (tx.tokenSymbol) {
-        msg += ` ${tx.tokenSymbol}`;
+        msg += ` <b>${tx.tokenSymbol}</b>`;
       }
     }
     msg += `\n`;
 
-    // Token info
-    if (tx.tokenName && tx.tokenSymbol) {
-      msg += `Token: <b>${tx.tokenName}</b> ($${tx.tokenSymbol})\n`;
-    } else if (tx.tokenMint) {
-      msg += `Mint: <code>${tx.tokenMint.slice(0, 8)}...${tx.tokenMint.slice(-4)}</code>\n`;
+    // Token name (if different from symbol)
+    if (tx.tokenName && tx.tokenSymbol && tx.tokenName !== tx.tokenSymbol) {
+      msg += `📍 ${tx.tokenName}\n`;
     }
 
-    // Value
-    if (tx.solAmount) {
-      msg += `Value: <b>${tx.solAmount.toFixed(4)} SOL</b>`;
-      if (tx.priceUsd) {
+    // Value in SOL and USD
+    if (tx.solAmount && tx.solAmount > 0.0001) {
+      msg += `💰 <b>${tx.solAmount.toFixed(4)} SOL</b>`;
+      if (tx.priceUsd && tx.priceUsd > 0.01) {
         msg += ` (~$${tx.priceUsd.toFixed(2)})`;
       }
       msg += `\n`;
@@ -176,13 +241,16 @@ class TelegramService {
 
     msg += `\n`;
 
-    // Links
-    msg += `<a href="https://solscan.io/tx/${tx.signature}">View Transaction</a>`;
+    // Links row
+    msg += `🔗 <a href="https://solscan.io/tx/${tx.signature}">Transaction</a>`;
     if (tx.tokenMint) {
-      msg += ` | <a href="https://dexscreener.com/solana/${tx.tokenMint}">Chart</a>`;
+      msg += ` • <a href="https://dexscreener.com/solana/${tx.tokenMint}">Chart</a>`;
+      msg += ` • <a href="https://birdeye.so/token/${tx.tokenMint}?chain=solana">Birdeye</a>`;
     }
-    msg += `\n`;
-    msg += `Analyze: <code>/check ${tx.tokenMint}</code>`;
+    msg += `\n\n`;
+
+    // Quick action
+    msg += `🔍 <code>/check ${tx.tokenMint}</code>`;
 
     return msg;
   }
@@ -191,12 +259,15 @@ class TelegramService {
     const targetChatId = chatId || this.defaultChatId;
 
     try {
-      await this.bot.telegram.sendMessage(targetChatId, message, {
-        parse_mode: 'HTML',
-        link_preview_options: { is_disabled: true },
-      });
+      await this.withRetry(
+        () => this.bot.telegram.sendMessage(targetChatId, message, {
+          parse_mode: 'HTML',
+          link_preview_options: { is_disabled: true },
+        }),
+        'sendMessage'
+      );
     } catch (error) {
-      console.error('Failed to send message:', error);
+      logger.silentError('Telegram', 'Failed to send message', error as Error);
     }
   }
 

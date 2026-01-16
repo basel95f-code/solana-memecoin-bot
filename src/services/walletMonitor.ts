@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { Connection, PublicKey, ParsedTransactionWithMeta, ConfirmedSignatureInfo } from '@solana/web3.js';
+import { Connection, PublicKey, ParsedTransactionWithMeta, ConfirmedSignatureInfo, Logs } from '@solana/web3.js';
 import axios from 'axios';
 import { config } from '../config';
 import { storageService } from './storage';
@@ -7,6 +7,7 @@ import { solanaService } from './solana';
 import { dexScreenerService } from './dexscreener';
 import { TrackedWallet, WalletTransaction, WalletActivityAlert, SOL_MINT, DEFAULT_CATEGORY_PRIORITIES } from '../types';
 import { logger } from '../utils/logger';
+import { WALLET_MONITOR, DEX_PROGRAMS as DEX_PROGRAM_IDS } from '../constants';
 
 // Token metadata cache
 interface TokenMetadataCache {
@@ -16,39 +17,24 @@ interface TokenMetadataCache {
   cachedAt: number;
 }
 const tokenMetadataCache = new Map<string, TokenMetadataCache>();
-const METADATA_CACHE_TTL = 300000; // 5 minutes
 
 // Known DEX program IDs for detecting swaps
-const RAYDIUM_AMM_V4 = '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8';
-const RAYDIUM_CLMM = 'CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK';
-const JUPITER_V6 = 'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4';
-const JUPITER_V4 = 'JUP4Fb2cqiRUcaTHdrPC8h2gNsA2ETXiPDD33WcGuJB';
-const ORCA_WHIRLPOOL = 'whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc';
-const PUMPFUN_PROGRAM = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
-const PUMPSWAP_AMM = 'pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA';
-
 const DEX_PROGRAMS = new Set([
-  RAYDIUM_AMM_V4,
-  RAYDIUM_CLMM,
-  JUPITER_V6,
-  JUPITER_V4,
-  ORCA_WHIRLPOOL,
-  PUMPFUN_PROGRAM,
-  PUMPSWAP_AMM,
+  DEX_PROGRAM_IDS.RAYDIUM_AMM,
+  DEX_PROGRAM_IDS.RAYDIUM_CPMM,
+  DEX_PROGRAM_IDS.JUPITER_V6,
+  DEX_PROGRAM_IDS.ORCA_WHIRLPOOL,
+  DEX_PROGRAM_IDS.PUMPFUN,
+  'JUP4Fb2cqiRUcaTHdrPC8h2gNsA2ETXiPDD33WcGuJB', // Jupiter V4
+  'pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA', // PumpSwap AMM
+  'CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK', // Raydium CLMM
 ]);
 
-const TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
-const TOKEN_2022_PROGRAM = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
-
-// Configuration
-const POLL_INTERVAL_MS = 15000; // 15 seconds - faster alerts
-const MAX_SIGNATURES_PER_WALLET = 20;
-const TX_CACHE_TTL_MS = 300000; // 5 minutes
-const ALERT_COOLDOWN_MS = 10000; // 10 seconds between alerts for same wallet
-
-interface WalletMonitorConfig {
-  enabled: boolean;
-  pollIntervalMs: number;
+interface WalletSubscription {
+  walletAddress: string;
+  chatId: string;
+  subscriptionId: number;
+  lastSignature?: string;
 }
 
 export class WalletMonitorService extends EventEmitter {
@@ -56,6 +42,11 @@ export class WalletMonitorService extends EventEmitter {
   private isRunning: boolean = false;
   private txCache: Map<string, number> = new Map(); // signature -> timestamp (dedup)
   private connection: Connection;
+  private wsConnection: Connection | null = null;
+  private subscriptions: Map<string, WalletSubscription> = new Map(); // walletAddress -> subscription
+  private useWebSocket: boolean = true;
+  private reconnectAttempts: number = 0;
+  private processingSignatures: Set<string> = new Set(); // Prevent duplicate processing
 
   constructor() {
     super();
@@ -68,14 +59,11 @@ export class WalletMonitorService extends EventEmitter {
     this.isRunning = true;
     logger.info('WalletMonitor', 'Wallet monitoring started');
 
-    // Initial check
-    await this.checkAllWallets();
+    // Try to start WebSocket monitoring
+    await this.initializeWebSocket();
 
-    // Set up periodic checks
-    this.pollInterval = setInterval(
-      () => this.checkAllWallets(),
-      POLL_INTERVAL_MS
-    );
+    // Start fallback polling (runs less frequently when WS is active)
+    this.startFallbackPolling();
   }
 
   stop(): void {
@@ -83,30 +71,301 @@ export class WalletMonitorService extends EventEmitter {
       clearInterval(this.pollInterval);
       this.pollInterval = null;
     }
+
+    // Cleanup WebSocket subscriptions
+    this.cleanupSubscriptions();
+
     this.isRunning = false;
     logger.info('WalletMonitor', 'Wallet monitoring stopped');
   }
 
-  private async checkAllWallets(): Promise<void> {
+  /**
+   * Initialize WebSocket connection and subscriptions
+   */
+  private async initializeWebSocket(): Promise<void> {
+    try {
+      // Create a separate connection for WebSocket subscriptions
+      this.wsConnection = new Connection(config.solanaWsUrl, {
+        commitment: 'confirmed',
+        wsEndpoint: config.solanaWsUrl,
+      });
+
+      // Subscribe to all tracked wallets
+      await this.subscribeToAllWallets();
+
+      this.useWebSocket = true;
+      this.reconnectAttempts = 0;
+      logger.info('WalletMonitor', 'WebSocket monitoring active - real-time alerts enabled');
+    } catch (error) {
+      logger.warn('WalletMonitor', `WebSocket initialization failed: ${(error as Error).message}`);
+      this.useWebSocket = false;
+      logger.info('WalletMonitor', 'Falling back to polling mode');
+    }
+  }
+
+  /**
+   * Subscribe to logs for all tracked wallets
+   */
+  private async subscribeToAllWallets(): Promise<void> {
+    if (!this.wsConnection) return;
+
+    const chatIds = storageService.getAllTrackedWalletChatIds();
+
+    for (const chatId of chatIds) {
+      const wallets = storageService.getTrackedWallets(chatId);
+      for (const wallet of wallets) {
+        await this.subscribeToWallet(wallet, chatId);
+      }
+    }
+  }
+
+  /**
+   * Subscribe to a single wallet's transactions via WebSocket
+   */
+  private async subscribeToWallet(wallet: TrackedWallet, chatId: string): Promise<void> {
+    if (!this.wsConnection) return;
+
+    // Skip if already subscribed
+    if (this.subscriptions.has(wallet.address)) return;
+
+    try {
+      const pubkey = new PublicKey(wallet.address);
+
+      // Subscribe to logs mentioning this wallet
+      const subscriptionId = this.wsConnection.onLogs(
+        pubkey,
+        async (logs: Logs) => {
+          await this.handleWalletLogs(logs, wallet, chatId);
+        },
+        'confirmed'
+      );
+
+      this.subscriptions.set(wallet.address, {
+        walletAddress: wallet.address,
+        chatId,
+        subscriptionId,
+        lastSignature: wallet.lastSignature,
+      });
+
+      logger.debug('WalletMonitor', `WebSocket subscribed to ${wallet.label} (${wallet.address.slice(0, 8)}...)`);
+    } catch (error) {
+      logger.silentError('WalletMonitor', `Failed to subscribe to ${wallet.address.slice(0, 8)}...`, error as Error);
+    }
+  }
+
+  /**
+   * Handle incoming logs from WebSocket subscription
+   */
+  private async handleWalletLogs(logs: Logs, wallet: TrackedWallet, chatId: string): Promise<void> {
+    try {
+      // Skip if transaction had an error
+      if (logs.err) return;
+
+      const signature = logs.signature;
+
+      // Skip if already processed
+      if (this.txCache.has(signature) || this.processingSignatures.has(signature)) {
+        return;
+      }
+
+      // Mark as processing to prevent duplicates
+      this.processingSignatures.add(signature);
+
+      // Small delay to let transaction finalize
+      await this.sleep(WALLET_MONITOR.SIGNATURE_PROCESS_DELAY_MS);
+
+      try {
+        // Fetch full transaction details
+        const tx = await this.connection.getParsedTransaction(signature, {
+          maxSupportedTransactionVersion: 0,
+        });
+
+        if (tx) {
+          const parsed = this.parseTransaction(tx, wallet.address);
+          if (parsed) {
+            // Check if we should alert for this transaction
+            const shouldAlert = await this.shouldAlertForTransaction(parsed, wallet, chatId);
+            if (shouldAlert) {
+              await this.emitWalletAlert(wallet, parsed, chatId);
+            }
+
+            // Cache the signature
+            this.txCache.set(signature, Date.now());
+
+            // Update subscription's last signature
+            const sub = this.subscriptions.get(wallet.address);
+            if (sub) {
+              sub.lastSignature = signature;
+            }
+          }
+        }
+      } finally {
+        this.processingSignatures.delete(signature);
+      }
+    } catch (error) {
+      this.processingSignatures.delete(logs.signature);
+      logger.silentError('WalletMonitor', `Error handling logs for ${wallet.label}`, error as Error);
+    }
+  }
+
+  /**
+   * Check if we should alert for this transaction
+   */
+  private async shouldAlertForTransaction(tx: WalletTransaction, wallet: TrackedWallet, chatId: string): Promise<boolean> {
+    const settings = storageService.getUserSettings(chatId);
+
+    // Check if alerts are enabled
+    if (!settings.filters.alertsEnabled) return false;
+
+    // Check if wallet_activity category is enabled
+    const walletAlertEnabled = settings.filters.alertCategories?.wallet_activity ?? true;
+    if (!walletAlertEnabled) return false;
+
+    // Check quiet hours
+    if (storageService.isQuietHours(chatId)) return false;
+
+    // Check priority level
+    const alertPriority = DEFAULT_CATEGORY_PRIORITIES.wallet_activity;
+    if (!storageService.shouldAlertForPriority(chatId, alertPriority)) return false;
+
+    // Check minimum SOL threshold
+    const minSolValue = settings.filters.walletAlertMinSol || 0;
+    if (minSolValue > 0 && tx.solAmount && tx.solAmount < minSolValue) {
+      logger.debug('WalletMonitor', `Skipping: below min SOL threshold (${tx.solAmount} < ${minSolValue})`);
+      return false;
+    }
+
+    // Check cooldown for this wallet
+    const now = Date.now();
+    if (wallet.lastAlertedAt && now - wallet.lastAlertedAt < WALLET_MONITOR.ALERT_COOLDOWN_MS) {
+      logger.debug('WalletMonitor', `Skipping: cooldown active for ${wallet.label}`);
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Emit wallet activity alert
+   */
+  private async emitWalletAlert(wallet: TrackedWallet, tx: WalletTransaction, chatId: string): Promise<void> {
+    const alert: WalletActivityAlert = {
+      wallet,
+      transaction: tx,
+      chatId,
+    };
+
+    logger.info('WalletMonitor', `[REAL-TIME] ${wallet.label} ${tx.type} ${tx.tokenMint.slice(0, 8)}...`);
+    this.emit('walletActivity', alert);
+
+    // Update last alerted time
+    storageService.updateTrackedWallet(chatId, wallet.address, {
+      lastAlertedAt: Date.now(),
+      lastSignature: tx.signature,
+    });
+  }
+
+  /**
+   * Cleanup all WebSocket subscriptions
+   */
+  private cleanupSubscriptions(): void {
+    if (!this.wsConnection) return;
+
+    for (const [address, sub] of this.subscriptions) {
+      try {
+        this.wsConnection.removeOnLogsListener(sub.subscriptionId);
+        logger.debug('WalletMonitor', `Unsubscribed from ${address.slice(0, 8)}...`);
+      } catch (error) {
+        // Ignore cleanup errors
+      }
+    }
+
+    this.subscriptions.clear();
+  }
+
+  /**
+   * Start fallback polling (less frequent when WebSocket is active)
+   */
+  private startFallbackPolling(): void {
+    // Clear existing interval if any
+    if (this.pollInterval) {
+      clearInterval(this.pollInterval);
+    }
+
+    // Poll less frequently when WebSocket is active
+    const interval = this.useWebSocket ? WALLET_MONITOR.FALLBACK_POLL_INTERVAL_MS * 2 : WALLET_MONITOR.FALLBACK_POLL_INTERVAL_MS;
+
+    this.pollInterval = setInterval(
+      () => this.checkAllWalletsFallback(),
+      interval
+    );
+
+    logger.debug('WalletMonitor', `Fallback polling started (interval: ${interval / 1000}s)`);
+  }
+
+  /**
+   * Fallback polling check for all wallets
+   */
+  private async checkAllWalletsFallback(): Promise<void> {
     try {
       const chatIds = storageService.getAllTrackedWalletChatIds();
       if (chatIds.length === 0) return;
 
-      logger.info('WalletMonitor', `Polling ${chatIds.length} chats with tracked wallets`);
-
       // Cleanup old cache entries
       this.cleanupTxCache();
 
-      // Process each chat's wallets
-      for (const chatId of chatIds) {
-        try {
-          await this.checkWalletsForChat(chatId);
-        } catch (error) {
-          logger.silentError('WalletMonitor', `Error checking wallets for ${chatId}`, error as Error);
+      // Check if we need to refresh subscriptions
+      await this.refreshSubscriptionsIfNeeded();
+
+      // Only do full polling if WebSocket is down
+      if (!this.useWebSocket) {
+        logger.debug('WalletMonitor', `Fallback polling ${chatIds.length} chats`);
+        for (const chatId of chatIds) {
+          try {
+            await this.checkWalletsForChat(chatId);
+          } catch (error) {
+            logger.silentError('WalletMonitor', `Error checking wallets for ${chatId}`, error as Error);
+          }
         }
       }
     } catch (error) {
-      logger.silentError('WalletMonitor', 'Error in checkAllWallets', error as Error);
+      logger.silentError('WalletMonitor', 'Error in fallback polling', error as Error);
+    }
+  }
+
+  /**
+   * Refresh WebSocket subscriptions if wallets have changed
+   */
+  private async refreshSubscriptionsIfNeeded(): Promise<void> {
+    if (!this.useWebSocket || !this.wsConnection) return;
+
+    const chatIds = storageService.getAllTrackedWalletChatIds();
+    const currentWallets = new Set<string>();
+
+    // Collect all current wallets
+    for (const chatId of chatIds) {
+      const wallets = storageService.getTrackedWallets(chatId);
+      for (const wallet of wallets) {
+        currentWallets.add(wallet.address);
+
+        // Subscribe if not already subscribed
+        if (!this.subscriptions.has(wallet.address)) {
+          await this.subscribeToWallet(wallet, chatId);
+        }
+      }
+    }
+
+    // Unsubscribe from removed wallets
+    for (const [address, sub] of this.subscriptions) {
+      if (!currentWallets.has(address)) {
+        try {
+          this.wsConnection.removeOnLogsListener(sub.subscriptionId);
+          this.subscriptions.delete(address);
+          logger.debug('WalletMonitor', `Unsubscribed from removed wallet ${address.slice(0, 8)}...`);
+        } catch (error) {
+          // Ignore
+        }
+      }
     }
   }
 
@@ -115,7 +374,6 @@ export class WalletMonitorService extends EventEmitter {
 
     // Check if wallet_activity alerts are enabled
     if (!settings.filters.alertsEnabled) return;
-    // Default to true if wallet_activity category not set (backward compatibility)
     const walletAlertEnabled = settings.filters.alertCategories?.wallet_activity ?? true;
     if (!walletAlertEnabled) return;
 
@@ -127,51 +385,28 @@ export class WalletMonitorService extends EventEmitter {
     if (!storageService.shouldAlertForPriority(chatId, alertPriority)) return;
 
     const wallets = storageService.getTrackedWallets(chatId);
-    if (wallets.length > 0) {
-      logger.info('WalletMonitor', `Checking ${wallets.length} wallets for chat ${chatId}`);
-    }
     const minSolValue = settings.filters.walletAlertMinSol || 0;
 
     for (const wallet of wallets) {
       try {
         const transactions = await this.fetchWalletTransactions(wallet);
-        if (transactions.length > 0) {
-          logger.info('WalletMonitor', `Found ${transactions.length} new tx for ${wallet.label}`);
-        }
 
         for (const tx of transactions) {
-          logger.info('WalletMonitor', `Processing tx: ${tx.type} ${tx.tokenMint.slice(0,8)}... SOL: ${tx.solAmount || 'N/A'}`);
-
           // Skip if below minimum SOL threshold
           if (minSolValue > 0 && tx.solAmount && tx.solAmount < minSolValue) {
-            logger.debug('WalletMonitor', `Skipping: below min SOL threshold`);
             continue;
           }
 
           // Check cooldown for this wallet
           const now = Date.now();
-          if (wallet.lastAlertedAt && now - wallet.lastAlertedAt < ALERT_COOLDOWN_MS) {
-            logger.debug('WalletMonitor', `Skipping: cooldown active`);
+          if (wallet.lastAlertedAt && now - wallet.lastAlertedAt < WALLET_MONITOR.ALERT_COOLDOWN_MS) {
             continue;
           }
 
-          // Emit alert event
-          const alert: WalletActivityAlert = {
-            wallet,
-            transaction: tx,
-            chatId,
-          };
-
-          logger.info('WalletMonitor', `Emitting wallet activity alert for ${wallet.label}`);
-          this.emit('walletActivity', alert);
-
-          // Update last alerted time
-          storageService.updateTrackedWallet(chatId, wallet.address, {
-            lastAlertedAt: now,
-          });
+          await this.emitWalletAlert(wallet, tx, chatId);
         }
 
-        // Update last checked time and signature
+        // Update last checked time
         const latestSig = transactions[0]?.signature;
         storageService.updateTrackedWallet(chatId, wallet.address, {
           lastChecked: Date.now(),
@@ -191,7 +426,7 @@ export class WalletMonitorService extends EventEmitter {
 
       // Get recent signatures
       const signatures = await this.connection.getSignaturesForAddress(pubkey, {
-        limit: MAX_SIGNATURES_PER_WALLET,
+        limit: WALLET_MONITOR.MAX_SIGNATURES_PER_WALLET,
       });
 
       // Filter to signatures after lastSignature
@@ -200,7 +435,7 @@ export class WalletMonitorService extends EventEmitter {
       if (newSignatures.length === 0) return [];
 
       // Batch fetch transaction details
-      for (const sig of newSignatures.slice(0, 10)) { // Limit to 10 per poll
+      for (const sig of newSignatures.slice(0, 10)) {
         // Skip if already processed
         if (this.txCache.has(sig.signature)) continue;
 
@@ -427,17 +662,30 @@ export class WalletMonitorService extends EventEmitter {
   private cleanupTxCache(): void {
     const now = Date.now();
     for (const [sig, timestamp] of this.txCache) {
-      if (now - timestamp > TX_CACHE_TTL_MS) {
+      if (now - timestamp > WALLET_MONITOR.TX_CACHE_TTL_MS) {
         this.txCache.delete(sig);
       }
     }
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   isActive(): boolean {
     return this.isRunning;
   }
 
-  getStats(): { trackedWallets: number; cachedTransactions: number } {
+  isWebSocketActive(): boolean {
+    return this.useWebSocket && this.subscriptions.size > 0;
+  }
+
+  getStats(): {
+    trackedWallets: number;
+    cachedTransactions: number;
+    wsSubscriptions: number;
+    mode: 'websocket' | 'polling';
+  } {
     let totalWallets = 0;
     const chatIds = storageService.getAllTrackedWalletChatIds();
     for (const chatId of chatIds) {
@@ -447,7 +695,30 @@ export class WalletMonitorService extends EventEmitter {
     return {
       trackedWallets: totalWallets,
       cachedTransactions: this.txCache.size,
+      wsSubscriptions: this.subscriptions.size,
+      mode: this.useWebSocket ? 'websocket' : 'polling',
     };
+  }
+
+  // Add a wallet subscription dynamically
+  async addWalletSubscription(wallet: TrackedWallet, chatId: string): Promise<void> {
+    if (this.useWebSocket && this.wsConnection) {
+      await this.subscribeToWallet(wallet, chatId);
+    }
+  }
+
+  // Remove a wallet subscription dynamically
+  removeWalletSubscription(walletAddress: string): void {
+    const sub = this.subscriptions.get(walletAddress);
+    if (sub && this.wsConnection) {
+      try {
+        this.wsConnection.removeOnLogsListener(sub.subscriptionId);
+        this.subscriptions.delete(walletAddress);
+        logger.debug('WalletMonitor', `Removed subscription for ${walletAddress.slice(0, 8)}...`);
+      } catch (error) {
+        // Ignore
+      }
+    }
   }
 
   // Fetch recent activity for a wallet (for /wallet command)
@@ -487,7 +758,7 @@ export class WalletMonitorService extends EventEmitter {
 
     // Check cache first
     const cached = tokenMetadataCache.get(mint);
-    if (cached && Date.now() - cached.cachedAt < METADATA_CACHE_TTL) {
+    if (cached && Date.now() - cached.cachedAt < WALLET_MONITOR.METADATA_CACHE_TTL_MS) {
       tx.tokenSymbol = cached.symbol;
       tx.tokenName = cached.name;
       if (cached.priceUsd && tx.amount) {
@@ -524,7 +795,6 @@ export class WalletMonitorService extends EventEmitter {
       const jupResponse = await axios.get(`https://price.jup.ag/v6/price?ids=${mint}`, { timeout: 5000 });
       if (jupResponse.data?.data?.[mint]) {
         const jupData = jupResponse.data.data[mint];
-        // Jupiter price API doesn't have name/symbol, try token info
         const tokenInfo = await solanaService.getTokenInfo(mint);
         tx.tokenSymbol = tokenInfo?.symbol || mint.slice(0, 6);
         tx.tokenName = tokenInfo?.name || 'Unknown';

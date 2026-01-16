@@ -299,3 +299,48 @@ export const CLEANUP = {
   MAIN_LOOP_INTERVAL_MS: 60000, // 1 minute
   ALERT_HISTORY_MAX_AGE_MS: 24 * 60 * 60 * 1000, // 24 hours
 } as const;
+
+// ============================================
+// Wallet Monitor Settings
+// ============================================
+export const WALLET_MONITOR = {
+  FALLBACK_POLL_INTERVAL_MS: 30000, // 30 seconds fallback polling
+  MAX_SIGNATURES_PER_WALLET: 20,
+  TX_CACHE_TTL_MS: 300000, // 5 minutes
+  ALERT_COOLDOWN_MS: 10000, // 10 seconds between alerts for same wallet
+  WS_RECONNECT_DELAY_MS: 5000, // 5 seconds before reconnect attempt
+  WS_MAX_RECONNECT_ATTEMPTS: 5,
+  SIGNATURE_PROCESS_DELAY_MS: 100, // Small delay to let transaction finalize
+  METADATA_CACHE_TTL_MS: 300000, // 5 minutes
+} as const;
+
+// ============================================
+// API Server Settings
+// ============================================
+export const API = {
+  PORT: 3001,
+  MAX_RECENT_ITEMS: 50, // Max recent discoveries/alerts to keep
+  HEALTH_CHECK_TIMEOUT_MS: 5000, // RPC health check timeout
+} as const;
+
+// ============================================
+// Outcome Tracker Settings
+// ============================================
+export const OUTCOME_TRACKER = {
+  POLL_INTERVAL_MS: 30 * 60 * 1000, // 30 minutes
+  MAX_TRACKING_DURATION_MS: 48 * 60 * 60 * 1000, // 48 hours
+  DATA_RETENTION_DAYS: 30, // Keep outcome data for 30 days
+  RUG_THRESHOLD_PERCENT: -90, // Price drop > 90% = rug
+  PUMP_THRESHOLD_PERCENT: 100, // Price increase > 100% = pump
+  DECLINE_THRESHOLD_PERCENT: -50, // Price drop > 50% = decline
+} as const;
+
+// ============================================
+// Telegram Settings
+// ============================================
+export const TELEGRAM = {
+  MAX_RETRIES: 3,
+  RETRY_DELAY_MS: 1000,
+  RETRY_BACKOFF_MULTIPLIER: 2,
+  MAX_MESSAGE_LENGTH: 4096,
+} as const;

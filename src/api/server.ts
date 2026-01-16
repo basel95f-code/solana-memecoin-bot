@@ -9,8 +9,13 @@ import fs from 'fs';
 import { storageService } from '../services/storage';
 import { database } from '../database';
 import { dexScreenerService } from '../services/dexscreener';
+import { solanaService } from '../services/solana';
+import { walletMonitorService } from '../services/walletMonitor';
 import { config } from '../config';
 import { logger } from '../utils/logger';
+
+// Track startup time for uptime calculation
+const startupTime = Date.now();
 
 const PORT = 3001;
 const DASHBOARD_DIR = path.join(process.cwd(), 'dashboard');
@@ -80,7 +85,9 @@ class ApiServer {
 
       try {
         // API Routes
-        if (url.pathname === '/api/portfolio') {
+        if (url.pathname === '/api/health' || url.pathname === '/health') {
+          await this.handleHealth(req, res);
+        } else if (url.pathname === '/api/portfolio') {
           await this.handlePortfolio(req, res);
         } else if (url.pathname === '/api/watchlist') {
           await this.handleWatchlist(req, res);
@@ -229,6 +236,108 @@ class ApiServer {
       totalAnalyses: dbStats.totalAnalyses,
       totalAlerts: dbStats.totalAlerts,
     }));
+  }
+
+  /**
+   * Health check endpoint - returns system health status
+   * Used for monitoring and alerting
+   */
+  private async handleHealth(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+    const checks: Record<string, { status: 'healthy' | 'degraded' | 'unhealthy'; message?: string; latencyMs?: number }> = {};
+    let overallStatus: 'healthy' | 'degraded' | 'unhealthy' = 'healthy';
+
+    // Check Solana RPC connection
+    try {
+      const start = Date.now();
+      const slot = await solanaService.getConnection().getSlot();
+      const latency = Date.now() - start;
+      checks.solana_rpc = {
+        status: latency < 5000 ? 'healthy' : 'degraded',
+        message: `Current slot: ${slot}`,
+        latencyMs: latency,
+      };
+      if (latency >= 5000) overallStatus = 'degraded';
+    } catch (error) {
+      checks.solana_rpc = {
+        status: 'unhealthy',
+        message: (error as Error).message,
+      };
+      overallStatus = 'unhealthy';
+    }
+
+    // Check Database
+    try {
+      const start = Date.now();
+      const dbStats = database.getStats();
+      const latency = Date.now() - start;
+      checks.database = {
+        status: 'healthy',
+        message: `${dbStats.totalAnalyses} analyses stored`,
+        latencyMs: latency,
+      };
+    } catch (error) {
+      checks.database = {
+        status: 'unhealthy',
+        message: (error as Error).message,
+      };
+      overallStatus = 'unhealthy';
+    }
+
+    // Check Wallet Monitor
+    try {
+      const walletStats = walletMonitorService.getStats();
+      checks.wallet_monitor = {
+        status: walletMonitorService.isActive() ? 'healthy' : 'degraded',
+        message: `${walletStats.trackedWallets} wallets tracked, mode: ${walletStats.mode}`,
+      };
+      if (!walletMonitorService.isActive() && overallStatus === 'healthy') {
+        overallStatus = 'degraded';
+      }
+    } catch (error) {
+      checks.wallet_monitor = {
+        status: 'degraded',
+        message: (error as Error).message,
+      };
+      if (overallStatus === 'healthy') overallStatus = 'degraded';
+    }
+
+    // Calculate uptime
+    const uptimeMs = Date.now() - startupTime;
+    const uptimeSeconds = Math.floor(uptimeMs / 1000);
+    const uptimeMinutes = Math.floor(uptimeSeconds / 60);
+    const uptimeHours = Math.floor(uptimeMinutes / 60);
+    const uptimeDays = Math.floor(uptimeHours / 24);
+
+    let uptimeString: string;
+    if (uptimeDays > 0) {
+      uptimeString = `${uptimeDays}d ${uptimeHours % 24}h ${uptimeMinutes % 60}m`;
+    } else if (uptimeHours > 0) {
+      uptimeString = `${uptimeHours}h ${uptimeMinutes % 60}m`;
+    } else {
+      uptimeString = `${uptimeMinutes}m ${uptimeSeconds % 60}s`;
+    }
+
+    // Memory usage
+    const memUsage = process.memoryUsage();
+    const memoryMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+
+    const healthResponse = {
+      status: overallStatus,
+      timestamp: new Date().toISOString(),
+      uptime: uptimeString,
+      uptimeMs,
+      memory: {
+        heapUsedMB: memoryMB,
+        heapTotalMB: Math.round(memUsage.heapTotal / 1024 / 1024),
+        rssMB: Math.round(memUsage.rss / 1024 / 1024),
+      },
+      checks,
+      version: '1.0.0', // Could be read from package.json
+    };
+
+    const statusCode = overallStatus === 'healthy' ? 200 : overallStatus === 'degraded' ? 200 : 503;
+    res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(healthResponse, null, 2));
   }
 
   /**

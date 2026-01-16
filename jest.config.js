@@ -7,6 +7,8 @@ module.exports = {
   collectCoverageFrom: [
     'src/analysis/**/*.ts',
     'src/risk/**/*.ts',
+    'src/core/**/*.ts',
+    'src/services/outcomeTracker.ts',
     '!src/**/*.d.ts',
   ],
   coverageDirectory: 'coverage',

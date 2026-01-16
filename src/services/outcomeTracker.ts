@@ -7,18 +7,20 @@ import { EventEmitter } from 'events';
 import { dexScreenerService } from './dexscreener';
 import { database } from '../database';
 import { logger } from '../utils/logger';
+import { OUTCOME_TRACKER } from '../constants';
 
 // Configuration
-const MONITORING_INTERVAL_MS = 30 * 60 * 1000; // Poll every 30 minutes
-const MONITORING_DURATION_MS = 48 * 60 * 60 * 1000; // Monitor for 48 hours
+const MONITORING_INTERVAL_MS = OUTCOME_TRACKER.POLL_INTERVAL_MS;
+const MONITORING_DURATION_MS = OUTCOME_TRACKER.MAX_TRACKING_DURATION_MS;
 const MAX_TRACKED_TOKENS = 500; // Max tokens to track simultaneously
 const BATCH_SIZE = 30; // DexScreener batch size
 const OUTCOME_CHECK_DELAY_MS = 24 * 60 * 60 * 1000; // Wait 24h before classifying
+const DATA_RETENTION_DAYS = OUTCOME_TRACKER.DATA_RETENTION_DAYS;
 
-// Outcome thresholds
+// Outcome thresholds (derived from constants)
 const RUG_LIQUIDITY_DROP = 0.2; // Liquidity dropped to <20% of initial
-const RUG_PRICE_DROP = 0.1; // Price dropped to <10% of initial
-const PUMP_THRESHOLD = 2.0; // Peak price >= 2x initial
+const RUG_PRICE_DROP = (100 + OUTCOME_TRACKER.RUG_THRESHOLD_PERCENT) / 100; // -90% = 0.1
+const PUMP_THRESHOLD = 1 + (OUTCOME_TRACKER.PUMP_THRESHOLD_PERCENT / 100); // 100% = 2.0x
 const STABLE_RANGE = 0.3; // Price within ±30% of initial
 
 export interface TrackedToken {
@@ -71,6 +73,7 @@ class OutcomeTracker extends EventEmitter {
   private trackedTokens: Map<string, TrackedToken> = new Map();
   private isRunning: boolean = false;
   private monitorInterval: NodeJS.Timeout | null = null;
+  private cleanupInterval: NodeJS.Timeout | null = null;
   private initialized: boolean = false;
 
   /**
@@ -103,6 +106,14 @@ class OutcomeTracker extends EventEmitter {
     this.monitorInterval = setInterval(() => {
       this.updateAllTokens();
     }, MONITORING_INTERVAL_MS);
+
+    // Run cleanup daily (every 24 hours)
+    this.cleanupInterval = setInterval(() => {
+      this.cleanupOldData();
+    }, 24 * 60 * 60 * 1000);
+
+    // Run initial cleanup
+    this.cleanupOldData();
   }
 
   /**
@@ -115,6 +126,10 @@ class OutcomeTracker extends EventEmitter {
     if (this.monitorInterval) {
       clearInterval(this.monitorInterval);
       this.monitorInterval = null;
+    }
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
     }
     logger.info('OutcomeTracker', 'Stopped monitoring');
   }
@@ -499,6 +514,52 @@ class OutcomeTracker extends EventEmitter {
   addManualOutcome(outcome: TokenOutcome): void {
     this.saveOutcome(outcome);
     this.emit('outcome', outcome);
+  }
+
+  /**
+   * Clean up old outcome data from the database
+   * Removes data older than DATA_RETENTION_DAYS
+   */
+  private cleanupOldData(): void {
+    try {
+      const cutoffTimestamp = Math.floor(Date.now() / 1000) - (DATA_RETENTION_DAYS * 24 * 60 * 60);
+
+      // Clean up old token outcomes
+      const result = database.cleanupOldOutcomes(cutoffTimestamp);
+
+      if (result.deletedCount > 0) {
+        logger.info('OutcomeTracker', `Cleaned up ${result.deletedCount} old outcome records (older than ${DATA_RETENTION_DAYS} days)`);
+      } else {
+        logger.debug('OutcomeTracker', 'No old outcome records to clean up');
+      }
+
+      // Also clean up old snapshots
+      const snapshotResult = database.cleanupOldSnapshots(cutoffTimestamp);
+      if (snapshotResult.deletedCount > 0) {
+        logger.info('OutcomeTracker', `Cleaned up ${snapshotResult.deletedCount} old snapshot records`);
+      }
+    } catch (error) {
+      logger.error('OutcomeTracker', 'Failed to clean up old data', error as Error);
+    }
+  }
+
+  /**
+   * Manually trigger cleanup (for testing or manual maintenance)
+   */
+  manualCleanup(): { outcomesDeleted: number; snapshotsDeleted: number } {
+    try {
+      const cutoffTimestamp = Math.floor(Date.now() / 1000) - (DATA_RETENTION_DAYS * 24 * 60 * 60);
+      const outcomes = database.cleanupOldOutcomes(cutoffTimestamp);
+      const snapshots = database.cleanupOldSnapshots(cutoffTimestamp);
+
+      return {
+        outcomesDeleted: outcomes.deletedCount,
+        snapshotsDeleted: snapshots.deletedCount,
+      };
+    } catch (error) {
+      logger.error('OutcomeTracker', 'Manual cleanup failed', error as Error);
+      return { outcomesDeleted: 0, snapshotsDeleted: 0 };
+    }
   }
 }
 
