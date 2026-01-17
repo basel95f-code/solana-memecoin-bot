@@ -1,5 +1,6 @@
 import type { Context, Telegraf } from 'telegraf';
-import { formatHelp, formatStats } from '../formatters';
+import { formatHelp, formatStats, formatMainMenu, formatMarketMenu, formatAlertsMenu, formatAnalyzeMenu } from '../formatters';
+import { mainMenuKeyboard, marketKeyboard, alertsKeyboard, backToMenuKeyboard } from '../keyboards';
 import { config } from '../../config';
 
 let startTime = Date.now();
@@ -17,31 +18,88 @@ export function incrementAlertsSent(): void {
 export function registerBasicCommands(bot: Telegraf): void {
   startTime = Date.now();
 
-  // /start command
+  // /start command - now shows main menu
   bot.command('start', async (ctx: Context) => {
-    const message = [
-      `🚀 <b>Welcome to Solana Memecoin Monitor!</b>`,
-      ``,
-      `I monitor new tokens on Solana and alert you to potential opportunities.`,
-      ``,
-      `<b>Quick Start:</b>`,
-      `• Alerts are <b>ON</b> by default`,
-      `• Default filter: <b>Balanced</b>`,
-      `• Type /help for all commands`,
-      ``,
-      `<b>Current Monitors:</b>`,
-      config.monitors.raydium.enabled ? `✅ Raydium` : `❌ Raydium`,
-      config.monitors.pumpfun.enabled ? `✅ Pump.fun` : `❌ Pump.fun`,
-      config.monitors.jupiter.enabled ? `✅ Jupiter` : `❌ Jupiter`,
-      ``,
-      `<b>Popular Commands:</b>`,
-      `/check [address] - Analyze a token`,
-      `/filter - Change alert filter`,
-      `/watchlist - Manage watchlist`,
-      `/trending - See trending tokens`,
-    ].join('\n');
+    await ctx.replyWithHTML(formatMainMenu(), mainMenuKeyboard());
+  });
 
-    await ctx.replyWithHTML(message);
+  // /menu command - main navigation
+  bot.command('menu', async (ctx: Context) => {
+    await ctx.replyWithHTML(formatMainMenu(), mainMenuKeyboard());
+  });
+
+  // Menu navigation callbacks
+  bot.action('back_menu', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.editMessageText(formatMainMenu(), {
+      parse_mode: 'HTML',
+      ...mainMenuKeyboard(),
+    });
+  });
+
+  bot.action('menu_market', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.editMessageText(formatMarketMenu(), {
+      parse_mode: 'HTML',
+      ...marketKeyboard(),
+    });
+  });
+
+  bot.action('menu_analyze', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.editMessageText(formatAnalyzeMenu(), {
+      parse_mode: 'HTML',
+      ...backToMenuKeyboard(),
+    });
+  });
+
+  bot.action('menu_alerts', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.editMessageText(formatAlertsMenu(true), {
+      parse_mode: 'HTML',
+      ...alertsKeyboard(true),
+    });
+  });
+
+  bot.action('menu_settings', async (ctx) => {
+    await ctx.answerCbQuery();
+    // Trigger settings command
+    await ctx.reply('Loading settings...', backToMenuKeyboard());
+  });
+
+  bot.action('menu_stats', async (ctx) => {
+    await ctx.answerCbQuery();
+    const monitors = [];
+    if (config.monitors.raydium.enabled) monitors.push('Raydium');
+    if (config.monitors.pumpfun.enabled) monitors.push('Pump.fun');
+    if (config.monitors.jupiter.enabled) monitors.push('Jupiter');
+
+    const stats = formatStats({
+      tokensAnalyzed,
+      alertsSent,
+      uptime: Date.now() - startTime,
+      watchlistCount: 0,
+      monitorsActive: monitors,
+    });
+
+    await ctx.editMessageText(stats, {
+      parse_mode: 'HTML',
+      ...backToMenuKeyboard(),
+    });
+  });
+
+  bot.action('menu_watchlist', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.reply('Loading watchlist...', backToMenuKeyboard());
+  });
+
+  bot.action('cancel', async (ctx) => {
+    await ctx.answerCbQuery('Cancelled');
+    await ctx.deleteMessage();
+  });
+
+  bot.action('noop', async (ctx) => {
+    await ctx.answerCbQuery();
   });
 
   // /help command
