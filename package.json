@@ -1,49 +1,31 @@
 {
-  "name": "solana-memecoin-bot",
+  "name": "solana-memecoin-bot-monorepo",
   "version": "1.0.0",
-  "description": "Solana memecoin monitoring bot with Telegram alerts, safety checks, and risk classification",
-  "main": "dist/index.js",
-  "scripts": {
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts",
-    "watch": "tsc -w",
-    "test": "jest",
-    "test:coverage": "jest --coverage",
-    "test:watch": "jest --watch",
-    "test:token": "ts-node scripts/test-token.ts",
-    "lint": "eslint src --ext .ts",
-    "lint:fix": "eslint src --ext .ts --fix"
-  },
-  "keywords": [
-    "solana",
-    "memecoin",
-    "trading",
-    "telegram",
-    "bot"
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
   ],
-  "author": "",
-  "license": "MIT",
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.24.0",
-    "@solana/spl-token": "^0.4.6",
-    "@solana/web3.js": "^1.95.3",
-    "@tensorflow/tfjs": "^4.20.0",
-    "axios": "^1.7.7",
-    "dotenv": "^16.4.5",
-    "sql.js": "^1.10.0",
-    "telegraf": "^4.16.3"
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "dev:bot": "turbo dev --filter=@memecoin/bot",
+    "dev:dashboard": "turbo dev --filter=@memecoin/dashboard",
+    "start": "turbo start",
+    "start:bot": "turbo start --filter=@memecoin/bot",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "typecheck": "turbo typecheck",
+    "clean": "turbo clean && rm -rf node_modules",
+    "db:migrate": "cd supabase && npx supabase db push",
+    "db:types": "cd supabase && npx supabase gen types typescript --local > ../packages/shared/src/types/supabase.ts"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.2",
-    "@types/jest": "^30.0.0",
-    "@types/node": "^22.5.5",
-    "@types/sql.js": "^1.4.9",
-    "eslint": "^9.39.2",
-    "jest": "^30.2.0",
-    "ts-jest": "^29.4.6",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.6.2",
-    "typescript-eslint": "^8.53.0"
+    "turbo": "^2.0.0",
+    "typescript": "^5.6.2"
+  },
+  "packageManager": "npm@10.0.0",
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

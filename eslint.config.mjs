@@ -17,10 +17,13 @@ export default tseslint.config(
     },
     rules: {
       // Allow unused vars with underscore prefix
-      '@typescript-eslint/no-unused-vars': ['error', { 
-        argsIgnorePattern: '^_',
-        varsIgnorePattern: '^_',
-      }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+        },
+      ],
       // Allow explicit any in specific cases (trading bot needs flexibility)
       '@typescript-eslint/no-explicit-any': 'warn',
       // Require proper error handling

@@ -1,0 +1,24 @@
+[project]
+project_id = "memecoin-bot"
+name = "Solana Memecoin Bot"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+
+[db]
+port = 54322
+
+[studio]
+enabled = true
+port = 54323
+
+[auth]
+enabled = false
+
+[storage]
+enabled = false
+
+[realtime]
+enabled = true

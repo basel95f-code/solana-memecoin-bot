@@ -1,0 +1,6 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "cd ../.. && npm run build -- --filter=@memecoin/dashboard",
+  "installCommand": "cd ../.. && npm install",
+  "outputDirectory": ".next"
+}

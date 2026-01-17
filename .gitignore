@@ -4,14 +4,18 @@ node_modules/
 # Build output
 dist/
 build/
+.next/
+out/
 
 # Environment variables (NEVER commit!)
 .env
 .env.local
 .env.*.local
+!.env.example
 
 # Data files (user settings, database)
 data/
+*.db
 
 # OS files
 .DS_Store
@@ -37,3 +41,14 @@ temp/
 # ML models (large files)
 *.h5
 *.pkl
+
+# Turborepo
+.turbo/
+
+# Vercel
+.vercel/
+
+# TypeScript cache
+*.tsbuildinfo
+
+.vercel

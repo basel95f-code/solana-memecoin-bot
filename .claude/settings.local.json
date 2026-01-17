@@ -63,7 +63,13 @@
       "Bash(dir /B \"C:\\\\Users\\\\User\\\\solana-memecoin-bot\")",
       "Bash(sqlite3:*)",
       "Bash(cursor:*)",
-      "Bash(cmd //c \"taskkill /PID 8796 /F\")"
+      "Bash(cmd //c \"taskkill /PID 8796 /F\")",
+      "Bash(xcopy:*)",
+      "Bash(for dir in /c/Users/User/.claude/skills/*/)",
+      "Bash(done)",
+      "Bash(npm install)",
+      "Bash(npm run dev:dashboard:*)",
+      "Bash(npx vercel:*)"
     ]
   }
 }
