@@ -69,7 +69,16 @@ export function formatMainMenu(): string {
   return [
     `<b>◆ SOLANA MEMECOIN BOT</b>`,
     ``,
-    `Select an option below.`,
+    `Real-time token monitoring on Solana.`,
+    ``,
+    `<b>◆ Features</b>`,
+    `• Live alerts from Raydium, Pump.fun, Jupiter`,
+    `• Token analysis with risk scoring`,
+    `• Smart money & whale tracking`,
+    `• Watchlist with price alerts`,
+    `• Backtesting strategies`,
+    ``,
+    `Select an option:`,
   ].join('\n');
 }
 

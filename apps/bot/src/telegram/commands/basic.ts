@@ -104,7 +104,7 @@ export function registerBasicCommands(bot: Telegraf): void {
 
   // /help command
   bot.command('help', async (ctx: Context) => {
-    await ctx.replyWithHTML(formatHelp());
+    await ctx.replyWithHTML(formatHelp(), backToMenuKeyboard());
   });
 
   // /status command
@@ -115,16 +115,13 @@ export function registerBasicCommands(bot: Telegraf): void {
     if (config.monitors.jupiter.enabled) monitors.push('Jupiter');
 
     const message = [
-      `✅ <b>Bot Status: ONLINE</b>`,
+      `✅ <b>STATUS: ONLINE</b>`,
       ``,
-      `<b>Monitors Active:</b> ${monitors.length > 0 ? monitors.join(', ') : 'None'}`,
-      `<b>Watchlist:</b> ${config.watchlist.enabled ? 'Enabled' : 'Disabled'}`,
-      `<b>Discovery:</b> ${config.discovery.enabled ? 'Enabled' : 'Disabled'}`,
-      ``,
-      `<b>Uptime:</b> ${formatUptime(Date.now() - startTime)}`,
+      `Monitors: ${monitors.length > 0 ? monitors.join(', ') : 'None'}`,
+      `Uptime: ${formatUptime(Date.now() - startTime)}`,
     ].join('\n');
 
-    await ctx.replyWithHTML(message);
+    await ctx.replyWithHTML(message, backToMenuKeyboard());
   });
 
   // /stats command
@@ -138,11 +135,11 @@ export function registerBasicCommands(bot: Telegraf): void {
       tokensAnalyzed,
       alertsSent,
       uptime: Date.now() - startTime,
-      watchlistCount: 0, // Will be updated when storage is integrated
+      watchlistCount: 0,
       monitorsActive: monitors,
     });
 
-    await ctx.replyWithHTML(stats);
+    await ctx.replyWithHTML(stats, backToMenuKeyboard());
   });
 }
 
