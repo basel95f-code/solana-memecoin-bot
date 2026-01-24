@@ -3,6 +3,9 @@
  * Automated ML model training orchestration
  */
 
+import * as tf from '@tensorflow/tfjs';
+import path from 'path';
+import fs from 'fs';
 import { EventEmitter } from 'events';
 import { logger } from '../utils/logger';
 import { database } from '../database';
@@ -54,12 +57,35 @@ export class TrainingPipeline extends EventEmitter {
   private lastTrainingResult?: TrainingResult;
   private newSamplesSinceLastTrain: number = 0;
   private checkInterval: NodeJS.Timeout | null = null;
+  private modelDir: string;
+  private currentModel: tf.LayersModel | null = null;
+
+  constructor() {
+    super();
+    this.modelDir = path.join(process.cwd(), 'data', 'models', 'training_pipeline');
+  }
 
   /**
    * Initialize the training pipeline
    */
   async initialize(): Promise<void> {
     await modelVersionManager.initialize();
+
+    // Ensure model directory exists
+    if (!fs.existsSync(this.modelDir)) {
+      fs.mkdirSync(this.modelDir, { recursive: true });
+    }
+
+    // Try to load existing model
+    const modelPath = path.join(this.modelDir, 'model.json');
+    if (fs.existsSync(modelPath)) {
+      try {
+        this.currentModel = await tf.loadLayersModel(`file://${modelPath}`);
+        logger.info('TrainingPipeline', 'Loaded existing trained model');
+      } catch (error) {
+        logger.warn('TrainingPipeline', 'Failed to load existing model, will create new on training');
+      }
+    }
 
     // Wire up outcome events from outcomeTracker for auto-labeling
     this.setupOutcomeListener();
@@ -401,29 +427,149 @@ export class TrainingPipeline extends EventEmitter {
   }
 
   /**
-   * Train the model (placeholder for actual TensorFlow training)
-   * In a real implementation, this would use TensorFlow.js
+   * Train the model using TensorFlow.js
    */
   private async trainModel(splits: SplitData): Promise<TrainingMetrics> {
-    // Simulate training time
-    await new Promise(resolve => setTimeout(resolve, 100));
+    const startTime = Date.now();
 
-    // For now, return simulated metrics
-    // In production, this would use the actual rugPredictor training
-    const predictions = splits.test.labels.map(() => Math.random());
-    const cm = metricsCalculator.buildConfusionMatrix(predictions, splits.test.labels);
-    const metrics = metricsCalculator.calculateMetrics(cm);
-    const auc = metricsCalculator.calculateAUC(predictions, splits.test.labels);
+    // Create training tensors
+    const xTrain = tf.tensor2d(splits.train.features);
+    const yTrain = tf.tensor2d(splits.train.labels, [splits.train.labels.length, 1]);
+    const xVal = tf.tensor2d(splits.validation.features);
+    const yVal = tf.tensor2d(splits.validation.labels, [splits.validation.labels.length, 1]);
 
-    return {
-      ...metrics,
-      auc,
-      trainLoss: 0.3 + Math.random() * 0.2,
-      validationLoss: 0.35 + Math.random() * 0.25,
-      epochs: 50,
-      trainingDurationMs: 5000 + Math.random() * 5000,
-      confusionMatrix: cm,
-    };
+    try {
+      // Create a new model for training
+      const model = this.createModel(FEATURE_COUNT);
+
+      // Training configuration
+      const epochs = ML_TRAINING.EPOCHS || 50;
+      const batchSize = ML_TRAINING.BATCH_SIZE || 32;
+
+      logger.info('TrainingPipeline', `Starting TensorFlow training: ${epochs} epochs, batch size ${batchSize}`);
+
+      // Train the model
+      let trainLoss = 0;
+      let validationLoss = 0;
+
+      const history = await model.fit(xTrain, yTrain, {
+        epochs,
+        batchSize,
+        validationData: [xVal, yVal],
+        shuffle: true,
+        callbacks: {
+          onEpochEnd: (epoch, logs) => {
+            if (epoch % 10 === 0 || epoch === epochs - 1) {
+              logger.debug('TrainingPipeline',
+                `Epoch ${epoch + 1}/${epochs}: loss=${logs?.loss?.toFixed(4)}, val_loss=${logs?.val_loss?.toFixed(4)}`
+              );
+            }
+            trainLoss = logs?.loss || 0;
+            validationLoss = logs?.val_loss || 0;
+          },
+        },
+      });
+
+      // Get final losses from history
+      const finalTrainLoss = history.history.loss[history.history.loss.length - 1] as number;
+      const finalValLoss = history.history.val_loss[history.history.val_loss.length - 1] as number;
+
+      // Evaluate on test set
+      const xTest = tf.tensor2d(splits.test.features);
+      const predictions = model.predict(xTest) as tf.Tensor;
+      const predArray = await predictions.data();
+
+      // Convert predictions to array
+      const predictionsList: number[] = Array.from(predArray);
+
+      // Build confusion matrix and calculate metrics
+      const cm = metricsCalculator.buildConfusionMatrix(predictionsList, splits.test.labels);
+      const metrics = metricsCalculator.calculateMetrics(cm);
+      const auc = metricsCalculator.calculateAUC(predictionsList, splits.test.labels);
+
+      // Cleanup test tensors
+      xTest.dispose();
+      predictions.dispose();
+
+      // Save the trained model
+      await model.save(`file://${this.modelDir}`);
+      logger.info('TrainingPipeline', `Model saved to ${this.modelDir}`);
+
+      // Update current model reference (dispose old model first)
+      if (this.currentModel) {
+        this.currentModel.dispose();
+      }
+      this.currentModel = model;
+
+      const trainingDurationMs = Date.now() - startTime;
+
+      logger.info('TrainingPipeline',
+        `Training complete: accuracy=${(metrics.accuracy * 100).toFixed(1)}%, F1=${(metrics.f1Score * 100).toFixed(1)}%, AUC=${(auc * 100).toFixed(1)}%`
+      );
+
+      return {
+        ...metrics,
+        auc,
+        trainLoss: finalTrainLoss,
+        validationLoss: finalValLoss,
+        epochs,
+        trainingDurationMs,
+        confusionMatrix: cm,
+      };
+
+    } finally {
+      // Cleanup training tensors
+      xTrain.dispose();
+      yTrain.dispose();
+      xVal.dispose();
+      yVal.dispose();
+    }
+  }
+
+  /**
+   * Create a TensorFlow model for training
+   */
+  private createModel(featureCount: number): tf.LayersModel {
+    const model = tf.sequential();
+
+    // Input layer with batch normalization
+    model.add(tf.layers.dense({
+      inputShape: [featureCount],
+      units: 128,
+      activation: 'relu',
+      kernelInitializer: 'heNormal',
+    }));
+    model.add(tf.layers.batchNormalization());
+    model.add(tf.layers.dropout({ rate: 0.3 }));
+
+    // Hidden layer 1
+    model.add(tf.layers.dense({
+      units: 64,
+      activation: 'relu',
+      kernelInitializer: 'heNormal',
+    }));
+    model.add(tf.layers.dropout({ rate: 0.2 }));
+
+    // Hidden layer 2
+    model.add(tf.layers.dense({
+      units: 32,
+      activation: 'relu',
+      kernelInitializer: 'heNormal',
+    }));
+
+    // Output layer
+    model.add(tf.layers.dense({
+      units: 1,
+      activation: 'sigmoid',
+    }));
+
+    model.compile({
+      optimizer: tf.train.adam(0.001),
+      loss: 'binaryCrossentropy',
+      metrics: ['accuracy'],
+    });
+
+    return model;
   }
 
   /**
@@ -454,6 +600,39 @@ export class TrainingPipeline extends EventEmitter {
    */
   getLatestMetrics(): any | null {
     return database.getLatestTrainingRun();
+  }
+
+  /**
+   * Check if a trained model is loaded
+   */
+  hasTrainedModel(): boolean {
+    return this.currentModel !== null;
+  }
+
+  /**
+   * Predict using the trained model
+   */
+  async predict(features: number[]): Promise<number | null> {
+    if (!this.currentModel) {
+      return null;
+    }
+
+    const inputTensor = tf.tensor2d([features]);
+    try {
+      const prediction = this.currentModel.predict(inputTensor) as tf.Tensor;
+      const result = (await prediction.data())[0];
+      prediction.dispose();
+      return result;
+    } finally {
+      inputTensor.dispose();
+    }
+  }
+
+  /**
+   * Get model directory path
+   */
+  getModelDir(): string {
+    return this.modelDir;
   }
 }
 

@@ -97,7 +97,7 @@
 ## TODO - Next Improvements
 
 ### High Priority
-1. **Real TensorFlow Training** - Replace simulated training in `trainingPipeline.ts` with actual TF.js model training
+1. ~~**Real TensorFlow Training**~~ - ✅ DONE - Training pipeline now uses actual TF.js with model persistence
 2. **Integration Testing** - Add tests to verify signal generation and ML pipeline work end-to-end
 3. ~~**Signal Price Monitoring**~~ - ✅ DONE - Monitor active signals for take-profit/stop-loss triggers
 4. **Error Recovery** - Add graceful handling for API failures and reconnection logic

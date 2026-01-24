@@ -404,6 +404,11 @@ export const ML_TRAINING = {
   MIN_NEW_SAMPLES_FOR_RETRAIN: 20,
   MIN_HOURS_BETWEEN_TRAINING: 24,
 
+  // Training hyperparameters
+  EPOCHS: 50,
+  BATCH_SIZE: 32,
+  LEARNING_RATE: 0.001,
+
   // Data split
   TRAIN_SPLIT: 0.70,
   VALIDATION_SPLIT: 0.15,
