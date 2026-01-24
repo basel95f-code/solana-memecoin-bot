@@ -2,6 +2,7 @@ import type { Context, Telegraf } from 'telegraf';
 import { formatHelp, formatStats, formatMainMenu, formatMarketMenu, formatAlertsMenu, formatAnalyzeMenu } from '../formatters';
 import { mainMenuKeyboard, marketKeyboard, alertsKeyboard, backToMenuKeyboard } from '../keyboards';
 import { config } from '../../config';
+import { healthMonitor } from '../../services/retryService';
 
 let startTime = Date.now();
 let tokensAnalyzed = 0;
@@ -140,6 +141,43 @@ export function registerBasicCommands(bot: Telegraf): void {
     });
 
     await ctx.replyWithHTML(stats, backToMenuKeyboard());
+  });
+
+  // /health command - service health status
+  bot.command('health', async (ctx: Context) => {
+    const status = healthMonitor.getStatus();
+
+    let msg = '<b>🏥 Service Health</b>\n\n';
+
+    if (status.size === 0) {
+      msg += '<i>No services registered for health monitoring.</i>\n\n';
+      msg += 'Health monitoring is enabled but no services have registered health checks yet.';
+    } else {
+      for (const [name, info] of status) {
+        const healthIcon = info.healthy ? '🟢' : '🔴';
+        const circuitIcon = info.circuitState === 'closed' ? '✅' :
+                           info.circuitState === 'open' ? '🚫' : '⚠️';
+
+        msg += `${healthIcon} <b>${name}</b>\n`;
+        msg += `  Circuit: ${circuitIcon} ${info.circuitState}\n`;
+        if (info.consecutiveFailures > 0) {
+          msg += `  Failures: ${info.consecutiveFailures}\n`;
+        }
+        if (info.lastCheck > 0) {
+          const ago = Math.floor((Date.now() - info.lastCheck) / 1000);
+          msg += `  Last check: ${ago}s ago\n`;
+        }
+        msg += '\n';
+      }
+    }
+
+    // Add system info
+    const memUsage = process.memoryUsage();
+    msg += '<b>System:</b>\n';
+    msg += `Memory: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB / ${Math.round(memUsage.heapTotal / 1024 / 1024)}MB\n`;
+    msg += `Uptime: ${formatUptime(Date.now() - startTime)}`;
+
+    await ctx.replyWithHTML(msg, backToMenuKeyboard());
   });
 }
 

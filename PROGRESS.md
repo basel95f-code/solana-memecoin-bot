@@ -76,6 +76,14 @@
   - `POST /api/ml/train` - Trigger training
   - `GET /api/ml/history` - Training history
 
+### Error Recovery & Health Monitoring (Jan 2026)
+- **Retry Service** (`src/services/retryService.ts`)
+  - Exponential backoff with jitter
+  - Configurable retry conditions (network errors, rate limits)
+  - Circuit breaker pattern for failing services
+  - Health monitor for service status tracking
+  - `/health` command to view service status
+
 ### Signal Price Monitor (Jan 2026)
 - **Price Monitoring** (`src/signals/priceMonitor.ts`)
   - Monitors active signals every 30 seconds
@@ -100,7 +108,7 @@
 1. ~~**Real TensorFlow Training**~~ - ✅ DONE - Training pipeline now uses actual TF.js with model persistence
 2. **Integration Testing** - Add tests to verify signal generation and ML pipeline work end-to-end
 3. ~~**Signal Price Monitoring**~~ - ✅ DONE - Monitor active signals for take-profit/stop-loss triggers
-4. **Error Recovery** - Add graceful handling for API failures and reconnection logic
+4. ~~**Error Recovery**~~ - ✅ DONE - Added retry service, circuit breaker, and health monitor
 
 ### Medium Priority
 5. **Backtesting System** - Test signal strategies against historical data

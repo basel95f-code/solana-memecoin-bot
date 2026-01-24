@@ -97,6 +97,8 @@ export function registerAllCommands(bot: Telegraf): void {
     { command: 'webhook', description: 'Manage webhooks' },
     // ML Training
     { command: 'ml', description: 'ML model status' },
+    // Health
+    { command: 'health', description: 'Service health status' },
   ]).catch(err => console.error('Failed to set bot commands:', err));
 
   console.log('All Telegram commands registered');
