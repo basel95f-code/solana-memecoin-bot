@@ -12,23 +12,39 @@ import type {
   SignalConfig,
   SignalGenerationInput,
   PositionSizeConfig,
+  KellyConfig,
+  SignalOutcome,
+  KellyCalculationResult,
 } from './types';
 import {
   DEFAULT_SIGNAL_CONFIG,
   DEFAULT_POSITION_SIZE_CONFIG,
+  DEFAULT_KELLY_CONFIG,
 } from './types';
+import { KellyCriterion } from './kellyCriterion';
+import { correlationAnalyzer, CorrelationAnalyzer, CorrelationResult, CorrelationConfig } from './correlationAnalyzer';
 
 export class SignalGenerator {
   private config: SignalConfig;
   private positionConfig: PositionSizeConfig;
+  private kellyCalculator: KellyCriterion;
+  private correlationChecker: CorrelationAnalyzer;
+  private historicalOutcomes: SignalOutcome[] = [];
+  private activeSignals: TradingSignal[] = [];
   private lastSignalTime: Map<string, number> = new Map(); // mint -> timestamp
+  private lastKellyResult: KellyCalculationResult | null = null;
+  private lastCorrelationResult: CorrelationResult | null = null;
 
   constructor(
     config: Partial<SignalConfig> = {},
-    positionConfig: Partial<PositionSizeConfig> = {}
+    positionConfig: Partial<PositionSizeConfig> = {},
+    kellyConfig: Partial<KellyConfig> = {},
+    correlationConfig: Partial<CorrelationConfig> = {}
   ) {
     this.config = { ...DEFAULT_SIGNAL_CONFIG, ...config };
     this.positionConfig = { ...DEFAULT_POSITION_SIZE_CONFIG, ...positionConfig };
+    this.kellyCalculator = new KellyCriterion({ ...DEFAULT_KELLY_CONFIG, ...kellyConfig });
+    this.correlationChecker = new CorrelationAnalyzer(correlationConfig);
   }
 
   /**
@@ -218,8 +234,30 @@ export class SignalGenerator {
       return null;
     }
 
+    // Check correlation with active signals
+    const correlationResult = this.correlationChecker.analyzeCorrelation(
+      input,
+      { momentumScore, smartMoneyScore, holderScore },
+      this.activeSignals
+    );
+    this.lastCorrelationResult = correlationResult;
+
+    // Block if too many correlated signals
+    if (correlationResult.shouldBlock) {
+      logger.info(
+        'SignalGenerator',
+        `Blocked ${input.symbol} due to correlation: ${correlationResult.blockReason}`
+      );
+      return null;
+    }
+
     // Generate reasons and warnings
     const { reasons, warnings } = this.generateReasonsAndWarnings(input, confidence, signalType);
+
+    // Add correlation warning if applicable
+    if (correlationResult.isCorrelated && correlationResult.warning) {
+      warnings.push(correlationResult.warning);
+    }
 
     // Calculate position size
     const { size, sizeType } = this.calculatePositionSize(confidence, input.riskScore);
@@ -396,12 +434,41 @@ export class SignalGenerator {
 
   /**
    * Calculate suggested position size
+   * Uses Kelly criterion when enabled, otherwise falls back to default logic
    */
   private calculatePositionSize(confidence: number, riskScore: number): {
     size: number;
     sizeType: 'percentage' | 'fixed_sol';
+    kellyUsed?: boolean;
   } {
     const config = this.positionConfig;
+
+    // Try Kelly criterion first if enabled
+    const kellyConfig = this.kellyCalculator.getConfig();
+    if (kellyConfig.enabled && config.type === 'percentage') {
+      const kellyResult = this.kellyCalculator.calculate(
+        this.historicalOutcomes,
+        confidence
+      );
+      this.lastKellyResult = kellyResult;
+
+      if (kellyResult.kellyUsed && kellyResult.suggestedPositionPercent > 0) {
+        logger.debug(
+          'SignalGenerator',
+          `Using Kelly position: ${kellyResult.suggestedPositionPercent}% ` +
+            `(optimal: ${(kellyResult.optimalFraction * 100).toFixed(1)}%, ` +
+            `WR: ${(kellyResult.winRate * 100).toFixed(1)}%, ` +
+            `W/L: ${kellyResult.winLossRatio.toFixed(2)})`
+        );
+        return {
+          size: kellyResult.suggestedPositionPercent,
+          sizeType: 'percentage',
+          kellyUsed: true,
+        };
+      }
+    }
+
+    // Fall back to default position sizing
     let baseSize: number;
 
     if (config.type === 'percentage') {
@@ -423,7 +490,7 @@ export class SignalGenerator {
 
       // Clamp to min/max
       baseSize = Math.max(config.minPercentage, Math.min(config.maxPercentage, baseSize));
-      return { size: Math.round(baseSize * 10) / 10, sizeType: 'percentage' };
+      return { size: Math.round(baseSize * 10) / 10, sizeType: 'percentage', kellyUsed: false };
 
     } else {
       baseSize = config.defaultSol;
@@ -439,7 +506,7 @@ export class SignalGenerator {
       }
 
       baseSize = Math.max(config.minSol, Math.min(config.maxSol, baseSize));
-      return { size: Math.round(baseSize * 1000) / 1000, sizeType: 'fixed_sol' };
+      return { size: Math.round(baseSize * 1000) / 1000, sizeType: 'fixed_sol', kellyUsed: false };
     }
   }
 
@@ -502,6 +569,161 @@ export class SignalGenerator {
    */
   clearCooldowns(): void {
     this.lastSignalTime.clear();
+  }
+
+  /**
+   * Update Kelly criterion configuration
+   */
+  updateKellyConfig(config: Partial<KellyConfig>): void {
+    this.kellyCalculator.updateConfig(config);
+  }
+
+  /**
+   * Get Kelly criterion configuration
+   */
+  getKellyConfig(): KellyConfig {
+    return this.kellyCalculator.getConfig();
+  }
+
+  /**
+   * Get Kelly criterion description
+   */
+  getKellyDescription(): string {
+    return this.kellyCalculator.getDescription();
+  }
+
+  /**
+   * Get last Kelly calculation result
+   */
+  getLastKellyResult(): KellyCalculationResult | null {
+    return this.lastKellyResult;
+  }
+
+  /**
+   * Update historical outcomes for Kelly calculation
+   * @param outcomes - Array of signal outcomes with P&L data
+   */
+  updateHistoricalOutcomes(outcomes: SignalOutcome[]): void {
+    this.historicalOutcomes = outcomes;
+    logger.debug('SignalGenerator', `Updated historical outcomes: ${outcomes.length} trades`);
+  }
+
+  /**
+   * Add a single outcome to historical data
+   */
+  addOutcome(outcome: SignalOutcome): void {
+    this.historicalOutcomes.push(outcome);
+    // Keep only recent outcomes (based on lookback config)
+    const lookback = this.kellyCalculator.getConfig().lookbackTrades;
+    if (this.historicalOutcomes.length > lookback * 2) {
+      this.historicalOutcomes = this.historicalOutcomes
+        .sort((a, b) => (b.exitRecordedAt || 0) - (a.exitRecordedAt || 0))
+        .slice(0, lookback * 2);
+    }
+  }
+
+  /**
+   * Get Kelly historical metrics
+   */
+  getKellyMetrics(): {
+    enabled: boolean;
+    tradeCount: number;
+    winRate: number;
+    winLossRatio: number;
+    suggestedPosition: number;
+    fallbackReason?: string;
+  } {
+    const config = this.kellyCalculator.getConfig();
+    if (!config.enabled) {
+      return {
+        enabled: false,
+        tradeCount: 0,
+        winRate: 0,
+        winLossRatio: 0,
+        suggestedPosition: 0,
+        fallbackReason: 'Kelly criterion disabled',
+      };
+    }
+
+    const result = this.kellyCalculator.calculate(this.historicalOutcomes);
+    return {
+      enabled: true,
+      tradeCount: result.tradeCount,
+      winRate: result.winRate,
+      winLossRatio: result.winLossRatio,
+      suggestedPosition: result.suggestedPositionPercent,
+      fallbackReason: result.fallbackReason,
+    };
+  }
+
+  // ============================================
+  // Correlation Methods
+  // ============================================
+
+  /**
+   * Update active signals for correlation checking
+   */
+  updateActiveSignals(signals: TradingSignal[]): void {
+    this.activeSignals = signals;
+    logger.debug('SignalGenerator', `Updated active signals: ${signals.length}`);
+  }
+
+  /**
+   * Add a signal to active signals
+   */
+  addActiveSignal(signal: TradingSignal): void {
+    this.activeSignals.push(signal);
+  }
+
+  /**
+   * Remove a signal from active signals
+   */
+  removeActiveSignal(signalId: string): void {
+    this.activeSignals = this.activeSignals.filter((s) => s.id !== signalId);
+  }
+
+  /**
+   * Update correlation configuration
+   */
+  updateCorrelationConfig(config: Partial<CorrelationConfig>): void {
+    this.correlationChecker.updateConfig(config);
+  }
+
+  /**
+   * Get correlation configuration
+   */
+  getCorrelationConfig(): CorrelationConfig {
+    return this.correlationChecker.getConfig();
+  }
+
+  /**
+   * Get last correlation result
+   */
+  getLastCorrelationResult(): CorrelationResult | null {
+    return this.lastCorrelationResult;
+  }
+
+  /**
+   * Get correlation summary for active signals
+   */
+  getCorrelationSummary(): {
+    totalSignals: number;
+    correlationPairs: number;
+    highCorrelationPairs: Array<{
+      signalA: string;
+      signalB: string;
+      correlation: number;
+    }>;
+    diversificationScore: number;
+  } {
+    return this.correlationChecker.getCorrelationSummary(this.activeSignals);
+  }
+
+  /**
+   * Update price history for correlation calculation
+   */
+  updatePriceHistory(mint: string, price: number): void {
+    this.correlationChecker.updatePriceHistory(mint, price);
   }
 }
 

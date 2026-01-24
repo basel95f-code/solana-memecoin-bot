@@ -346,3 +346,83 @@ export const DEFAULT_POSITION_SIZE_CONFIG: PositionSizeConfig = {
   adjustByConfidence: true,
   adjustByRisk: true,
 };
+
+// ============================================
+// Kelly Criterion Configuration
+// ============================================
+
+export interface KellyConfig {
+  // Enable Kelly criterion-based position sizing
+  enabled: boolean;
+
+  // Kelly fraction (0.0 - 1.0)
+  // Full Kelly = 1.0, Half Kelly = 0.5, Quarter Kelly = 0.25
+  // Lower values are more conservative and reduce volatility
+  fraction: number;
+
+  // Minimum historical trades required before using Kelly
+  // Below this threshold, use default position sizing
+  minTradesRequired: number;
+
+  // Lookback period for calculating win rate and win/loss ratio
+  // Number of recent trades to consider
+  lookbackTrades: number;
+
+  // Maximum position size regardless of Kelly calculation
+  maxPositionPercent: number;
+
+  // Minimum position size (Kelly can suggest very small bets)
+  minPositionPercent: number;
+
+  // Floor win rate - if historical win rate falls below this, disable Kelly
+  minWinRate: number;
+
+  // Use confidence-adjusted Kelly (blend Kelly with signal confidence)
+  useConfidenceAdjustment: boolean;
+}
+
+export interface KellyCalculationResult {
+  // Optimal Kelly fraction (before applying fraction multiplier)
+  optimalFraction: number;
+
+  // Adjusted Kelly fraction (after applying fraction multiplier)
+  adjustedFraction: number;
+
+  // Suggested position size as percentage of portfolio
+  suggestedPositionPercent: number;
+
+  // Input metrics used for calculation
+  winRate: number; // p
+  winLossRatio: number; // b (avg win / avg loss)
+  avgWinPercent: number;
+  avgLossPercent: number;
+
+  // Trade count used in calculation
+  tradeCount: number;
+
+  // Whether Kelly was actually used or fallback to default
+  kellyUsed: boolean;
+  fallbackReason?: string;
+}
+
+export interface KellyHistoricalMetrics {
+  totalTrades: number;
+  winningTrades: number;
+  losingTrades: number;
+  winRate: number;
+  avgWinPercent: number;
+  avgLossPercent: number;
+  winLossRatio: number;
+  calculatedAt: number;
+}
+
+export const DEFAULT_KELLY_CONFIG: KellyConfig = {
+  enabled: false, // Disabled by default - user must explicitly enable
+  fraction: 0.25, // Quarter Kelly - very conservative
+  minTradesRequired: 20, // Need 20+ trades for statistically meaningful data
+  lookbackTrades: 50, // Look at last 50 trades
+  maxPositionPercent: 15, // Cap at 15% even if Kelly suggests more
+  minPositionPercent: 1, // At least 1% position
+  minWinRate: 0.40, // Disable Kelly if win rate drops below 40%
+  useConfidenceAdjustment: true, // Blend with signal confidence
+};

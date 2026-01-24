@@ -13,6 +13,7 @@ import { registerBacktestCommands } from './backtest';
 import { registerSignalCommands } from './signals';
 import { registerMLCommands } from './ml';
 import { registerSentimentCommands } from './sentiment';
+import { registerRulesCommands } from './rules';
 
 export function registerAllCommands(bot: Telegraf): void {
   // Register all command handlers
@@ -30,6 +31,7 @@ export function registerAllCommands(bot: Telegraf): void {
   registerSignalCommands(bot);
   registerMLCommands(bot);
   registerSentimentCommands(bot);
+  registerRulesCommands(bot);
 
   // Set up bot commands menu
   bot.telegram.setMyCommands([
@@ -97,6 +99,10 @@ export function registerAllCommands(bot: Telegraf): void {
     { command: 'ack', description: 'Acknowledge a signal' },
     { command: 'outcome', description: 'Record trade outcome' },
     { command: 'webhook', description: 'Manage webhooks' },
+    { command: 'kelly', description: 'Kelly criterion position sizing' },
+    { command: 'correlation', description: 'Signal correlation analysis' },
+    { command: 'slack', description: 'Manage Slack webhooks' },
+    { command: 'rules', description: 'Custom alert rules' },
     // ML Training
     { command: 'ml', description: 'ML model status' },
     // Sentiment

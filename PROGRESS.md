@@ -84,6 +84,39 @@
   - Health monitor for service status tracking
   - `/health` command to view service status
 
+### Advanced Features (Jan 2026)
+
+- **Kelly Criterion Position Sizing** (`src/signals/kellyCriterion.ts`)
+  - Optimal position sizing based on historical win rate and win/loss ratio
+  - Configurable fraction (Full, Half, Quarter Kelly)
+  - Confidence-adjusted sizing
+  - /kelly command for configuration
+
+- **Signal Correlation Analysis** (`src/signals/correlationAnalyzer.ts`)
+  - Detects correlated signals to avoid concentration risk
+  - Diversification scoring (0-100)
+  - Configurable correlation threshold
+  - Auto-blocks when too many correlated signals
+  - /correlation command
+
+- **Slack Webhooks** (`src/signals/slackWebhook.ts`)
+  - Slack Block Kit rich message formatting
+  - Retry logic with rate limit handling
+  - /slack command for webhook management
+
+- **Alert Rules Engine** (`src/services/alertRules.ts`)
+  - Custom alert conditions on any token metric
+  - Logical operators (AND/OR)
+  - Actions: alert, block, boost, tag
+  - Preset rules (high liquidity, whale alert, rug risk, pump detector)
+  - /rules command
+
+- **Multi-Platform Sentiment** (`src/services/telegramMtproto.ts`, `src/services/discordBot.ts`)
+  - Telegram MTProto API via gramjs
+  - Discord Bot API via discord.js
+  - Weighted aggregation (Twitter 40%, Telegram 35%, Discord 25%)
+  - /sentiment command for channel management
+
 ### Signal Price Monitor (Jan 2026)
 - **Price Monitoring** (`src/signals/priceMonitor.ts`)
   - Monitors active signals every 30 seconds
@@ -106,17 +139,17 @@
 
 ### High Priority
 1. ~~**Real TensorFlow Training**~~ - ✅ DONE - Training pipeline now uses actual TF.js with model persistence
-2. **Integration Testing** - Add tests to verify signal generation and ML pipeline work end-to-end
+2. ~~**Integration Testing**~~ - ✅ DONE - Added tests for signal generation, ML pipeline, and queue processor
 3. ~~**Signal Price Monitoring**~~ - ✅ DONE - Monitor active signals for take-profit/stop-loss triggers
 4. ~~**Error Recovery**~~ - ✅ DONE - Added retry service, circuit breaker, and health monitor
 
 ### Medium Priority
 5. ~~**Backtesting System**~~ - ✅ Already implemented (strategies, comparison, quick backtest)
-6. **Advanced Position Sizing** - Implement Kelly criterion for optimal bet sizing
-7. **Signal Correlation** - Detect and warn about correlated signals
+6. ~~**Advanced Position Sizing**~~ - ✅ DONE - Kelly criterion with configurable fraction, confidence adjustment
+7. ~~**Signal Correlation**~~ - ✅ DONE - Detects correlated signals, diversification scoring, /correlation command
 8. **Dashboard Charts** - Add signal performance charts to web dashboard
-9. **Slack Webhooks** - Support Slack in addition to Discord
-10. **Alert Rules Engine** - User-configurable alert conditions
+9. ~~**Slack Webhooks**~~ - ✅ DONE - SlackWebhookDispatcher with Block Kit formatting, /slack command
+10. ~~**Alert Rules Engine**~~ - ✅ DONE - Flexible rule conditions, preset rules, /rules command
 
 ### Low Priority / Future
 11. **Multi-model Ensemble** - Combine multiple ML models for predictions
