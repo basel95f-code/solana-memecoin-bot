@@ -111,7 +111,7 @@
 4. ~~**Error Recovery**~~ - ✅ DONE - Added retry service, circuit breaker, and health monitor
 
 ### Medium Priority
-5. **Backtesting System** - Test signal strategies against historical data
+5. ~~**Backtesting System**~~ - ✅ Already implemented (strategies, comparison, quick backtest)
 6. **Advanced Position Sizing** - Implement Kelly criterion for optimal bet sizing
 7. **Signal Correlation** - Detect and warn about correlated signals
 8. **Dashboard Charts** - Add signal performance charts to web dashboard
@@ -128,6 +128,8 @@
 ---
 
 ## Recent Commits
+- `be4c974` - Add retry service, circuit breaker, and health monitoring
+- `f1b604e` - Implement real TensorFlow training in training pipeline
 - `92cfb39` - Use enhanced 25-feature ML prediction in queue processor
 - `e37eb74` - Add /monitor command for price monitor control
 - `f5d65e8` - Add signal price monitor and progress tracking
