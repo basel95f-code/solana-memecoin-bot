@@ -6,7 +6,7 @@
 import type { Context, Telegraf } from 'telegraf';
 import { Markup } from 'telegraf';
 import { database } from '../../database';
-import { signalService } from '../../signals';
+import { signalService, signalPriceMonitor } from '../../signals';
 import {
   formatSignalList,
   formatSignalPerformance,
@@ -400,6 +400,86 @@ export function registerSignalCommands(bot: Telegraf): void {
       '<code>/webhook add &lt;url&gt; [name]</code> - Add webhook\n' +
       '<code>/webhook remove &lt;id&gt;</code> - Remove webhook\n' +
       '<code>/webhook test</code> - Send test signal'
+    );
+  });
+
+  // /monitor command - price monitor status and control
+  bot.command('monitor', async (ctx: Context) => {
+    const text = ctx.message && 'text' in ctx.message ? ctx.message.text : '';
+    const args = text.split(' ').slice(1);
+    const subcommand = args[0]?.toLowerCase();
+
+    if (!subcommand || subcommand === 'status') {
+      // Show monitor status
+      const stats = signalPriceMonitor.getStats();
+      const activeSignals = signalService.getActiveSignals();
+
+      let msg = '<b>📡 Price Monitor Status</b>\n\n';
+      msg += `Status: ${stats.isRunning ? '🟢 Running' : '🔴 Stopped'}\n`;
+      msg += `Active signals: <b>${stats.activeSignalsCount}</b>\n`;
+      msg += `Cached prices: <b>${stats.cachedPricesCount}</b>\n\n`;
+
+      if (activeSignals.length > 0) {
+        msg += '<b>Monitored Signals:</b>\n';
+        for (const signal of activeSignals.slice(0, 5)) {
+          const targetPct = signal.targetPrice
+            ? ((signal.targetPrice - signal.entryPrice) / signal.entryPrice * 100).toFixed(1)
+            : 'N/A';
+          const stopPct = signal.stopLossPrice
+            ? ((signal.stopLossPrice - signal.entryPrice) / signal.entryPrice * 100).toFixed(1)
+            : 'N/A';
+          msg += `• <b>${signal.symbol}</b> ${signal.type}\n`;
+          msg += `  Entry: $${signal.entryPrice.toFixed(8)}\n`;
+          msg += `  TP: +${targetPct}% | SL: ${stopPct}%\n`;
+        }
+        if (activeSignals.length > 5) {
+          msg += `<i>...and ${activeSignals.length - 5} more</i>\n`;
+        }
+      } else {
+        msg += '<i>No active signals being monitored.</i>\n';
+      }
+
+      msg += '\n<b>Commands:</b>\n';
+      msg += '<code>/monitor check</code> - Force price check\n';
+      msg += '<code>/monitor start</code> - Start monitoring\n';
+      msg += '<code>/monitor stop</code> - Stop monitoring';
+
+      await ctx.replyWithHTML(msg);
+      return;
+    }
+
+    if (subcommand === 'check') {
+      // Force a price check
+      await ctx.replyWithHTML('⏳ Checking prices for active signals...');
+
+      try {
+        await signalPriceMonitor.forceCheck();
+        await ctx.replyWithHTML('✅ Price check completed.');
+      } catch (error) {
+        await ctx.replyWithHTML(`❌ Price check failed: ${(error as Error).message}`);
+      }
+      return;
+    }
+
+    if (subcommand === 'start') {
+      signalPriceMonitor.start();
+      await ctx.replyWithHTML('🟢 Price monitor started.');
+      return;
+    }
+
+    if (subcommand === 'stop') {
+      signalPriceMonitor.stop();
+      await ctx.replyWithHTML('🔴 Price monitor stopped.');
+      return;
+    }
+
+    // Unknown subcommand
+    await ctx.replyWithHTML(
+      '<b>📡 Monitor Commands</b>\n\n' +
+      '<code>/monitor</code> - Show status\n' +
+      '<code>/monitor check</code> - Force price check\n' +
+      '<code>/monitor start</code> - Start monitoring\n' +
+      '<code>/monitor stop</code> - Stop monitoring'
     );
   });
 
