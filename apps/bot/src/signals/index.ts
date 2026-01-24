@@ -321,4 +321,5 @@ export const signalService = new SignalService();
 export { signalGenerator } from './signalGenerator';
 export { signalTracker } from './signalTracker';
 export { webhookDispatcher } from './webhookDispatcher';
+export { signalPriceMonitor } from './priceMonitor';
 export * from './types';

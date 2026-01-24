@@ -16,6 +16,8 @@ import { rugPredictor } from './ml/rugPredictor';
 import { claudeExplainer } from './ml/claudeExplainer';
 import { apiServer } from './api/server';
 import { outcomeTracker } from './services/outcomeTracker';
+import { signalService, signalPriceMonitor } from './signals';
+import { trainingPipeline } from './ml/trainingPipeline';
 import { queueProcessor, setupEventListeners, setupWalletMonitorListeners } from './core';
 
 class SolanaMemecoinBot {
@@ -81,6 +83,16 @@ class SolanaMemecoinBot {
       await outcomeTracker.initialize();
       outcomeTracker.start();
       logger.info('Main', 'Outcome tracker started');
+
+      // Initialize signal service and training pipeline
+      await signalService.initialize();
+      await trainingPipeline.initialize();
+      trainingPipeline.startAutoTraining();
+      logger.info('Main', 'Signal service and ML training pipeline started');
+
+      // Start signal price monitor (watches active signals for TP/SL)
+      signalPriceMonitor.start();
+      logger.info('Main', 'Signal price monitor started');
 
       // Start API server for dashboard
       apiServer.start();
@@ -175,6 +187,11 @@ class SolanaMemecoinBot {
 
     // Stop outcome tracker
     outcomeTracker.stop();
+
+    // Stop signal services
+    signalPriceMonitor.stop();
+    signalService.stop();
+    trainingPipeline.stopAutoTraining();
 
     // Stop Telegram bot
     telegramService.stop();
