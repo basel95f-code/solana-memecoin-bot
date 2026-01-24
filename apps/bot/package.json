@@ -25,9 +25,11 @@
     "@supabase/supabase-js": "^2.45.0",
     "@tensorflow/tfjs": "^4.20.0",
     "axios": "^1.7.7",
+    "discord.js": "^14.14.0",
     "dotenv": "^16.4.5",
     "sql.js": "^1.10.0",
-    "telegraf": "^4.16.3"
+    "telegraf": "^4.16.3",
+    "telegram": "^2.19.0"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",

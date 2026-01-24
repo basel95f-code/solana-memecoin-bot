@@ -12,7 +12,9 @@ import type {
   BlacklistType,
   AlertPriority,
   AlertPrioritySettings,
-  TrackedWallet} from '../types';
+  TrackedWallet,
+  MonitoredChannel,
+  SentimentChannelConfig} from '../types';
 import {
   FILTER_PRESETS,
   DEFAULT_ALERT_CATEGORIES,
@@ -617,6 +619,92 @@ class StorageService {
   // Get wallet tracking config
   getMaxWalletsPerUser(): number {
     return MAX_WALLETS_PER_USER;
+  }
+
+  // ============================================
+  // Sentiment Channel Management
+  // ============================================
+
+  private getDefaultSentimentChannels(): SentimentChannelConfig {
+    return {
+      telegramChannels: [],
+      discordChannels: [],
+      enabled: true,
+    };
+  }
+
+  getSentimentChannels(chatId: string): SentimentChannelConfig {
+    const settings = this.getUserSettings(chatId);
+    return settings.sentimentChannels || this.getDefaultSentimentChannels();
+  }
+
+  addSentimentChannel(chatId: string, channel: MonitoredChannel): SentimentChannelConfig {
+    const current = this.getUserSettings(chatId);
+    const channels = current.sentimentChannels || this.getDefaultSentimentChannels();
+
+    if (channel.platform === 'telegram') {
+      // Check if already exists
+      const exists = channels.telegramChannels.find(c => c.id === channel.id);
+      if (!exists) {
+        channels.telegramChannels.push(channel);
+      }
+    } else if (channel.platform === 'discord') {
+      // Check if already exists
+      const exists = channels.discordChannels.find(c => c.id === channel.id);
+      if (!exists) {
+        channels.discordChannels.push(channel);
+      }
+    }
+
+    this.updateUserSettings(chatId, { sentimentChannels: channels });
+    return channels;
+  }
+
+  removeSentimentChannel(chatId: string, channelId: string, platform: 'telegram' | 'discord'): SentimentChannelConfig {
+    const current = this.getUserSettings(chatId);
+    const channels = current.sentimentChannels || this.getDefaultSentimentChannels();
+
+    if (platform === 'telegram') {
+      channels.telegramChannels = channels.telegramChannels.filter(c => c.id !== channelId);
+    } else if (platform === 'discord') {
+      channels.discordChannels = channels.discordChannels.filter(c => c.id !== channelId);
+    }
+
+    this.updateUserSettings(chatId, { sentimentChannels: channels });
+    return channels;
+  }
+
+  toggleSentimentChannels(chatId: string): boolean {
+    const current = this.getUserSettings(chatId);
+    const channels = current.sentimentChannels || this.getDefaultSentimentChannels();
+    channels.enabled = !channels.enabled;
+    this.updateUserSettings(chatId, { sentimentChannels: channels });
+    return channels.enabled;
+  }
+
+  setSentimentChannelsEnabled(chatId: string, enabled: boolean): SentimentChannelConfig {
+    const current = this.getUserSettings(chatId);
+    const channels = current.sentimentChannels || this.getDefaultSentimentChannels();
+    channels.enabled = enabled;
+    this.updateUserSettings(chatId, { sentimentChannels: channels });
+    return channels;
+  }
+
+  clearSentimentChannels(chatId: string, platform?: 'telegram' | 'discord'): SentimentChannelConfig {
+    const current = this.getUserSettings(chatId);
+    const channels = current.sentimentChannels || this.getDefaultSentimentChannels();
+
+    if (!platform) {
+      channels.telegramChannels = [];
+      channels.discordChannels = [];
+    } else if (platform === 'telegram') {
+      channels.telegramChannels = [];
+    } else if (platform === 'discord') {
+      channels.discordChannels = [];
+    }
+
+    this.updateUserSettings(chatId, { sentimentChannels: channels });
+    return channels;
   }
 }
 

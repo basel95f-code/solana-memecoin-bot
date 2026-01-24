@@ -12,6 +12,7 @@ import { registerWalletCommands } from './wallets';
 import { registerBacktestCommands } from './backtest';
 import { registerSignalCommands } from './signals';
 import { registerMLCommands } from './ml';
+import { registerSentimentCommands } from './sentiment';
 
 export function registerAllCommands(bot: Telegraf): void {
   // Register all command handlers
@@ -28,6 +29,7 @@ export function registerAllCommands(bot: Telegraf): void {
   registerBacktestCommands(bot);
   registerSignalCommands(bot);
   registerMLCommands(bot);
+  registerSentimentCommands(bot);
 
   // Set up bot commands menu
   bot.telegram.setMyCommands([
@@ -97,6 +99,8 @@ export function registerAllCommands(bot: Telegraf): void {
     { command: 'webhook', description: 'Manage webhooks' },
     // ML Training
     { command: 'ml', description: 'ML model status' },
+    // Sentiment
+    { command: 'sentiment', description: 'Multi-platform sentiment settings' },
     // Health
     { command: 'health', description: 'Service health status' },
   ]).catch(err => console.error('Failed to set bot commands:', err));

@@ -6,6 +6,8 @@ import { rateLimitService } from './services/ratelimit';
 import { watchlistService } from './services/watchlist';
 import { advancedMonitor } from './services/advancedMonitor';
 import { walletMonitorService } from './services/walletMonitor';
+import { telegramMtprotoService } from './services/telegramMtproto';
+import { discordBotService } from './services/discordBot';
 import { raydiumMonitor } from './monitors/raydium';
 import { pumpFunMonitor } from './monitors/pumpfun';
 import { jupiterMonitor } from './monitors/jupiter';
@@ -78,6 +80,19 @@ class SolanaMemecoinBot {
 
       // Start advanced monitoring (volume spikes, whale alerts, etc.)
       await advancedMonitor.start();
+
+      // Initialize multi-platform sentiment services
+      if (config.sentiment.telegramEnabled) {
+        await telegramMtprotoService.initialize();
+        const tgStats = telegramMtprotoService.getStats();
+        logger.info('Main', `Telegram MTProto: ${tgStats.isConnected ? 'Connected' : 'Not connected'}`);
+      }
+
+      if (config.sentiment.discordEnabled) {
+        await discordBotService.initialize();
+        const discordStats = discordBotService.getStats();
+        logger.info('Main', `Discord Bot: ${discordStats.isConnected ? 'Connected' : 'Not connected'} (${discordStats.guilds} guilds)`);
+      }
 
       // Start outcome tracker for backtesting data
       await outcomeTracker.initialize();
@@ -184,6 +199,10 @@ class SolanaMemecoinBot {
 
     // Stop wallet monitoring
     walletMonitorService.stop();
+
+    // Stop multi-platform sentiment services
+    await telegramMtprotoService.stop();
+    await discordBotService.stop();
 
     // Stop outcome tracker
     outcomeTracker.stop();

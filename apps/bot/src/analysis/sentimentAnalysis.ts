@@ -1,6 +1,16 @@
-import type { SentimentAnalysis, TokenInfo } from '../types';
+import type {
+  SentimentAnalysis,
+  MultiPlatformSentimentAnalysis,
+  PlatformSentimentData,
+  SentimentPlatform,
+  TokenInfo,
+  MonitoredChannel,
+} from '../types';
 import { twitterService } from '../services/twitter';
-import { SENTIMENT } from '../constants';
+import { telegramMtprotoService } from '../services/telegramMtproto';
+import { discordBotService } from '../services/discordBot';
+import { config } from '../config';
+import { SENTIMENT, SENTIMENT_AGGREGATION } from '../constants';
 
 // Bullish/positive keywords for crypto sentiment
 const BULLISH_KEYWORDS = [
@@ -44,58 +54,341 @@ interface TermCount {
   sentiment: 'positive' | 'negative';
 }
 
-export async function analyzeSentiment(tokenInfo: TokenInfo): Promise<SentimentAnalysis> {
-  const result = getDefaultSentiment();
+interface SentimentResult {
+  positiveCount: number;
+  negativeCount: number;
+  sentimentScore: number;
+  confidence: number;
+  topTerms: TermCount[];
+}
+
+/**
+ * Main entry point for sentiment analysis
+ * Coordinates all enabled platforms and aggregates results
+ */
+export async function analyzeSentiment(
+  tokenInfo: TokenInfo,
+  channels?: { telegram?: MonitoredChannel[]; discord?: MonitoredChannel[] }
+): Promise<MultiPlatformSentimentAnalysis> {
+  const platforms: PlatformSentimentData[] = [];
+  const platformsAnalyzed: SentimentPlatform[] = [];
+
+  // Build search terms
+  const searchTerms = buildSearchTerms(tokenInfo);
+
+  // Analyze each enabled platform in parallel
+  const promises: Promise<PlatformSentimentData | null>[] = [];
+
+  // Twitter analysis
+  if (config.sentiment.twitterEnabled) {
+    promises.push(analyzeTwitterSentiment(searchTerms).catch(() => null));
+  }
+
+  // Telegram analysis
+  if (config.sentiment.telegramEnabled && telegramMtprotoService.isReady()) {
+    const telegramChannels = channels?.telegram ||
+      config.sentiment.defaultTelegramChannels.map(c => ({
+        id: c,
+        name: c,
+        platform: 'telegram' as const,
+        addedAt: Date.now(),
+      }));
+    if (telegramChannels.length > 0) {
+      promises.push(analyzeTelegramSentiment(searchTerms, telegramChannels).catch(() => null));
+    }
+  }
+
+  // Discord analysis
+  if (config.sentiment.discordEnabled && discordBotService.isReady()) {
+    const discordChannels = channels?.discord ||
+      config.sentiment.defaultDiscordChannels.map(c => ({
+        id: c,
+        name: c,
+        platform: 'discord' as const,
+        addedAt: Date.now(),
+      }));
+    if (discordChannels.length > 0) {
+      promises.push(analyzeDiscordSentiment(searchTerms, discordChannels).catch(() => null));
+    }
+  }
+
+  // Wait for all platform analyses
+  const results = await Promise.all(promises);
+
+  // Collect successful results
+  for (const result of results) {
+    if (result && result.messageCount > 0) {
+      platforms.push(result);
+      platformsAnalyzed.push(result.platform);
+    }
+  }
+
+  // Aggregate results
+  return aggregatePlatformSentiment(platforms, platformsAnalyzed);
+}
+
+/**
+ * Analyze Twitter sentiment
+ */
+async function analyzeTwitterSentiment(searchTerms: string[]): Promise<PlatformSentimentData | null> {
+  if (searchTerms.length === 0) {
+    return null;
+  }
 
   try {
-    // Build search terms using symbol and name
-    const searchTerms = buildSearchTerms(tokenInfo);
-    if (searchTerms.length === 0) {
-      return result;
-    }
-
-    // Search Twitter for recent tweets
     const tweets = await twitterService.searchRecentTweets(searchTerms, {
       maxResults: SENTIMENT.MAX_TWEETS,
       excludeRetweets: true,
     });
 
     if (!tweets || tweets.length === 0) {
-      return result;
+      return null;
     }
 
-    // Analyze sentiment
-    const sentimentResult = calculateSentiment(tweets);
+    const result = calculateSentiment(tweets);
 
-    // Populate result
-    result.hasSentimentData = true;
-    result.tweetCount = tweets.length;
-    result.sentimentScore = sentimentResult.sentimentScore;
-    result.confidence = sentimentResult.confidence;
-
-    if (tweets.length > 0) {
-      result.positivePercent = (sentimentResult.positiveCount / tweets.length) * 100;
-      result.negativePercent = (sentimentResult.negativeCount / tweets.length) * 100;
-      result.neutralPercent = 100 - result.positivePercent - result.negativePercent;
-    }
-
-    // Extract top terms
-    result.topPositiveTerms = sentimentResult.topTerms
-      .filter((t) => t.sentiment === 'positive')
-      .slice(0, 5)
-      .map((t) => t.term);
-
-    result.topNegativeTerms = sentimentResult.topTerms
-      .filter((t) => t.sentiment === 'negative')
-      .slice(0, 5)
-      .map((t) => t.term);
-
-    result.analyzedAt = new Date();
+    return {
+      platform: 'twitter',
+      messageCount: tweets.length,
+      sentimentScore: result.sentimentScore,
+      confidence: result.confidence,
+      positivePercent: tweets.length > 0 ? (result.positiveCount / tweets.length) * 100 : 0,
+      negativePercent: tweets.length > 0 ? (result.negativeCount / tweets.length) * 100 : 0,
+      neutralPercent: tweets.length > 0 ?
+        100 - ((result.positiveCount + result.negativeCount) / tweets.length) * 100 : 100,
+      topPositiveTerms: result.topTerms
+        .filter(t => t.sentiment === 'positive')
+        .slice(0, 5)
+        .map(t => t.term),
+      topNegativeTerms: result.topTerms
+        .filter(t => t.sentiment === 'negative')
+        .slice(0, 5)
+        .map(t => t.term),
+      analyzedAt: new Date(),
+    };
   } catch (error) {
-    console.error('Sentiment analysis failed:', error);
+    console.error('Twitter sentiment analysis failed:', error);
+    return null;
+  }
+}
+
+/**
+ * Analyze Telegram sentiment from configured channels
+ */
+async function analyzeTelegramSentiment(
+  searchTerms: string[],
+  channels: MonitoredChannel[]
+): Promise<PlatformSentimentData | null> {
+  const allMessages: string[] = [];
+
+  // Collect messages from all channels
+  for (const channel of channels) {
+    try {
+      const messages = await telegramMtprotoService.searchMessages(channel.id, searchTerms);
+      allMessages.push(...messages);
+    } catch (error) {
+      console.error(`Telegram channel ${channel.id} error:`, error);
+    }
   }
 
-  return result;
+  if (allMessages.length === 0) {
+    return null;
+  }
+
+  const result = calculateSentiment(allMessages);
+
+  return {
+    platform: 'telegram',
+    messageCount: allMessages.length,
+    sentimentScore: result.sentimentScore,
+    confidence: result.confidence,
+    positivePercent: allMessages.length > 0 ? (result.positiveCount / allMessages.length) * 100 : 0,
+    negativePercent: allMessages.length > 0 ? (result.negativeCount / allMessages.length) * 100 : 0,
+    neutralPercent: allMessages.length > 0 ?
+      100 - ((result.positiveCount + result.negativeCount) / allMessages.length) * 100 : 100,
+    topPositiveTerms: result.topTerms
+      .filter(t => t.sentiment === 'positive')
+      .slice(0, 5)
+      .map(t => t.term),
+    topNegativeTerms: result.topTerms
+      .filter(t => t.sentiment === 'negative')
+      .slice(0, 5)
+      .map(t => t.term),
+    analyzedAt: new Date(),
+  };
+}
+
+/**
+ * Analyze Discord sentiment from configured channels
+ */
+async function analyzeDiscordSentiment(
+  searchTerms: string[],
+  channels: MonitoredChannel[]
+): Promise<PlatformSentimentData | null> {
+  const allMessages: string[] = [];
+
+  // Collect messages from all channels
+  for (const channel of channels) {
+    try {
+      const messages = await discordBotService.searchMessages(channel.id, searchTerms);
+      allMessages.push(...messages);
+    } catch (error) {
+      console.error(`Discord channel ${channel.id} error:`, error);
+    }
+  }
+
+  if (allMessages.length === 0) {
+    return null;
+  }
+
+  const result = calculateSentiment(allMessages);
+
+  return {
+    platform: 'discord',
+    messageCount: allMessages.length,
+    sentimentScore: result.sentimentScore,
+    confidence: result.confidence,
+    positivePercent: allMessages.length > 0 ? (result.positiveCount / allMessages.length) * 100 : 0,
+    negativePercent: allMessages.length > 0 ? (result.negativeCount / allMessages.length) * 100 : 0,
+    neutralPercent: allMessages.length > 0 ?
+      100 - ((result.positiveCount + result.negativeCount) / allMessages.length) * 100 : 100,
+    topPositiveTerms: result.topTerms
+      .filter(t => t.sentiment === 'positive')
+      .slice(0, 5)
+      .map(t => t.term),
+    topNegativeTerms: result.topTerms
+      .filter(t => t.sentiment === 'negative')
+      .slice(0, 5)
+      .map(t => t.term),
+    analyzedAt: new Date(),
+  };
+}
+
+/**
+ * Aggregate sentiment from multiple platforms using weighted scoring
+ */
+function aggregatePlatformSentiment(
+  platforms: PlatformSentimentData[],
+  platformsAnalyzed: SentimentPlatform[]
+): MultiPlatformSentimentAnalysis {
+  if (platforms.length === 0) {
+    return getDefaultMultiPlatformSentiment();
+  }
+
+  // Calculate weighted sentiment score
+  let totalWeight = 0;
+  let weightedScore = 0;
+  let totalMessages = 0;
+  let totalPositive = 0;
+  let totalNegative = 0;
+
+  // Collect all terms
+  const allPositiveTerms: Map<string, number> = new Map();
+  const allNegativeTerms: Map<string, number> = new Map();
+
+  for (const platform of platforms) {
+    const weight = getplatformWeight(platform.platform);
+    totalWeight += weight;
+    weightedScore += platform.sentimentScore * weight;
+    totalMessages += platform.messageCount;
+    totalPositive += (platform.positivePercent / 100) * platform.messageCount;
+    totalNegative += (platform.negativePercent / 100) * platform.messageCount;
+
+    // Aggregate top terms
+    for (const term of platform.topPositiveTerms) {
+      allPositiveTerms.set(term, (allPositiveTerms.get(term) || 0) + 1);
+    }
+    for (const term of platform.topNegativeTerms) {
+      allNegativeTerms.set(term, (allNegativeTerms.get(term) || 0) + 1);
+    }
+  }
+
+  // Normalize weighted score
+  const aggregatedScore = totalWeight > 0 ? weightedScore / totalWeight : 0;
+
+  // Calculate aggregate confidence
+  let confidence = calculateAggregateConfidence(platforms, totalMessages);
+
+  // Apply penalty if only one platform
+  if (platforms.length === 1) {
+    confidence *= (1 - SENTIMENT_AGGREGATION.SINGLE_PLATFORM_CONFIDENCE_PENALTY);
+  }
+
+  // Sort and get top terms
+  const topPositiveTerms = Array.from(allPositiveTerms.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([term]) => term);
+
+  const topNegativeTerms = Array.from(allNegativeTerms.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([term]) => term);
+
+  // Calculate percentages
+  const positivePercent = totalMessages > 0 ? (totalPositive / totalMessages) * 100 : 0;
+  const negativePercent = totalMessages > 0 ? (totalNegative / totalMessages) * 100 : 0;
+  const neutralPercent = 100 - positivePercent - negativePercent;
+
+  // Calculate Twitter tweet count for backward compatibility
+  const twitterPlatform = platforms.find(p => p.platform === 'twitter');
+  const telegramPlatform = platforms.find(p => p.platform === 'telegram');
+  const discordPlatform = platforms.find(p => p.platform === 'discord');
+
+  return {
+    hasSentimentData: true,
+    tweetCount: twitterPlatform?.messageCount || 0,
+    telegramMessageCount: telegramPlatform?.messageCount,
+    discordMessageCount: discordPlatform?.messageCount,
+    totalMessageCount: totalMessages,
+    sentimentScore: aggregatedScore,
+    positivePercent,
+    negativePercent,
+    neutralPercent,
+    confidence,
+    topPositiveTerms,
+    topNegativeTerms,
+    analyzedAt: new Date(),
+    platforms,
+    platformsAnalyzed,
+  };
+}
+
+/**
+ * Get weight for a platform
+ */
+function getplatformWeight(platform: SentimentPlatform): number {
+  switch (platform) {
+    case 'twitter':
+      return SENTIMENT_AGGREGATION.WEIGHTS.TWITTER;
+    case 'telegram':
+      return SENTIMENT_AGGREGATION.WEIGHTS.TELEGRAM;
+    case 'discord':
+      return SENTIMENT_AGGREGATION.WEIGHTS.DISCORD;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Calculate aggregate confidence score
+ */
+function calculateAggregateConfidence(platforms: PlatformSentimentData[], totalMessages: number): number {
+  if (platforms.length === 0) return 0;
+
+  // Sample size confidence
+  const sampleConfidence = Math.min(
+    totalMessages / SENTIMENT_AGGREGATION.HIGH_CONFIDENCE_MESSAGES,
+    1
+  );
+
+  // Average platform confidence
+  const avgPlatformConfidence = platforms.reduce((sum, p) => sum + p.confidence, 0) / platforms.length;
+
+  // Platform count bonus
+  const platformBonus = platforms.length >= SENTIMENT_AGGREGATION.MIN_PLATFORMS_HIGH_CONFIDENCE ? 0.1 : 0;
+
+  return Math.min(sampleConfidence * 0.5 + avgPlatformConfidence * 0.5 + platformBonus, 1);
 }
 
 function buildSearchTerms(tokenInfo: TokenInfo): string[] {
@@ -121,27 +414,21 @@ function buildSearchTerms(tokenInfo: TokenInfo): string[] {
   return terms;
 }
 
-function calculateSentiment(tweets: string[]): {
-  positiveCount: number;
-  negativeCount: number;
-  sentimentScore: number;
-  confidence: number;
-  topTerms: TermCount[];
-} {
+function calculateSentiment(messages: string[]): SentimentResult {
   let positiveCount = 0;
   let negativeCount = 0;
   const termCounts: Map<string, TermCount> = new Map();
 
-  for (const tweet of tweets) {
-    const lowerTweet = tweet.toLowerCase();
-    let tweetPositive = 0;
-    let tweetNegative = 0;
+  for (const message of messages) {
+    const lowerMessage = message.toLowerCase();
+    let messagePositive = 0;
+    let messageNegative = 0;
 
     // Count bullish keywords
     for (const keyword of BULLISH_KEYWORDS) {
-      if (lowerTweet.includes(keyword)) {
+      if (lowerMessage.includes(keyword)) {
         const weight = KEYWORD_WEIGHTS[keyword] || 1;
-        tweetPositive += weight;
+        messagePositive += weight;
 
         const existing = termCounts.get(keyword);
         if (existing) {
@@ -154,9 +441,9 @@ function calculateSentiment(tweets: string[]): {
 
     // Count bearish keywords
     for (const keyword of BEARISH_KEYWORDS) {
-      if (lowerTweet.includes(keyword)) {
+      if (lowerMessage.includes(keyword)) {
         const weight = KEYWORD_WEIGHTS[keyword] || 1;
-        tweetNegative += weight;
+        messageNegative += weight;
 
         const existing = termCounts.get(keyword);
         if (existing) {
@@ -167,10 +454,10 @@ function calculateSentiment(tweets: string[]): {
       }
     }
 
-    // Classify tweet based on weighted scores
-    if (tweetPositive > tweetNegative) {
+    // Classify message based on weighted scores
+    if (messagePositive > messageNegative) {
       positiveCount++;
-    } else if (tweetNegative > tweetPositive) {
+    } else if (messageNegative > messagePositive) {
       negativeCount++;
     }
   }
@@ -183,7 +470,7 @@ function calculateSentiment(tweets: string[]): {
   }
 
   // Calculate confidence (based on sample size and clarity)
-  const sampleConfidence = Math.min(tweets.length / SENTIMENT.HIGH_CONFIDENCE_TWEETS, 1);
+  const sampleConfidence = Math.min(messages.length / SENTIMENT.HIGH_CONFIDENCE_TWEETS, 1);
   const clarityConfidence = totalScored > 0 ? Math.abs(sentimentScore) : 0;
   const confidence = sampleConfidence * 0.6 + clarityConfidence * 0.4;
 
@@ -213,5 +500,23 @@ export function getDefaultSentiment(): SentimentAnalysis {
     topPositiveTerms: [],
     topNegativeTerms: [],
     analyzedAt: new Date(),
+  };
+}
+
+export function getDefaultMultiPlatformSentiment(): MultiPlatformSentimentAnalysis {
+  return {
+    hasSentimentData: false,
+    tweetCount: 0,
+    totalMessageCount: 0,
+    sentimentScore: 0,
+    positivePercent: 0,
+    negativePercent: 0,
+    neutralPercent: 100,
+    confidence: 0,
+    topPositiveTerms: [],
+    topNegativeTerms: [],
+    analyzedAt: new Date(),
+    platforms: [],
+    platformsAnalyzed: [],
   };
 }

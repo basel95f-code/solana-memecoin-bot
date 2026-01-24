@@ -212,6 +212,79 @@ export const SENTIMENT = {
 } as const;
 
 // ============================================
+// Telegram MTProto Sentiment Settings
+// ============================================
+export const TELEGRAM_SENTIMENT = {
+  // Rate limiting: 20 requests per minute
+  RATE_LIMIT_REQUESTS: 20,
+  RATE_LIMIT_WINDOW_MS: 60 * 1000, // 1 minute
+  FLOOD_WAIT_MULTIPLIER: 1.5, // multiply wait time by this on flood errors
+
+  // Message limits
+  MAX_MESSAGES: 100, // max messages to fetch per channel
+  MESSAGE_AGE_LIMIT_MS: 24 * 60 * 60 * 1000, // only analyze messages from last 24h
+
+  // Caching
+  CACHE_TTL_MS: 5 * 60 * 1000, // 5 minutes fresh
+  STALE_CACHE_TTL_MS: 30 * 60 * 1000, // 30 minutes stale fallback
+
+  // Circuit breaker
+  CIRCUIT_BREAKER_THRESHOLD: 5, // failures to open circuit
+  CIRCUIT_BREAKER_RESET_MS: 5 * 60 * 1000, // 5 minutes to reset
+
+  // Reconnection
+  RECONNECT_DELAY_MS: 5000,
+  MAX_RECONNECT_ATTEMPTS: 5,
+} as const;
+
+// ============================================
+// Discord Bot Sentiment Settings
+// ============================================
+export const DISCORD_SENTIMENT = {
+  // Rate limiting: 5 requests per second (token bucket)
+  RATE_LIMIT_TOKENS: 5,
+  RATE_LIMIT_REFILL_MS: 1000, // refill 1 token per 200ms
+
+  // Message limits
+  MAX_MESSAGES: 100, // max messages to fetch per channel
+  MESSAGE_AGE_LIMIT_MS: 24 * 60 * 60 * 1000, // only analyze messages from last 24h
+
+  // Caching
+  CACHE_TTL_MS: 5 * 60 * 1000, // 5 minutes fresh
+  STALE_CACHE_TTL_MS: 30 * 60 * 1000, // 30 minutes stale fallback
+
+  // Circuit breaker
+  CIRCUIT_BREAKER_THRESHOLD: 5, // failures to open circuit
+  CIRCUIT_BREAKER_RESET_MS: 5 * 60 * 1000, // 5 minutes to reset
+
+  // Reconnection
+  RECONNECT_DELAY_MS: 5000,
+  MAX_RECONNECT_ATTEMPTS: 5,
+} as const;
+
+// ============================================
+// Multi-Platform Sentiment Aggregation
+// ============================================
+export const SENTIMENT_AGGREGATION = {
+  // Platform weights (must sum to 1.0)
+  WEIGHTS: {
+    TWITTER: 0.40,
+    TELEGRAM: 0.35,
+    DISCORD: 0.25,
+  },
+
+  // Confidence thresholds
+  MIN_MESSAGES_FOR_CONFIDENCE: 10,
+  HIGH_CONFIDENCE_MESSAGES: 50,
+
+  // Minimum platforms required for high confidence
+  MIN_PLATFORMS_HIGH_CONFIDENCE: 2,
+
+  // Fallback behavior
+  SINGLE_PLATFORM_CONFIDENCE_PENALTY: 0.2, // reduce confidence by 20% if only 1 platform
+} as const;
+
+// ============================================
 // Risk Scoring Penalties
 // ============================================
 export const RISK_PENALTIES = {

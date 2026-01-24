@@ -93,6 +93,46 @@ export interface SentimentAnalysis {
   analyzedAt: Date;
 }
 
+// ============================================
+// Multi-Platform Sentiment Types
+// ============================================
+
+export type SentimentPlatform = 'twitter' | 'telegram' | 'discord';
+
+export interface PlatformSentimentData {
+  platform: SentimentPlatform;
+  messageCount: number;
+  sentimentScore: number; // -1 (very negative) to 1 (very positive)
+  positivePercent: number;
+  negativePercent: number;
+  neutralPercent: number;
+  confidence: number; // 0 to 1
+  topPositiveTerms: string[];
+  topNegativeTerms: string[];
+  analyzedAt: Date;
+}
+
+export interface MultiPlatformSentimentAnalysis extends SentimentAnalysis {
+  platforms: PlatformSentimentData[];
+  telegramMessageCount?: number;
+  discordMessageCount?: number;
+  totalMessageCount: number;
+  platformsAnalyzed: SentimentPlatform[];
+}
+
+export interface MonitoredChannel {
+  id: string;
+  name: string;
+  platform: 'telegram' | 'discord';
+  addedAt: number;
+}
+
+export interface SentimentChannelConfig {
+  telegramChannels: MonitoredChannel[];
+  discordChannels: MonitoredChannel[];
+  enabled: boolean;
+}
+
 export interface RugCheckResult {
   score: number;
   risks: RugCheckRisk[];
@@ -368,6 +408,7 @@ export interface UserSettings {
   watchlist: WatchedToken[];
   blacklist: BlacklistEntry[];
   trackedWallets: TrackedWallet[];
+  sentimentChannels?: SentimentChannelConfig;
   muteUntil?: number; // timestamp
   createdAt: number;
   updatedAt: number;
@@ -491,12 +532,36 @@ export interface WalletMonitorConfig {
   maxWalletsPerUser: number;
 }
 
+export interface TelegramMtprotoConfig {
+  apiId: number;
+  apiHash: string;
+  sessionString: string;
+  enabled: boolean;
+}
+
+export interface DiscordBotConfig {
+  token: string;
+  enabled: boolean;
+}
+
+export interface SentimentConfig {
+  enabled: boolean;
+  twitterEnabled: boolean;
+  telegramEnabled: boolean;
+  discordEnabled: boolean;
+  defaultTelegramChannels: string[];
+  defaultDiscordChannels: string[];
+}
+
 export interface ExtendedBotConfig extends BotConfig {
   watchlist: WatchlistConfig;
   rateLimit: RateLimitConfig;
   discovery: DiscoveryConfig;
   storage: StorageConfig;
   walletMonitor: WalletMonitorConfig;
+  telegramMtproto: TelegramMtprotoConfig;
+  discordBot: DiscordBotConfig;
+  sentiment: SentimentConfig;
 }
 
 // ============================================

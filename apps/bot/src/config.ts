@@ -88,6 +88,36 @@ export function loadConfig(): ExtendedBotConfig {
       pollIntervalMs: getEnvNumber('WALLET_MONITOR_INTERVAL', 60000), // 60 seconds
       maxWalletsPerUser: getEnvNumber('WALLET_MAX_PER_USER', 10),
     },
+
+    // Telegram MTProto (for sentiment analysis)
+    telegramMtproto: {
+      apiId: getEnvNumber('TELEGRAM_API_ID', 0),
+      apiHash: getEnvVar('TELEGRAM_API_HASH', false),
+      sessionString: getEnvVar('TELEGRAM_SESSION', false),
+      enabled: getEnvBoolean('TELEGRAM_SENTIMENT_ENABLED', false),
+    },
+
+    // Discord Bot (for sentiment analysis)
+    discordBot: {
+      token: getEnvVar('DISCORD_BOT_TOKEN', false),
+      enabled: getEnvBoolean('DISCORD_SENTIMENT_ENABLED', false),
+    },
+
+    // Multi-platform sentiment settings
+    sentiment: {
+      enabled: getEnvBoolean('SENTIMENT_ENABLED', true),
+      twitterEnabled: getEnvBoolean('TWITTER_SENTIMENT_ENABLED', true),
+      telegramEnabled: getEnvBoolean('TELEGRAM_SENTIMENT_ENABLED', false),
+      discordEnabled: getEnvBoolean('DISCORD_SENTIMENT_ENABLED', false),
+      defaultTelegramChannels: getEnvVar('DEFAULT_TELEGRAM_CHANNELS', false)
+        .split(',')
+        .map(c => c.trim())
+        .filter(c => c.length > 0),
+      defaultDiscordChannels: getEnvVar('DEFAULT_DISCORD_CHANNELS', false)
+        .split(',')
+        .map(c => c.trim())
+        .filter(c => c.length > 0),
+    },
   };
 }
 
