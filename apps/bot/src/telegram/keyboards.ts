@@ -60,6 +60,23 @@ export function alertActionKeyboard(mint: string): Markup.Markup<InlineKeyboardM
   ]);
 }
 
+export function signalActionKeyboard(signalId: string, mint: string): Markup.Markup<InlineKeyboardMarkup> {
+  return Markup.inlineKeyboard([
+    [
+      Markup.button.url('📊 Chart', `https://dexscreener.com/solana/${mint}`),
+      Markup.button.url('💱 Trade', `https://jup.ag/swap/SOL-${mint}`),
+    ],
+    [
+      Markup.button.callback('✅ Acknowledge', `ack_${signalId.slice(0, 16)}`),
+      Markup.button.callback('📝 Record', `outcome_${signalId.slice(0, 16)}`),
+    ],
+    [
+      Markup.button.callback('🔍 Details', `check_${mint.slice(0, 20)}`),
+      Markup.button.callback('⭐ Watch', `watch_${mint.slice(0, 20)}`),
+    ],
+  ]);
+}
+
 // ═══════════════════════════════════════════
 // MARKET / DISCOVERY
 // ═══════════════════════════════════════════

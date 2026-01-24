@@ -344,3 +344,89 @@ export const TELEGRAM = {
   RETRY_BACKOFF_MULTIPLIER: 2,
   MAX_MESSAGE_LENGTH: 4096,
 } as const;
+
+// ============================================
+// Trading Signal Settings
+// ============================================
+export const SIGNALS = {
+  // Confidence thresholds
+  MIN_BUY_CONFIDENCE: 60,
+  MIN_SELL_CONFIDENCE: 50,
+
+  // Risk thresholds
+  MAX_RUG_PROBABILITY: 0.30,
+  MIN_RISK_SCORE: 40,
+
+  // Confidence calculation weights
+  WEIGHTS: {
+    RUG_PROBABILITY: 0.30, // ML rug predictor
+    RISK_SCORE: 0.15, // Risk score
+    SMART_MONEY: 0.25, // GMGN activity
+    MOMENTUM: 0.20, // Volume/price momentum
+    HOLDERS: 0.10, // Holder distribution
+  },
+
+  // Timing
+  EXPIRY_SECONDS: 3600, // 1 hour
+  TOKEN_COOLDOWN_SECONDS: 1800, // 30 minutes between signals for same token
+  MAX_ACTIVE_SIGNALS: 20,
+
+  // Position sizing defaults
+  DEFAULT_POSITION_PERCENT: 5,
+  MAX_POSITION_PERCENT: 10,
+  MIN_POSITION_PERCENT: 1,
+  DEFAULT_POSITION_SOL: 0.1,
+  MAX_POSITION_SOL: 1,
+  MIN_POSITION_SOL: 0.05,
+
+  // Webhook settings
+  WEBHOOK_TIMEOUT_MS: 10000,
+  WEBHOOK_MAX_RETRIES: 3,
+  WEBHOOK_RETRY_DELAY_MS: 1000,
+  WEBHOOK_BACKOFF_MULTIPLIER: 2,
+
+  // Discord embed colors (decimal)
+  COLORS: {
+    BUY: 0x00FF00, // Green
+    SELL: 0xFF0000, // Red
+    TAKE_PROFIT: 0x00BFFF, // Deep sky blue
+    STOP_LOSS: 0xFF6347, // Tomato
+    INFO: 0x7289DA, // Discord blurple
+  },
+} as const;
+
+// ============================================
+// ML Training Settings
+// ============================================
+export const ML_TRAINING = {
+  // Auto-training triggers
+  MIN_SAMPLES_FOR_TRAINING: 100,
+  MIN_NEW_SAMPLES_FOR_RETRAIN: 20,
+  MIN_HOURS_BETWEEN_TRAINING: 24,
+
+  // Data split
+  TRAIN_SPLIT: 0.70,
+  VALIDATION_SPLIT: 0.15,
+  TEST_SPLIT: 0.15,
+
+  // Feature normalization
+  MAX_LIQUIDITY_USD: 1000000, // $1M for normalization
+  MAX_HOLDER_COUNT: 10000,
+  MAX_TOKEN_AGE_HOURS: 168, // 1 week
+
+  // Model versioning
+  MODEL_DIR: 'models',
+  MAX_MODELS_TO_KEEP: 5,
+
+  // A/B testing
+  AB_TEST_TRAFFIC_SPLIT: 0.1, // 10% traffic to challenger model
+
+  // Labeling
+  AUTO_LABEL_RUG_THRESHOLD: -90, // Price drop > 90%
+  AUTO_LABEL_PUMP_THRESHOLD: 100, // Price increase > 100%
+  MANUAL_LABEL_QUEUE_MAX: 100,
+
+  // Training metrics thresholds
+  MIN_ACCURACY_FOR_PROMOTION: 0.70,
+  MIN_F1_FOR_PROMOTION: 0.65,
+} as const;

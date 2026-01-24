@@ -10,6 +10,8 @@ import { registerAdvancedCommands } from './advanced';
 import { registerBlacklistCommands } from './blacklist';
 import { registerWalletCommands } from './wallets';
 import { registerBacktestCommands } from './backtest';
+import { registerSignalCommands } from './signals';
+import { registerMLCommands } from './ml';
 
 export function registerAllCommands(bot: Telegraf): void {
   // Register all command handlers
@@ -24,6 +26,8 @@ export function registerAllCommands(bot: Telegraf): void {
   registerBlacklistCommands(bot);
   registerWalletCommands(bot);
   registerBacktestCommands(bot);
+  registerSignalCommands(bot);
+  registerMLCommands(bot);
 
   // Set up bot commands menu
   bot.telegram.setMyCommands([
@@ -86,6 +90,13 @@ export function registerAllCommands(bot: Telegraf): void {
     { command: 'newstrategy', description: 'Create custom strategy' },
     { command: 'viewstrategy', description: 'View strategy details' },
     { command: 'snapshots', description: 'Snapshot collection status' },
+    // Trading Signals
+    { command: 'signals', description: 'Active trading signals' },
+    { command: 'ack', description: 'Acknowledge a signal' },
+    { command: 'outcome', description: 'Record trade outcome' },
+    { command: 'webhook', description: 'Manage webhooks' },
+    // ML Training
+    { command: 'ml', description: 'ML model status' },
   ]).catch(err => console.error('Failed to set bot commands:', err));
 
   console.log('All Telegram commands registered');

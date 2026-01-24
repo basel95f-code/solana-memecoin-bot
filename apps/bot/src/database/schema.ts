@@ -393,5 +393,174 @@ export const MIGRATIONS: { version: number; sql: string }[] = [
       CREATE INDEX IF NOT EXISTS idx_snapshot_watch_mint ON snapshot_watch_list(mint);
       CREATE INDEX IF NOT EXISTS idx_snapshot_watch_active ON snapshot_watch_list(is_active);
     `
+  },
+  // Trading Signals and ML Training tables
+  {
+    version: 3,
+    sql: `
+      -- ============================================
+      -- Trading Signals
+      -- Stores generated trading signals
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS trading_signals (
+        id TEXT PRIMARY KEY,
+        mint TEXT NOT NULL,
+        symbol TEXT,
+        name TEXT,
+        type TEXT NOT NULL,  -- BUY, SELL, TAKE_PROFIT, STOP_LOSS
+        confidence INTEGER,
+        suggested_position_size REAL,
+        position_size_type TEXT,  -- 'percentage' or 'fixed_sol'
+        rug_probability REAL,
+        risk_score INTEGER,
+        smart_money_score REAL,
+        momentum_score REAL,
+        holder_score REAL,
+        entry_price REAL,
+        target_price REAL,
+        stop_loss_price REAL,
+        reasons TEXT,  -- JSON array
+        warnings TEXT, -- JSON array
+        status TEXT DEFAULT 'active',  -- active, acknowledged, expired, executed
+        generated_at INTEGER NOT NULL,
+        expires_at INTEGER,
+        acknowledged_at INTEGER,
+        acknowledged_by TEXT,
+        -- Outcome tracking
+        actual_entry REAL,
+        actual_exit REAL,
+        profit_loss_percent REAL,
+        was_accurate INTEGER,
+        hit_target INTEGER,
+        hit_stop_loss INTEGER,
+        entry_recorded_at INTEGER,
+        exit_recorded_at INTEGER,
+        outcome_notes TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_trading_signals_mint ON trading_signals(mint);
+      CREATE INDEX IF NOT EXISTS idx_trading_signals_type ON trading_signals(type);
+      CREATE INDEX IF NOT EXISTS idx_trading_signals_status ON trading_signals(status);
+      CREATE INDEX IF NOT EXISTS idx_trading_signals_time ON trading_signals(generated_at);
+
+      -- ============================================
+      -- Signal Webhooks (Discord)
+      -- Stores webhook configurations
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS signal_webhooks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        url TEXT UNIQUE NOT NULL,
+        name TEXT,
+        enabled INTEGER DEFAULT 1,
+        events TEXT,  -- JSON array: ["BUY", "SELL"]
+        min_confidence INTEGER DEFAULT 60,
+        total_sent INTEGER DEFAULT 0,
+        failure_count INTEGER DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER,
+        last_triggered_at INTEGER
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_signal_webhooks_enabled ON signal_webhooks(enabled);
+
+      -- ============================================
+      -- ML Training Samples
+      -- Enhanced feature storage for ML training
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS ml_training_samples (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mint TEXT NOT NULL,
+        symbol TEXT,
+        -- 25 features stored as JSON
+        features TEXT NOT NULL,  -- JSON object with all 25 normalized features
+        feature_version TEXT DEFAULT 'v2',  -- Track feature schema version
+        -- Outcome
+        outcome TEXT,  -- 'rug', 'pump', 'stable', 'decline'
+        outcome_confidence REAL,
+        -- Labeling metadata
+        label_source TEXT,  -- 'auto' or 'manual'
+        labeled_by TEXT,  -- Username if manual
+        -- Timestamps
+        discovered_at INTEGER,
+        labeled_at INTEGER,
+        created_at INTEGER DEFAULT (strftime('%s', 'now')),
+        UNIQUE(mint, feature_version)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ml_samples_mint ON ml_training_samples(mint);
+      CREATE INDEX IF NOT EXISTS idx_ml_samples_outcome ON ml_training_samples(outcome);
+      CREATE INDEX IF NOT EXISTS idx_ml_samples_source ON ml_training_samples(label_source);
+      CREATE INDEX IF NOT EXISTS idx_ml_samples_time ON ml_training_samples(labeled_at);
+
+      -- ============================================
+      -- ML Training Runs
+      -- Tracks model training history
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS ml_training_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        model_version TEXT NOT NULL UNIQUE,
+        feature_version TEXT DEFAULT 'v2',
+        samples_used INTEGER,
+        train_samples INTEGER,
+        validation_samples INTEGER,
+        test_samples INTEGER,
+        -- Metrics
+        accuracy REAL,
+        precision_score REAL,
+        recall_score REAL,
+        f1_score REAL,
+        auc_score REAL,
+        -- Training metadata
+        training_loss REAL,
+        validation_loss REAL,
+        epochs INTEGER,
+        training_duration_ms INTEGER,
+        -- Status
+        is_active INTEGER DEFAULT 0,  -- Currently deployed model
+        is_challenger INTEGER DEFAULT 0,  -- A/B test challenger
+        -- Feature importance (JSON)
+        feature_importance TEXT,
+        -- Confusion matrix (JSON)
+        confusion_matrix TEXT,
+        -- Timestamps
+        trained_at INTEGER NOT NULL,
+        activated_at INTEGER,
+        deactivated_at INTEGER
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ml_runs_version ON ml_training_runs(model_version);
+      CREATE INDEX IF NOT EXISTS idx_ml_runs_active ON ml_training_runs(is_active);
+      CREATE INDEX IF NOT EXISTS idx_ml_runs_time ON ml_training_runs(trained_at);
+
+      -- ============================================
+      -- ML Pending Labels
+      -- Queue of tokens awaiting manual labeling
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS ml_pending_labels (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mint TEXT NOT NULL UNIQUE,
+        symbol TEXT,
+        -- Token data at discovery
+        initial_price REAL,
+        initial_liquidity REAL,
+        initial_risk_score INTEGER,
+        -- Current data (for auto-suggest)
+        current_price REAL,
+        price_change_percent REAL,
+        -- Suggested label based on price change
+        suggested_label TEXT,
+        suggest_confidence REAL,
+        -- Status
+        status TEXT DEFAULT 'pending',  -- pending, labeled, skipped
+        -- Timestamps
+        discovered_at INTEGER NOT NULL,
+        last_updated_at INTEGER,
+        labeled_at INTEGER
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ml_pending_mint ON ml_pending_labels(mint);
+      CREATE INDEX IF NOT EXISTS idx_ml_pending_status ON ml_pending_labels(status);
+      CREATE INDEX IF NOT EXISTS idx_ml_pending_time ON ml_pending_labels(discovered_at);
+    `
   }
 ];

@@ -254,6 +254,62 @@ class DatabaseService {
   }
 
   /**
+   * Get analysis by mint address
+   */
+  getAnalysisByMint(mint: string): {
+    mint: string;
+    symbol: string;
+    name: string;
+    risk_score: number;
+    liquidity_usd: number;
+    holder_count: number;
+    top_10_percent: number;
+    mint_revoked: boolean;
+    freeze_revoked: boolean;
+    lp_burned_percent: number;
+    has_twitter: boolean;
+    has_telegram: boolean;
+    has_website: boolean;
+  } | null {
+    if (!this.db) return null;
+
+    try {
+      const result = this.db.exec(
+        'SELECT * FROM token_analysis WHERE mint = ? ORDER BY analyzed_at DESC LIMIT 1',
+        [mint]
+      );
+
+      if (result.length === 0 || result[0].values.length === 0) return null;
+
+      const columns = result[0].columns;
+      const values = result[0].values[0];
+      const row: any = {};
+      columns.forEach((col, i) => {
+        row[col] = values[i];
+      });
+
+      return {
+        mint: row.mint,
+        symbol: row.symbol,
+        name: row.name,
+        risk_score: row.risk_score,
+        liquidity_usd: row.liquidity_usd,
+        holder_count: row.total_holders,
+        top_10_percent: row.top10_percent,
+        mint_revoked: row.mint_revoked === 1,
+        freeze_revoked: row.freeze_revoked === 1,
+        lp_burned_percent: row.lp_burned_percent,
+        has_twitter: row.has_twitter === 1,
+        has_telegram: row.has_telegram === 1,
+        has_website: row.has_website === 1,
+      };
+    } catch (error) {
+      logger.silentError('Database', 'Failed to get analysis by mint', error as Error);
+      return null;
+    }
+  }
+
+  /**
    * Save an alert to history
    */
   saveAlert(input: AlertInput): void {
@@ -1487,6 +1543,779 @@ class DatabaseService {
       this.db = null;
       this.initialized = false;
       logger.info('Database', 'Connection closed');
+    }
+  }
+
+  // ============================================
+  // Trading Signal Methods
+  // ============================================
+
+  /**
+   * Save a trading signal
+   */
+  saveSignal(signal: {
+    id: string;
+    mint: string;
+    symbol?: string;
+    name?: string;
+    type: string;
+    confidence: number;
+    suggestedPositionSize: number;
+    positionSizeType: string;
+    rugProbability: number;
+    riskScore: number;
+    smartMoneyScore: number;
+    momentumScore: number;
+    holderScore: number;
+    entryPrice: number;
+    targetPrice?: number;
+    stopLossPrice?: number;
+    reasons: string[];
+    warnings: string[];
+    status: string;
+    generatedAt: number;
+    expiresAt: number;
+  }): void {
+    if (!this.db) return;
+
+    try {
+      this.db.run(`
+        INSERT OR REPLACE INTO trading_signals (
+          id, mint, symbol, name, type, confidence,
+          suggested_position_size, position_size_type,
+          rug_probability, risk_score, smart_money_score,
+          momentum_score, holder_score, entry_price,
+          target_price, stop_loss_price, reasons, warnings,
+          status, generated_at, expires_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        signal.id,
+        signal.mint,
+        signal.symbol ?? null,
+        signal.name ?? null,
+        signal.type,
+        signal.confidence,
+        signal.suggestedPositionSize,
+        signal.positionSizeType,
+        signal.rugProbability,
+        signal.riskScore,
+        signal.smartMoneyScore,
+        signal.momentumScore,
+        signal.holderScore,
+        signal.entryPrice,
+        signal.targetPrice ?? null,
+        signal.stopLossPrice ?? null,
+        JSON.stringify(signal.reasons),
+        JSON.stringify(signal.warnings),
+        signal.status,
+        signal.generatedAt,
+        signal.expiresAt,
+      ]);
+
+      this.dirty = true;
+    } catch (error) {
+      logger.silentError('Database', 'Failed to save signal', error as Error);
+    }
+  }
+
+  /**
+   * Update signal status
+   */
+  updateSignalStatus(id: string, status: string, acknowledgedAt?: number, acknowledgedBy?: string): void {
+    if (!this.db) return;
+
+    try {
+      this.db.run(`
+        UPDATE trading_signals
+        SET status = ?, acknowledged_at = ?, acknowledged_by = ?
+        WHERE id = ?
+      `, [status, acknowledgedAt ?? null, acknowledgedBy ?? null, id]);
+
+      this.dirty = true;
+    } catch (error) {
+      logger.silentError('Database', 'Failed to update signal status', error as Error);
+    }
+  }
+
+  /**
+   * Record signal outcome
+   */
+  recordSignalOutcome(data: {
+    id: string;
+    actualEntry: number;
+    actualExit: number;
+    profitLossPercent: number;
+    wasAccurate: boolean;
+    hitTarget?: boolean;
+    hitStopLoss?: boolean;
+    entryRecordedAt: number;
+    exitRecordedAt: number;
+    notes?: string;
+  }): void {
+    if (!this.db) return;
+
+    try {
+      this.db.run(`
+        UPDATE trading_signals
+        SET actual_entry = ?, actual_exit = ?, profit_loss_percent = ?,
+            was_accurate = ?, hit_target = ?, hit_stop_loss = ?,
+            entry_recorded_at = ?, exit_recorded_at = ?, outcome_notes = ?,
+            status = 'executed'
+        WHERE id = ?
+      `, [
+        data.actualEntry,
+        data.actualExit,
+        data.profitLossPercent,
+        data.wasAccurate ? 1 : 0,
+        data.hitTarget ? 1 : 0,
+        data.hitStopLoss ? 1 : 0,
+        data.entryRecordedAt,
+        data.exitRecordedAt,
+        data.notes ?? null,
+        data.id,
+      ]);
+
+      this.dirty = true;
+    } catch (error) {
+      logger.silentError('Database', 'Failed to record signal outcome', error as Error);
+    }
+  }
+
+  /**
+   * Get signals with optional filtering
+   */
+  getSignals(options: {
+    status?: string;
+    type?: string;
+    mint?: string;
+    limit?: number;
+    offset?: number;
+  } = {}): any[] {
+    if (!this.db) return [];
+
+    try {
+      let sql = 'SELECT * FROM trading_signals WHERE 1=1';
+      const params: any[] = [];
+
+      if (options.status) {
+        sql += ' AND status = ?';
+        params.push(options.status);
+      }
+
+      if (options.type) {
+        sql += ' AND type = ?';
+        params.push(options.type);
+      }
+
+      if (options.mint) {
+        sql += ' AND mint = ?';
+        params.push(options.mint);
+      }
+
+      sql += ' ORDER BY generated_at DESC';
+
+      if (options.limit) {
+        sql += ' LIMIT ?';
+        params.push(options.limit);
+      }
+
+      if (options.offset) {
+        sql += ' OFFSET ?';
+        params.push(options.offset);
+      }
+
+      const result = this.db.exec(sql, params);
+      if (result.length === 0) return [];
+
+      const columns = result[0].columns;
+      return result[0].values.map(values => {
+        const row: any = {};
+        columns.forEach((col, i) => {
+          row[col] = values[i];
+        });
+        // Parse JSON fields
+        if (row.reasons) row.reasons = JSON.parse(row.reasons);
+        if (row.warnings) row.warnings = JSON.parse(row.warnings);
+        return row;
+      });
+    } catch (error) {
+      logger.silentError('Database', 'Failed to get signals', error as Error);
+      return [];
+    }
+  }
+
+  /**
+   * Get signal by ID
+   */
+  getSignalById(id: string): any | null {
+    if (!this.db) return null;
+
+    try {
+      const result = this.db.exec('SELECT * FROM trading_signals WHERE id = ?', [id]);
+      if (result.length === 0 || result[0].values.length === 0) return null;
+
+      const columns = result[0].columns;
+      const row: any = {};
+      columns.forEach((col, i) => {
+        row[col] = result[0].values[0][i];
+      });
+
+      if (row.reasons) row.reasons = JSON.parse(row.reasons);
+      if (row.warnings) row.warnings = JSON.parse(row.warnings);
+
+      return row;
+    } catch (error) {
+      logger.silentError('Database', 'Failed to get signal by ID', error as Error);
+      return null;
+    }
+  }
+
+  /**
+   * Get signal performance stats
+   */
+  getSignalStats(): {
+    totalSignals: number;
+    activeSignals: number;
+    executedSignals: number;
+    accurateSignals: number;
+    avgProfitLoss: number;
+  } {
+    if (!this.db) return { totalSignals: 0, activeSignals: 0, executedSignals: 0, accurateSignals: 0, avgProfitLoss: 0 };
+
+    try {
+      const totalResult = this.db.exec('SELECT COUNT(*) FROM trading_signals');
+      const activeResult = this.db.exec("SELECT COUNT(*) FROM trading_signals WHERE status = 'active'");
+      const executedResult = this.db.exec("SELECT COUNT(*) FROM trading_signals WHERE status = 'executed'");
+      const accurateResult = this.db.exec("SELECT COUNT(*) FROM trading_signals WHERE was_accurate = 1");
+      const avgResult = this.db.exec("SELECT AVG(profit_loss_percent) FROM trading_signals WHERE profit_loss_percent IS NOT NULL");
+
+      return {
+        totalSignals: totalResult.length > 0 ? (totalResult[0].values[0][0] as number) : 0,
+        activeSignals: activeResult.length > 0 ? (activeResult[0].values[0][0] as number) : 0,
+        executedSignals: executedResult.length > 0 ? (executedResult[0].values[0][0] as number) : 0,
+        accurateSignals: accurateResult.length > 0 ? (accurateResult[0].values[0][0] as number) : 0,
+        avgProfitLoss: avgResult.length > 0 && avgResult[0].values[0][0] ? (avgResult[0].values[0][0] as number) : 0,
+      };
+    } catch (error) {
+      logger.silentError('Database', 'Failed to get signal stats', error as Error);
+      return { totalSignals: 0, activeSignals: 0, executedSignals: 0, accurateSignals: 0, avgProfitLoss: 0 };
+    }
+  }
+
+  // ============================================
+  // Webhook Methods
+  // ============================================
+
+  /**
+   * Save a webhook
+   */
+  saveWebhook(webhook: {
+    url: string;
+    name: string;
+    enabled: boolean;
+    events: string[];
+    minConfidence: number;
+    createdAt: number;
+  }): number {
+    if (!this.db) return 0;
+
+    try {
+      this.db.run(`
+        INSERT OR REPLACE INTO signal_webhooks (
+          url, name, enabled, events, min_confidence, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `, [
+        webhook.url,
+        webhook.name,
+        webhook.enabled ? 1 : 0,
+        JSON.stringify(webhook.events),
+        webhook.minConfidence,
+        webhook.createdAt,
+      ]);
+
+      this.dirty = true;
+
+      const result = this.db.exec('SELECT last_insert_rowid()');
+      return result.length > 0 ? (result[0].values[0][0] as number) : 0;
+    } catch (error) {
+      logger.silentError('Database', 'Failed to save webhook', error as Error);
+      return 0;
+    }
+  }
+
+  /**
+   * Update webhook stats
+   */
+  updateWebhookStats(id: number, totalSent: number, failureCount: number, lastTriggeredAt?: number): void {
+    if (!this.db) return;
+
+    try {
+      this.db.run(`
+        UPDATE signal_webhooks
+        SET total_sent = ?, failure_count = ?, last_triggered_at = ?, updated_at = ?
+        WHERE id = ?
+      `, [totalSent, failureCount, lastTriggeredAt ?? null, Math.floor(Date.now() / 1000), id]);
+
+      this.dirty = true;
+    } catch (error) {
+      logger.silentError('Database', 'Failed to update webhook stats', error as Error);
+    }
+  }
+
+  /**
+   * Delete a webhook
+   */
+  deleteWebhook(id: number): void {
+    if (!this.db) return;
+
+    try {
+      this.db.run('DELETE FROM signal_webhooks WHERE id = ?', [id]);
+      this.dirty = true;
+    } catch (error) {
+      logger.silentError('Database', 'Failed to delete webhook', error as Error);
+    }
+  }
+
+  /**
+   * Get all webhooks
+   */
+  getWebhooks(): any[] {
+    if (!this.db) return [];
+
+    try {
+      const result = this.db.exec('SELECT * FROM signal_webhooks ORDER BY created_at DESC');
+      if (result.length === 0) return [];
+
+      const columns = result[0].columns;
+      return result[0].values.map(values => {
+        const row: any = {};
+        columns.forEach((col, i) => {
+          row[col] = values[i];
+        });
+        if (row.events) row.events = JSON.parse(row.events);
+        row.enabled = row.enabled === 1;
+        return row;
+      });
+    } catch (error) {
+      logger.silentError('Database', 'Failed to get webhooks', error as Error);
+      return [];
+    }
+  }
+
+  // ============================================
+  // ML Training Sample Methods
+  // ============================================
+
+  /**
+   * Save an ML training sample
+   */
+  saveMLSample(sample: {
+    mint: string;
+    symbol?: string;
+    features: Record<string, number>;
+    featureVersion?: string;
+    outcome?: string;
+    outcomeConfidence?: number;
+    labelSource: string;
+    labeledBy?: string;
+    discoveredAt: number;
+    labeledAt?: number;
+  }): void {
+    if (!this.db) return;
+
+    try {
+      this.db.run(`
+        INSERT OR REPLACE INTO ml_training_samples (
+          mint, symbol, features, feature_version, outcome,
+          outcome_confidence, label_source, labeled_by,
+          discovered_at, labeled_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        sample.mint,
+        sample.symbol ?? null,
+        JSON.stringify(sample.features),
+        sample.featureVersion ?? 'v2',
+        sample.outcome ?? null,
+        sample.outcomeConfidence ?? null,
+        sample.labelSource,
+        sample.labeledBy ?? null,
+        sample.discoveredAt,
+        sample.labeledAt ?? null,
+      ]);
+
+      this.dirty = true;
+    } catch (error) {
+      logger.silentError('Database', 'Failed to save ML sample', error as Error);
+    }
+  }
+
+  /**
+   * Get ML training samples
+   */
+  getMLSamples(options: {
+    outcome?: string;
+    labelSource?: string;
+    featureVersion?: string;
+    limit?: number;
+  } = {}): any[] {
+    if (!this.db) return [];
+
+    try {
+      let sql = 'SELECT * FROM ml_training_samples WHERE outcome IS NOT NULL';
+      const params: any[] = [];
+
+      if (options.outcome) {
+        sql += ' AND outcome = ?';
+        params.push(options.outcome);
+      }
+
+      if (options.labelSource) {
+        sql += ' AND label_source = ?';
+        params.push(options.labelSource);
+      }
+
+      if (options.featureVersion) {
+        sql += ' AND feature_version = ?';
+        params.push(options.featureVersion);
+      }
+
+      sql += ' ORDER BY labeled_at DESC';
+
+      if (options.limit) {
+        sql += ' LIMIT ?';
+        params.push(options.limit);
+      }
+
+      const result = this.db.exec(sql, params);
+      if (result.length === 0) return [];
+
+      const columns = result[0].columns;
+      return result[0].values.map(values => {
+        const row: any = {};
+        columns.forEach((col, i) => {
+          row[col] = values[i];
+        });
+        if (row.features) row.features = JSON.parse(row.features);
+        return row;
+      });
+    } catch (error) {
+      logger.silentError('Database', 'Failed to get ML samples', error as Error);
+      return [];
+    }
+  }
+
+  /**
+   * Get ML sample count
+   */
+  getMLSampleCount(): { total: number; labeled: number; byOutcome: Record<string, number> } {
+    if (!this.db) return { total: 0, labeled: 0, byOutcome: {} };
+
+    try {
+      const totalResult = this.db.exec('SELECT COUNT(*) FROM ml_training_samples');
+      const labeledResult = this.db.exec('SELECT COUNT(*) FROM ml_training_samples WHERE outcome IS NOT NULL');
+      const byOutcomeResult = this.db.exec(`
+        SELECT outcome, COUNT(*) as count
+        FROM ml_training_samples
+        WHERE outcome IS NOT NULL
+        GROUP BY outcome
+      `);
+
+      const byOutcome: Record<string, number> = {};
+      if (byOutcomeResult.length > 0) {
+        for (const row of byOutcomeResult[0].values) {
+          byOutcome[row[0] as string] = row[1] as number;
+        }
+      }
+
+      return {
+        total: totalResult.length > 0 ? (totalResult[0].values[0][0] as number) : 0,
+        labeled: labeledResult.length > 0 ? (labeledResult[0].values[0][0] as number) : 0,
+        byOutcome,
+      };
+    } catch (error) {
+      logger.silentError('Database', 'Failed to get ML sample count', error as Error);
+      return { total: 0, labeled: 0, byOutcome: {} };
+    }
+  }
+
+  // ============================================
+  // ML Training Run Methods
+  // ============================================
+
+  /**
+   * Save a training run
+   */
+  saveTrainingRun(run: {
+    modelVersion: string;
+    featureVersion?: string;
+    samplesUsed: number;
+    trainSamples: number;
+    validationSamples: number;
+    testSamples: number;
+    accuracy: number;
+    precisionScore: number;
+    recallScore: number;
+    f1Score: number;
+    aucScore?: number;
+    trainingLoss?: number;
+    validationLoss?: number;
+    epochs?: number;
+    trainingDurationMs?: number;
+    featureImportance?: Record<string, number>;
+    confusionMatrix?: number[][];
+    trainedAt: number;
+  }): void {
+    if (!this.db) return;
+
+    try {
+      this.db.run(`
+        INSERT INTO ml_training_runs (
+          model_version, feature_version, samples_used,
+          train_samples, validation_samples, test_samples,
+          accuracy, precision_score, recall_score, f1_score, auc_score,
+          training_loss, validation_loss, epochs, training_duration_ms,
+          feature_importance, confusion_matrix, trained_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        run.modelVersion,
+        run.featureVersion ?? 'v2',
+        run.samplesUsed,
+        run.trainSamples,
+        run.validationSamples,
+        run.testSamples,
+        run.accuracy,
+        run.precisionScore,
+        run.recallScore,
+        run.f1Score,
+        run.aucScore ?? null,
+        run.trainingLoss ?? null,
+        run.validationLoss ?? null,
+        run.epochs ?? null,
+        run.trainingDurationMs ?? null,
+        run.featureImportance ? JSON.stringify(run.featureImportance) : null,
+        run.confusionMatrix ? JSON.stringify(run.confusionMatrix) : null,
+        run.trainedAt,
+      ]);
+
+      this.dirty = true;
+    } catch (error) {
+      logger.silentError('Database', 'Failed to save training run', error as Error);
+    }
+  }
+
+  /**
+   * Set active model version
+   */
+  setActiveModelVersion(modelVersion: string): void {
+    if (!this.db) return;
+
+    try {
+      // Deactivate all
+      this.db.run('UPDATE ml_training_runs SET is_active = 0');
+      // Activate specified
+      this.db.run('UPDATE ml_training_runs SET is_active = 1, activated_at = ? WHERE model_version = ?',
+        [Math.floor(Date.now() / 1000), modelVersion]);
+
+      this.dirty = true;
+    } catch (error) {
+      logger.silentError('Database', 'Failed to set active model version', error as Error);
+    }
+  }
+
+  /**
+   * Get active model version
+   */
+  getActiveModelVersion(): string | null {
+    if (!this.db) return null;
+
+    try {
+      const result = this.db.exec('SELECT model_version FROM ml_training_runs WHERE is_active = 1');
+      if (result.length === 0 || result[0].values.length === 0) return null;
+      return result[0].values[0][0] as string;
+    } catch (error) {
+      logger.silentError('Database', 'Failed to get active model version', error as Error);
+      return null;
+    }
+  }
+
+  /**
+   * Get training runs
+   */
+  getTrainingRuns(limit: number = 10): any[] {
+    if (!this.db) return [];
+
+    try {
+      const result = this.db.exec(
+        'SELECT * FROM ml_training_runs ORDER BY trained_at DESC LIMIT ?',
+        [limit]
+      );
+
+      if (result.length === 0) return [];
+
+      const columns = result[0].columns;
+      return result[0].values.map(values => {
+        const row: any = {};
+        columns.forEach((col, i) => {
+          row[col] = values[i];
+        });
+        if (row.feature_importance) row.feature_importance = JSON.parse(row.feature_importance);
+        if (row.confusion_matrix) row.confusion_matrix = JSON.parse(row.confusion_matrix);
+        row.is_active = row.is_active === 1;
+        row.is_challenger = row.is_challenger === 1;
+        return row;
+      });
+    } catch (error) {
+      logger.silentError('Database', 'Failed to get training runs', error as Error);
+      return [];
+    }
+  }
+
+  /**
+   * Get latest training run
+   */
+  getLatestTrainingRun(): any | null {
+    const runs = this.getTrainingRuns(1);
+    return runs.length > 0 ? runs[0] : null;
+  }
+
+  // ============================================
+  // ML Pending Labels Methods
+  // ============================================
+
+  /**
+   * Add token to pending labels queue
+   */
+  addPendingLabel(data: {
+    mint: string;
+    symbol?: string;
+    initialPrice: number;
+    initialLiquidity: number;
+    initialRiskScore: number;
+    discoveredAt: number;
+  }): void {
+    if (!this.db) return;
+
+    try {
+      this.db.run(`
+        INSERT OR IGNORE INTO ml_pending_labels (
+          mint, symbol, initial_price, initial_liquidity,
+          initial_risk_score, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `, [
+        data.mint,
+        data.symbol ?? null,
+        data.initialPrice,
+        data.initialLiquidity,
+        data.initialRiskScore,
+        data.discoveredAt,
+      ]);
+
+      this.dirty = true;
+    } catch (error) {
+      logger.silentError('Database', 'Failed to add pending label', error as Error);
+    }
+  }
+
+  /**
+   * Update pending label with current price
+   */
+  updatePendingLabelPrice(mint: string, currentPrice: number, priceChangePercent: number): void {
+    if (!this.db) return;
+
+    try {
+      // Auto-suggest label based on price change
+      let suggestedLabel: string | null = null;
+      let suggestConfidence = 0;
+
+      if (priceChangePercent <= -90) {
+        suggestedLabel = 'rug';
+        suggestConfidence = 0.9;
+      } else if (priceChangePercent >= 100) {
+        suggestedLabel = 'pump';
+        suggestConfidence = 0.8;
+      } else if (priceChangePercent <= -50) {
+        suggestedLabel = 'decline';
+        suggestConfidence = 0.7;
+      } else if (priceChangePercent >= -20 && priceChangePercent <= 50) {
+        suggestedLabel = 'stable';
+        suggestConfidence = 0.6;
+      }
+
+      this.db.run(`
+        UPDATE ml_pending_labels
+        SET current_price = ?, price_change_percent = ?,
+            suggested_label = ?, suggest_confidence = ?,
+            last_updated_at = ?
+        WHERE mint = ?
+      `, [currentPrice, priceChangePercent, suggestedLabel, suggestConfidence, Math.floor(Date.now() / 1000), mint]);
+
+      this.dirty = true;
+    } catch (error) {
+      logger.silentError('Database', 'Failed to update pending label price', error as Error);
+    }
+  }
+
+  /**
+   * Mark pending label as labeled
+   */
+  markPendingLabelAsLabeled(mint: string): void {
+    if (!this.db) return;
+
+    try {
+      this.db.run(`
+        UPDATE ml_pending_labels
+        SET status = 'labeled', labeled_at = ?
+        WHERE mint = ?
+      `, [Math.floor(Date.now() / 1000), mint]);
+
+      this.dirty = true;
+    } catch (error) {
+      logger.silentError('Database', 'Failed to mark pending label', error as Error);
+    }
+  }
+
+  /**
+   * Get pending labels
+   */
+  getPendingLabels(limit: number = 50): any[] {
+    if (!this.db) return [];
+
+    try {
+      const result = this.db.exec(`
+        SELECT * FROM ml_pending_labels
+        WHERE status = 'pending'
+        ORDER BY discovered_at DESC
+        LIMIT ?
+      `, [limit]);
+
+      if (result.length === 0) return [];
+
+      const columns = result[0].columns;
+      return result[0].values.map(values => {
+        const row: any = {};
+        columns.forEach((col, i) => {
+          row[col] = values[i];
+        });
+        return row;
+      });
+    } catch (error) {
+      logger.silentError('Database', 'Failed to get pending labels', error as Error);
+      return [];
+    }
+  }
+
+  /**
+   * Get pending label count
+   */
+  getPendingLabelCount(): number {
+    if (!this.db) return 0;
+
+    try {
+      const result = this.db.exec("SELECT COUNT(*) FROM ml_pending_labels WHERE status = 'pending'");
+      return result.length > 0 ? (result[0].values[0][0] as number) : 0;
+    } catch (error) {
+      logger.silentError('Database', 'Failed to get pending label count', error as Error);
+      return 0;
     }
   }
 }

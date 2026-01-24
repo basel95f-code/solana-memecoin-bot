@@ -7,6 +7,11 @@ import type {
   DexScreenerPair,
   SmartMoneyActivity,
 } from '../types';
+import type {
+  TradingSignal,
+  SignalPerformanceMetrics,
+  WebhookConfig,
+} from '../signals/types';
 
 // ═══════════════════════════════════════════
 // UTILITY FUNCTIONS
@@ -504,4 +509,307 @@ export function getSmartMoneyEmoji(netBuys: number): string {
 export function formatSmartMoney(smartMoney: SmartMoneyActivity): string {
   const net = smartMoney.netSmartMoney;
   return `${net > 0 ? '+' : ''}${net} (${smartMoney.smartBuys24h}B/${smartMoney.smartSells24h}S)`;
+}
+
+// ═══════════════════════════════════════════
+// TRADING SIGNALS
+// ═══════════════════════════════════════════
+
+export function getSignalEmoji(type: string): string {
+  switch (type) {
+    case 'BUY': return '🟢';
+    case 'SELL': return '🔴';
+    case 'TAKE_PROFIT': return '🎯';
+    case 'STOP_LOSS': return '🛑';
+    default: return '📊';
+  }
+}
+
+export function formatSignalAlert(signal: TradingSignal): string {
+  const emoji = getSignalEmoji(signal.type);
+  const header = signal.type === 'BUY' ? 'BUY SIGNAL' :
+                 signal.type === 'SELL' ? 'SELL SIGNAL' :
+                 signal.type === 'TAKE_PROFIT' ? 'TAKE PROFIT' : 'STOP LOSS';
+
+  const lines = [
+    `${emoji} <b>${header}</b>`,
+    ``,
+    `<b>${signal.symbol}</b>${signal.name ? ` • ${signal.name}` : ''}`,
+    `<code>${signal.mint}</code>`,
+    ``,
+    `Confidence: <b>${signal.confidence}%</b>`,
+    `Entry: ${formatPrice(signal.entryPrice)}`,
+  ];
+
+  if (signal.type === 'BUY') {
+    if (signal.targetPrice) {
+      const targetPct = ((signal.targetPrice / signal.entryPrice - 1) * 100).toFixed(0);
+      lines.push(`Target: ${formatPrice(signal.targetPrice)} (+${targetPct}%)`);
+    }
+    if (signal.stopLossPrice) {
+      const stopPct = ((signal.stopLossPrice / signal.entryPrice - 1) * 100).toFixed(0);
+      lines.push(`Stop: ${formatPrice(signal.stopLossPrice)} (${stopPct}%)`);
+    }
+  }
+
+  lines.push(``);
+  lines.push(`<b>◆ Metrics</b>`);
+  lines.push(`Risk: ${signal.riskScore}/100 • Rug: ${(signal.rugProbability * 100).toFixed(0)}%`);
+  lines.push(`Smart $: ${(signal.smartMoneyScore * 100).toFixed(0)}% • Mom: ${(signal.momentumScore * 100).toFixed(0)}%`);
+
+  // Position size
+  lines.push(``);
+  const sizeStr = signal.positionSizeType === 'percentage'
+    ? `${signal.suggestedPositionSize}% of portfolio`
+    : `${signal.suggestedPositionSize} SOL`;
+  lines.push(`Position: ${sizeStr}`);
+
+  // Reasons (top 3)
+  if (signal.reasons.length > 0) {
+    lines.push(``);
+    lines.push(`<b>◆ Reasons</b>`);
+    signal.reasons.slice(0, 3).forEach(r => lines.push(`✓ ${r}`));
+  }
+
+  // Warnings (top 2)
+  if (signal.warnings.length > 0) {
+    lines.push(``);
+    signal.warnings.slice(0, 2).forEach(w => lines.push(`⚠ ${w}`));
+  }
+
+  // Expiry
+  const expiresIn = Math.max(0, signal.expiresAt - Math.floor(Date.now() / 1000));
+  const expiryStr = expiresIn < 60 ? `${expiresIn}s` :
+                    expiresIn < 3600 ? `${Math.floor(expiresIn / 60)}m` :
+                    `${Math.floor(expiresIn / 3600)}h`;
+  lines.push(``);
+  lines.push(`<i>Expires in ${expiryStr} • ID: ${signal.id.slice(0, 8)}</i>`);
+
+  return lines.join('\n');
+}
+
+export function formatSignalList(signals: TradingSignal[], title: string = '📊 ACTIVE SIGNALS'): string {
+  if (signals.length === 0) {
+    return [
+      `<b>${title}</b>`,
+      ``,
+      `No active signals.`,
+    ].join('\n');
+  }
+
+  const lines = [`<b>${title}</b> (${signals.length})`, ``];
+
+  signals.slice(0, 10).forEach((signal, i) => {
+    const emoji = getSignalEmoji(signal.type);
+    const age = timeAgo(signal.generatedAt * 1000);
+    lines.push(
+      `${i + 1}. ${emoji} <b>${signal.symbol}</b> • ${signal.confidence}%`
+    );
+    lines.push(
+      `   ${formatPrice(signal.entryPrice)} • ${age} ago`
+    );
+  });
+
+  return lines.join('\n');
+}
+
+export function formatSignalPerformance(metrics: SignalPerformanceMetrics | {
+  totalSignals: number;
+  activeSignals: number;
+  executedSignals: number;
+  accurateSignals: number;
+  avgProfitLoss: number;
+}): string {
+  // Handle simple stats from database
+  if ('executedSignals' in metrics && !('winRate' in metrics)) {
+    const winRate = metrics.executedSignals > 0
+      ? (metrics.accurateSignals / metrics.executedSignals) * 100
+      : 0;
+
+    return [
+      `📈 <b>SIGNAL PERFORMANCE</b>`,
+      ``,
+      `<b>◆ Overview</b>`,
+      `Total: ${metrics.totalSignals} • Active: ${metrics.activeSignals}`,
+      `Executed: ${metrics.executedSignals}`,
+      ``,
+      `<b>◆ Results</b>`,
+      `Win rate: <b>${winRate.toFixed(1)}%</b>`,
+      `Accurate: ${metrics.accurateSignals}/${metrics.executedSignals}`,
+      `Avg P&L: ${metrics.avgProfitLoss >= 0 ? '+' : ''}${metrics.avgProfitLoss.toFixed(1)}%`,
+    ].join('\n');
+  }
+
+  // Full metrics format
+  const fullMetrics = metrics as SignalPerformanceMetrics;
+  return [
+    `📈 <b>SIGNAL PERFORMANCE</b>`,
+    ``,
+    `<b>◆ Overview</b>`,
+    `Total: ${fullMetrics.totalSignals} • Active: ${fullMetrics.activeSignals}`,
+    `With outcome: ${fullMetrics.signalsWithOutcome}`,
+    ``,
+    `<b>◆ Results</b>`,
+    `Win rate: <b>${fullMetrics.winRate.toFixed(1)}%</b>`,
+    `Avg return: ${fullMetrics.averageReturn >= 0 ? '+' : ''}${fullMetrics.averageReturn.toFixed(1)}%`,
+    `Best: +${fullMetrics.bestReturn.toFixed(1)}% • Worst: ${fullMetrics.worstReturn.toFixed(1)}%`,
+    ``,
+    `<b>◆ By Type</b>`,
+    `BUY: ${fullMetrics.buySignals.total} (${fullMetrics.buySignals.winRate.toFixed(0)}% win)`,
+    `SELL: ${fullMetrics.sellSignals.total} (${fullMetrics.sellSignals.winRate.toFixed(0)}% win)`,
+    ``,
+    `<b>◆ Activity</b>`,
+    `Last 24h: ${fullMetrics.signalsLast24h}`,
+    `Last 7d: ${fullMetrics.signalsLast7d}`,
+  ].join('\n');
+}
+
+export function formatWebhookList(webhooks: WebhookConfig[]): string {
+  if (webhooks.length === 0) {
+    return [
+      `🔗 <b>WEBHOOKS</b>`,
+      ``,
+      `No webhooks configured.`,
+      ``,
+      `Use /webhook add [url] to add one.`,
+    ].join('\n');
+  }
+
+  const lines = [`🔗 <b>WEBHOOKS</b> (${webhooks.length})`, ``];
+
+  webhooks.forEach((webhook, i) => {
+    const status = webhook.enabled ? '✓' : '✗';
+    lines.push(`${i + 1}. ${status} <b>${webhook.name}</b>`);
+    lines.push(`   Events: ${webhook.events.join(', ')}`);
+    lines.push(`   Min confidence: ${webhook.minConfidence}%`);
+    lines.push(`   Sent: ${webhook.totalSent} • Fails: ${webhook.failureCount}`);
+    lines.push(``);
+  });
+
+  return lines.join('\n');
+}
+
+// ═══════════════════════════════════════════
+// ML TRAINING STATUS
+// ═══════════════════════════════════════════
+
+export function formatMLStatus(status: {
+  isTraining: boolean;
+  lastTrainingAt?: number;
+  totalSamples: number;
+  newSamplesSinceLastTrain: number;
+  nextTrainingEligible: boolean;
+  activeModelVersion?: string;
+  modelLoaded?: boolean;
+  sampleCounts?: { labeled: number; byOutcome: Record<string, number> };
+  metrics?: {
+    accuracy: number;
+    precision: number;
+    recall: number;
+    f1Score: number;
+  };
+}): string {
+  const lastTrained = status.lastTrainingAt
+    ? timeAgo(status.lastTrainingAt)
+    : 'Never';
+
+  const lines = [
+    `🤖 <b>ML STATUS</b>`,
+    ``,
+    `<b>◆ Model</b>`,
+    status.activeModelVersion ? `Version: ${status.activeModelVersion}` : 'No model active',
+    `Status: ${status.isTraining ? '🔄 Training...' : status.modelLoaded ? '✓ Ready' : '⚠ Not loaded'}`,
+    ``,
+    `<b>◆ Data</b>`,
+    `Total samples: ${status.sampleCounts?.labeled ?? status.totalSamples}`,
+    `New samples: ${status.newSamplesSinceLastTrain}`,
+    `Last trained: ${lastTrained}`,
+  ];
+
+  if (status.metrics) {
+    lines.push(``);
+    lines.push(`<b>◆ Metrics</b>`);
+    lines.push(`Accuracy: ${(status.metrics.accuracy * 100).toFixed(1)}%`);
+    lines.push(`Precision: ${(status.metrics.precision * 100).toFixed(1)}%`);
+    lines.push(`Recall: ${(status.metrics.recall * 100).toFixed(1)}%`);
+    lines.push(`F1 Score: ${(status.metrics.f1Score * 100).toFixed(1)}%`);
+  }
+
+  lines.push(``);
+  lines.push(status.nextTrainingEligible
+    ? `✓ Ready for training`
+    : `⏳ Not ready for training`);
+
+  return lines.join('\n');
+}
+
+export function formatPendingLabels(tokens: Array<{
+  mint: string;
+  symbol?: string;
+  priceChangePercent?: number;
+  suggestedLabel?: string;
+  suggestConfidence?: number;
+}>): string {
+  if (tokens.length === 0) {
+    return [
+      `🏷 <b>PENDING LABELS</b>`,
+      ``,
+      `No tokens pending.`,
+    ].join('\n');
+  }
+
+  const lines = [`🏷 <b>PENDING LABELS</b> (${tokens.length})`, ``];
+
+  tokens.slice(0, 10).forEach((token, i) => {
+    const symbol = token.symbol || token.mint.slice(0, 8);
+    const change = token.priceChangePercent !== undefined
+      ? ` ${formatPercent(token.priceChangePercent)}`
+      : '';
+    const suggestion = token.suggestedLabel
+      ? ` → ${token.suggestedLabel} (${((token.suggestConfidence || 0) * 100).toFixed(0)}%)`
+      : '';
+
+    lines.push(`${i + 1}. <b>${symbol}</b>${change}${suggestion}`);
+  });
+
+  lines.push(``);
+  lines.push(`Use /ml label [mint] [rug|pump|stable|decline]`);
+
+  return lines.join('\n');
+}
+
+export function formatTrainingHistory(runs: Array<{
+  model_version: string;
+  accuracy: number;
+  f1_score: number;
+  samples_used: number;
+  trained_at: number;
+  is_active: boolean;
+}>): string {
+  if (runs.length === 0) {
+    return [
+      `📜 <b>TRAINING HISTORY</b>`,
+      ``,
+      `No training runs yet.`,
+    ].join('\n');
+  }
+
+  const lines = [`📜 <b>TRAINING HISTORY</b>`, ``];
+
+  runs.slice(0, 5).forEach((run, i) => {
+    const active = run.is_active ? ' ✓' : '';
+    const age = timeAgo(run.trained_at * 1000);
+    lines.push(
+      `${i + 1}. <b>${run.model_version}</b>${active}`
+    );
+    lines.push(
+      `   Acc: ${(run.accuracy * 100).toFixed(1)}% • F1: ${(run.f1_score * 100).toFixed(1)}%`
+    );
+    lines.push(
+      `   Samples: ${run.samples_used} • ${age} ago`
+    );
+    lines.push(``);
+  });
+
+  return lines.join('\n');
 }

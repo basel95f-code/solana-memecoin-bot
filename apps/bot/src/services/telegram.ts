@@ -1,9 +1,10 @@
 import { Telegraf } from 'telegraf';
 import { config } from '../config';
 import type { TokenAnalysis, WatchedToken, WalletActivityAlert, TrackedWallet, WalletTransaction } from '../types';
+import type { TradingSignal } from '../signals/types';
 import { registerAllCommands, incrementAlertsSent } from '../telegram/commands';
-import { formatTokenAlert, formatWatchlistAlert } from '../telegram/formatters';
-import { alertActionKeyboard } from '../telegram/keyboards';
+import { formatTokenAlert, formatWatchlistAlert, formatSignalAlert } from '../telegram/formatters';
+import { alertActionKeyboard, signalActionKeyboard } from '../telegram/keyboards';
 import { storageService } from './storage';
 import { dexScreenerService } from './dexscreener';
 import { TELEGRAM } from '../constants';
@@ -164,6 +165,37 @@ class TelegramService {
       );
     } catch (error) {
       logger.silentError('Telegram', `Failed to send watchlist alert for ${token.symbol}`, error as Error);
+    }
+  }
+
+  async sendSignalAlert(signal: TradingSignal, chatId?: string): Promise<void> {
+    const targetChatId = chatId || this.defaultChatId;
+
+    // Check if alerts are muted
+    if (storageService.isAlertsMuted(targetChatId)) {
+      return;
+    }
+
+    // Check quiet hours
+    if (storageService.isQuietHours(targetChatId)) {
+      return;
+    }
+
+    try {
+      const message = formatSignalAlert(signal);
+
+      await this.withRetry(
+        () => this.bot.telegram.sendMessage(targetChatId, message, {
+          parse_mode: 'HTML',
+          link_preview_options: { is_disabled: true },
+          ...signalActionKeyboard(signal.id, signal.mint),
+        }),
+        `sendSignalAlert for ${signal.symbol}`
+      );
+
+      incrementAlertsSent();
+    } catch (error) {
+      logger.silentError('Telegram', `Failed to send signal alert for ${signal.symbol}`, error as Error);
     }
   }
 

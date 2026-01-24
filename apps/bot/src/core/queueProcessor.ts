@@ -14,6 +14,7 @@ import { database } from '../database';
 import { apiServer } from '../api/server';
 import { outcomeTracker } from '../services/outcomeTracker';
 import { dexScreenerService } from '../services/dexscreener';
+import { signalService } from '../signals';
 import type { PoolInfo, TokenAnalysis } from '../types';
 import { logger } from '../utils/logger';
 import { QUEUE } from '../constants';
@@ -219,6 +220,11 @@ export class QueueProcessor {
           logger.silentError('Database', 'Failed to save analysis', e as Error)
         );
 
+        // Generate trading signal if conditions are met
+        this.generateSignal(analysis, mlPrediction).catch(e =>
+          logger.silentError('Signals', 'Failed to generate signal', e as Error)
+        );
+
         // Add to dashboard discoveries
         apiServer.addDiscovery({
           mint: analysis.token.mint,
@@ -307,6 +313,79 @@ export class QueueProcessor {
       );
     } catch (error) {
       logger.silentError('Database', 'Failed to save analysis', error as Error);
+    }
+  }
+
+  /**
+   * Generate trading signal based on analysis and ML prediction
+   */
+  private async generateSignal(
+    analysis: TokenAnalysis,
+    mlPrediction: { rugProbability: number; confidence: number; recommendation: string }
+  ): Promise<void> {
+    try {
+      // Get DexScreener data for price/volume info
+      const pairData = await dexScreenerService.getTokenData(analysis.token.mint);
+      const priceUsd = pairData ? parseFloat(pairData.priceUsd || '0') : 0;
+
+      if (priceUsd <= 0) return; // Skip if no price data
+
+      // Prepare signal generation input
+      const signal = await signalService.processAnalysis({
+        mint: analysis.token.mint,
+        symbol: analysis.token.symbol,
+        name: analysis.token.name,
+        rugProbability: mlPrediction.rugProbability,
+        riskScore: analysis.risk.score,
+        smartMoneyNetBuys: analysis.smartMoney?.netSmartMoney,
+        smartMoneyHolding: analysis.smartMoney?.smartMoneyHolding,
+        isSmartMoneyBullish: analysis.smartMoney?.isSmartMoneyBullish,
+        priceUsd,
+        priceChange1h: pairData?.priceChange?.h1,
+        priceChange24h: pairData?.priceChange?.h24,
+        volume1h: pairData?.volume?.h1,
+        volume24h: pairData?.volume?.h24,
+        holderCount: analysis.holders.totalHolders,
+        top10Percent: analysis.holders.top10HoldersPercent,
+        mintRevoked: analysis.contract.mintAuthorityRevoked,
+        freezeRevoked: analysis.contract.freezeAuthorityRevoked,
+        lpBurnedPercent: analysis.liquidity.lpBurnedPercent,
+        liquidityUsd: analysis.liquidity.totalLiquidityUsd,
+      });
+
+      if (signal) {
+        // Save signal to database
+        database.saveSignal({
+          id: signal.id,
+          mint: signal.mint,
+          symbol: signal.symbol,
+          name: signal.name,
+          type: signal.type,
+          confidence: signal.confidence,
+          suggestedPositionSize: signal.suggestedPositionSize,
+          positionSizeType: signal.positionSizeType,
+          rugProbability: signal.rugProbability,
+          riskScore: signal.riskScore,
+          smartMoneyScore: signal.smartMoneyScore,
+          momentumScore: signal.momentumScore,
+          holderScore: signal.holderScore,
+          entryPrice: signal.entryPrice,
+          targetPrice: signal.targetPrice,
+          stopLossPrice: signal.stopLossPrice,
+          reasons: signal.reasons,
+          warnings: signal.warnings,
+          status: signal.status,
+          generatedAt: signal.generatedAt,
+          expiresAt: signal.expiresAt,
+        });
+
+        // Send Telegram alert for signal
+        await telegramService.sendSignalAlert(signal);
+
+        logger.info('Signals', `Generated ${signal.type} signal for ${signal.symbol} (${signal.confidence}% confidence)`);
+      }
+    } catch (error) {
+      logger.debug('Signals', `Failed to generate signal for ${analysis.token.symbol}: ${(error as Error).message}`);
     }
   }
 

@@ -1,6 +1,7 @@
 /**
  * Rug Pull Predictor using TensorFlow.js
  * Neural network trained on historical token data to predict rug probability
+ * Supports 25 enhanced features (v2) with backward compatibility for 9 features (v1)
  */
 
 import * as tf from '@tensorflow/tfjs';
@@ -8,7 +9,10 @@ import path from 'path';
 import fs from 'fs';
 import { database } from '../database';
 import { logger } from '../utils/logger';
+import { FEATURE_COUNT } from './featureEngineering';
+import { modelVersionManager } from './modelVersioning';
 
+// Legacy 9-feature input (v1 compatibility)
 export interface PredictionInput {
   liquidityUsd: number;
   riskScore: number;
@@ -21,6 +25,30 @@ export interface PredictionInput {
   tokenAgeHours: number;
 }
 
+// Enhanced 25-feature input (v2)
+export interface EnhancedPredictionInput extends PredictionInput {
+  // Momentum features
+  priceChange5m?: number;
+  priceChange1h?: number;
+  priceChange24h?: number;
+  volumeChange1h?: number;
+  volumeChange24h?: number;
+  buyPressure1h?: number;
+  // Smart money features
+  smartMoneyNetBuys?: number;
+  smartMoneyHolding?: number;
+  isSmartMoneyBullish?: boolean;
+  // Trend features
+  priceVelocity?: number;
+  volumeAcceleration?: number;
+  liquidityTrend?: number;
+  holderTrend?: number;
+  // Pattern features
+  hasVolumeSpike?: boolean;
+  isPumping?: boolean;
+  isDumping?: boolean;
+}
+
 export interface PredictionResult {
   rugProbability: number;
   confidence: number;
@@ -30,11 +58,13 @@ export interface PredictionResult {
 
 class RugPredictor {
   private model: tf.LayersModel | null = null;
+  private modelV2: tf.LayersModel | null = null; // Enhanced model with 25 features
   private modelDir: string;
   private isTraining: boolean = false;
   private initialized: boolean = false;
   private trainingHistory: { loss: number; accuracy: number }[] = [];
   private totalPredictions: number = 0;
+  private featureVersion: 'v1' | 'v2' = 'v1';
 
   // Feature normalization parameters
   private readonly NORMALIZATION = {
@@ -42,6 +72,10 @@ class RugPredictor {
     holderCountMax: 10000,
     ageHoursMax: 168, // 1 week
   };
+
+  // V1 has 9 features, V2 has 25 features
+  private readonly FEATURE_COUNT_V1 = 9;
+  private readonly FEATURE_COUNT_V2 = FEATURE_COUNT;
 
   constructor() {
     this.modelDir = path.join(process.cwd(), 'data', 'models', 'rug_predictor');
@@ -82,14 +116,20 @@ class RugPredictor {
 
   /**
    * Create the neural network architecture
+   * @param featureCount Number of input features (9 for v1, 25 for v2)
    */
-  private createModel(): tf.LayersModel {
+  private createModel(featureCount: number = this.FEATURE_COUNT_V1): tf.LayersModel {
     const model = tf.sequential();
 
-    // Input layer: 9 features
+    // Adjust network size based on feature count
+    const firstLayerUnits = featureCount === this.FEATURE_COUNT_V2 ? 128 : 64;
+    const secondLayerUnits = featureCount === this.FEATURE_COUNT_V2 ? 64 : 32;
+    const thirdLayerUnits = featureCount === this.FEATURE_COUNT_V2 ? 32 : 16;
+
+    // Input layer
     model.add(tf.layers.dense({
-      inputShape: [9],
-      units: 64,
+      inputShape: [featureCount],
+      units: firstLayerUnits,
       activation: 'relu',
       kernelInitializer: 'heNormal',
     }));
@@ -102,7 +142,7 @@ class RugPredictor {
 
     // Hidden layer 1
     model.add(tf.layers.dense({
-      units: 32,
+      units: secondLayerUnits,
       activation: 'relu',
       kernelInitializer: 'heNormal',
     }));
@@ -111,7 +151,7 @@ class RugPredictor {
 
     // Hidden layer 2
     model.add(tf.layers.dense({
-      units: 16,
+      units: thirdLayerUnits,
       activation: 'relu',
       kernelInitializer: 'heNormal',
     }));
@@ -129,6 +169,13 @@ class RugPredictor {
     });
 
     return model;
+  }
+
+  /**
+   * Create V2 model with 25 features
+   */
+  private createModelV2(): tf.LayersModel {
+    return this.createModel(this.FEATURE_COUNT_V2);
   }
 
   /**
@@ -281,7 +328,7 @@ class RugPredictor {
   }
 
   /**
-   * Extract normalized features from input
+   * Extract normalized features from input (v1 - 9 features)
    */
   private extractFeatures(input: PredictionInput): number[] {
     return [
@@ -295,6 +342,122 @@ class RugPredictor {
       input.hasSocials ? 1 : 0,
       this.normalize(input.tokenAgeHours, 0, this.NORMALIZATION.ageHoursMax),
     ];
+  }
+
+  /**
+   * Extract enhanced features from input (v2 - 25 features)
+   */
+  private extractEnhancedFeatures(input: EnhancedPredictionInput): number[] {
+    // Start with v1 features
+    const features = this.extractFeatures(input);
+
+    // Add momentum features (6)
+    features.push(this.normalizePriceChange(input.priceChange5m ?? 0));
+    features.push(this.normalizePriceChange(input.priceChange1h ?? 0));
+    features.push(this.normalizePriceChange(input.priceChange24h ?? 0));
+    features.push(this.normalizePriceChange(input.volumeChange1h ?? 0));
+    features.push(this.normalizePriceChange(input.volumeChange24h ?? 0));
+    features.push(input.buyPressure1h ?? 0.5);
+
+    // Add smart money features (3)
+    features.push(this.normalizeSmartMoney(input.smartMoneyNetBuys ?? 0));
+    features.push(Math.min(1, (input.smartMoneyHolding ?? 0) / 30));
+    features.push(input.isSmartMoneyBullish ? 1 : 0);
+
+    // Add trend features (4)
+    features.push((input.priceVelocity ?? 0 + 50) / 100);
+    features.push((input.volumeAcceleration ?? 0 + 5) / 10);
+    features.push((input.liquidityTrend ?? 0 + 1) / 2);
+    features.push((input.holderTrend ?? 0 + 1) / 2);
+
+    // Add pattern features (3)
+    features.push(input.hasVolumeSpike ? 1 : 0);
+    features.push(input.isPumping ? 1 : 0);
+    features.push(input.isDumping ? 1 : 0);
+
+    // Clamp all values to 0-1
+    return features.map(v => Math.max(0, Math.min(1, v)));
+  }
+
+  /**
+   * Normalize price change (-100 to +200 -> 0 to 1)
+   */
+  private normalizePriceChange(change: number): number {
+    const clamped = Math.max(-100, Math.min(200, change));
+    return (clamped + 100) / 300;
+  }
+
+  /**
+   * Normalize smart money net buys (-20 to +20 -> 0 to 1)
+   */
+  private normalizeSmartMoney(netBuys: number): number {
+    const clamped = Math.max(-20, Math.min(20, netBuys));
+    return (clamped + 20) / 40;
+  }
+
+  /**
+   * Predict with enhanced features (v2)
+   */
+  async predictEnhanced(input: EnhancedPredictionInput): Promise<PredictionResult> {
+    // If v2 model is available, use it
+    if (this.modelV2) {
+      return this.predictWithModel(this.modelV2, this.extractEnhancedFeatures(input), input);
+    }
+
+    // Fall back to v1 model
+    return this.predict(input);
+  }
+
+  /**
+   * Internal predict method that works with any model
+   */
+  private async predictWithModel(model: tf.LayersModel, features: number[], input: PredictionInput): Promise<PredictionResult> {
+    const inputTensor = tf.tensor2d([features]);
+    this.totalPredictions++;
+
+    try {
+      const prediction = model.predict(inputTensor) as tf.Tensor;
+      const probability = (await prediction.data())[0];
+
+      prediction.dispose();
+      inputTensor.dispose();
+
+      const confidence = Math.abs(probability - 0.5) * 2;
+      const riskFactors = this.identifyRiskFactors(input);
+      const recommendation = this.getRecommendation(probability, confidence);
+
+      return {
+        rugProbability: probability,
+        confidence,
+        riskFactors,
+        recommendation,
+      };
+    } catch (error) {
+      logger.error('RugPredictor', 'Prediction failed', error as Error);
+      inputTensor.dispose();
+
+      return {
+        rugProbability: 0.5,
+        confidence: 0,
+        riskFactors: ['Prediction error'],
+        recommendation: 'unknown',
+      };
+    }
+  }
+
+  /**
+   * Set the feature version to use
+   */
+  setFeatureVersion(version: 'v1' | 'v2'): void {
+    this.featureVersion = version;
+    logger.info('RugPredictor', `Feature version set to ${version}`);
+  }
+
+  /**
+   * Get current feature version
+   */
+  getFeatureVersion(): 'v1' | 'v2' {
+    return this.featureVersion;
   }
 
   /**
@@ -393,6 +556,13 @@ class RugPredictor {
     // Check if model file exists
     const modelPath = path.join(this.modelDir, 'model.json');
     return !fs.existsSync(modelPath);
+  }
+
+  /**
+   * Check if the model is loaded and ready for predictions
+   */
+  isModelLoaded(): boolean {
+    return this.initialized && this.model !== null;
   }
 
   /**

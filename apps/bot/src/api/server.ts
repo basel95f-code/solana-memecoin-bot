@@ -13,6 +13,12 @@ import { walletMonitorService } from '../services/walletMonitor';
 import { supabaseSyncService } from '../services/supabaseSync';
 import { config } from '../config';
 import { logger } from '../utils/logger';
+import { signalService } from '../signals';
+import { trainingPipeline } from '../ml/trainingPipeline';
+import { manualLabelingService } from '../ml/manualLabeling';
+import { featureEngineering } from '../ml/featureEngineering';
+import { rugPredictor } from '../ml/rugPredictor';
+import type { TradingSignal } from '../signals/types';
 
 // Dashboard API key for secure communication
 const DASHBOARD_API_KEY = process.env.DASHBOARD_API_KEY;
@@ -131,6 +137,47 @@ class ApiServer {
           if (req.method === 'POST') {
             await this.handleCommand(req, res);
           }
+        // Signal API endpoints
+        } else if (url.pathname === '/api/signals') {
+          if (req.method === 'GET') {
+            this.handleGetSignals(req, res, url);
+          }
+        } else if (url.pathname === '/api/signals/history') {
+          this.handleGetSignalHistory(req, res, url);
+        } else if (url.pathname === '/api/signals/performance') {
+          this.handleGetSignalPerformance(req, res);
+        } else if (url.pathname.match(/^\/api\/signals\/[^/]+\/outcome$/)) {
+          if (req.method === 'POST') {
+            await this.handleRecordSignalOutcome(req, res, url);
+          }
+        // Webhook API endpoints
+        } else if (url.pathname === '/api/webhooks') {
+          if (req.method === 'GET') {
+            this.handleGetWebhooks(req, res);
+          } else if (req.method === 'POST') {
+            await this.handleAddWebhook(req, res);
+          }
+        } else if (url.pathname.match(/^\/api\/webhooks\/\d+$/)) {
+          if (req.method === 'DELETE') {
+            await this.handleDeleteWebhook(req, res, url);
+          }
+        // ML API endpoints
+        } else if (url.pathname === '/api/ml/status') {
+          this.handleGetMLStatus(req, res);
+        } else if (url.pathname === '/api/ml/metrics') {
+          this.handleGetMLMetrics(req, res);
+        } else if (url.pathname === '/api/ml/pending') {
+          this.handleGetPendingLabels(req, res, url);
+        } else if (url.pathname === '/api/ml/label') {
+          if (req.method === 'POST') {
+            await this.handleAddLabel(req, res);
+          }
+        } else if (url.pathname === '/api/ml/train') {
+          if (req.method === 'POST') {
+            await this.handleTriggerTraining(req, res);
+          }
+        } else if (url.pathname === '/api/ml/history') {
+          this.handleGetTrainingHistory(req, res, url);
         } else if (url.pathname.startsWith('/api/')) {
           res.writeHead(404, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Not found' }));
@@ -694,6 +741,418 @@ class ApiServer {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: (error as Error).message }));
     }
+  }
+
+  // ═══════════════════════════════════════════
+  // SIGNAL API HANDLERS
+  // ═══════════════════════════════════════════
+
+  /**
+   * Get active signals
+   */
+  private handleGetSignals(req: http.IncomingMessage, res: http.ServerResponse, url: URL): void {
+    const status = url.searchParams.get('status') || 'active';
+    const limit = parseInt(url.searchParams.get('limit') || '20', 10);
+
+    const signals = database.getSignals({ status, limit });
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ signals }));
+  }
+
+  /**
+   * Get signal history
+   */
+  private handleGetSignalHistory(req: http.IncomingMessage, res: http.ServerResponse, url: URL): void {
+    const limit = parseInt(url.searchParams.get('limit') || '50', 10);
+
+    const signals = database.getSignals({ limit });
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ signals }));
+  }
+
+  /**
+   * Get signal performance metrics
+   */
+  private handleGetSignalPerformance(req: http.IncomingMessage, res: http.ServerResponse): void {
+    const stats = database.getSignalStats();
+
+    // Calculate win rate from available stats
+    const winRate = stats.executedSignals > 0
+      ? (stats.accurateSignals / stats.executedSignals) * 100
+      : 0;
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      totalSignals: stats.totalSignals,
+      activeSignals: stats.activeSignals,
+      executedSignals: stats.executedSignals,
+      accurateSignals: stats.accurateSignals,
+      avgProfitLoss: stats.avgProfitLoss,
+      winRate,
+    }));
+  }
+
+  /**
+   * Record signal outcome
+   */
+  private async handleRecordSignalOutcome(req: http.IncomingMessage, res: http.ServerResponse, url: URL): Promise<void> {
+    if (!this.verifyApiKey(req)) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Unauthorized' }));
+      return;
+    }
+
+    try {
+      const pathParts = url.pathname.split('/');
+      const signalId = pathParts[pathParts.length - 2];
+
+      const body = await this.parseBody(req);
+      const { entryPrice, exitPrice } = body;
+
+      if (!entryPrice || !exitPrice) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'entryPrice and exitPrice are required' }));
+        return;
+      }
+
+      const signal = database.getSignalById(signalId);
+      if (!signal) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Signal not found' }));
+        return;
+      }
+
+      const profitLossPercent = ((exitPrice - entryPrice) / entryPrice) * 100;
+      const wasAccurate = signal.type === 'BUY' ? profitLossPercent > 0 : profitLossPercent < 0;
+      const now = Math.floor(Date.now() / 1000);
+
+      database.recordSignalOutcome({
+        id: signalId,
+        actualEntry: entryPrice,
+        actualExit: exitPrice,
+        profitLossPercent,
+        wasAccurate,
+        entryRecordedAt: now,
+        exitRecordedAt: now,
+      });
+      signalService.recordOutcome(signalId, entryPrice, exitPrice);
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: true,
+        profitLossPercent,
+        wasAccurate,
+      }));
+    } catch (error) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: (error as Error).message }));
+    }
+  }
+
+  // ═══════════════════════════════════════════
+  // WEBHOOK API HANDLERS
+  // ═══════════════════════════════════════════
+
+  /**
+   * Get webhooks
+   */
+  private handleGetWebhooks(req: http.IncomingMessage, res: http.ServerResponse): void {
+    const webhooks = database.getWebhooks();
+
+    // Don't expose full URL, just a masked version
+    const maskedWebhooks = webhooks.map(w => ({
+      id: w.id,
+      name: w.name,
+      enabled: w.enabled,
+      events: w.events,
+      minConfidence: w.min_confidence,
+      urlMasked: w.url.slice(0, 40) + '...',
+      successCount: w.success_count,
+      failureCount: w.failure_count,
+      lastTriggeredAt: w.last_triggered_at,
+    }));
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ webhooks: maskedWebhooks }));
+  }
+
+  /**
+   * Add webhook
+   */
+  private async handleAddWebhook(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+    if (!this.verifyApiKey(req)) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Unauthorized' }));
+      return;
+    }
+
+    try {
+      const body = await this.parseBody(req);
+      const { url, name, events, minConfidence } = body;
+
+      if (!url) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'url is required' }));
+        return;
+      }
+
+      // Validate Discord webhook URL
+      if (!url.startsWith('https://discord.com/api/webhooks/') &&
+          !url.startsWith('https://discordapp.com/api/webhooks/')) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid Discord webhook URL' }));
+        return;
+      }
+
+      const now = Math.floor(Date.now() / 1000);
+      const webhookId = database.saveWebhook({
+        url,
+        name: name || 'Discord Webhook',
+        enabled: true,
+        events: events || ['BUY', 'SELL', 'TAKE_PROFIT', 'STOP_LOSS'],
+        minConfidence: minConfidence || 60,
+        createdAt: now,
+      });
+
+      // Register with signal service
+      signalService.addWebhook({
+        id: webhookId.toString(),
+        url,
+        name: name || 'Discord Webhook',
+        enabled: true,
+        events: events || ['BUY', 'SELL', 'TAKE_PROFIT', 'STOP_LOSS'],
+        minConfidence: minConfidence || 60,
+      });
+
+      res.writeHead(201, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, message: 'Webhook added' }));
+    } catch (error) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: (error as Error).message }));
+    }
+  }
+
+  /**
+   * Delete webhook
+   */
+  private async handleDeleteWebhook(req: http.IncomingMessage, res: http.ServerResponse, url: URL): Promise<void> {
+    if (!this.verifyApiKey(req)) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Unauthorized' }));
+      return;
+    }
+
+    const webhookId = parseInt(url.pathname.split('/').pop() || '0', 10);
+
+    if (!webhookId) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid webhook ID' }));
+      return;
+    }
+
+    database.deleteWebhook(webhookId);
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true, message: 'Webhook deleted' }));
+  }
+
+  // ═══════════════════════════════════════════
+  // ML API HANDLERS
+  // ═══════════════════════════════════════════
+
+  /**
+   * Get ML status
+   */
+  private handleGetMLStatus(req: http.IncomingMessage, res: http.ServerResponse): void {
+    const status = trainingPipeline.getStatus();
+    const sampleCounts = database.getMLSampleCount();
+    const activeVersion = database.getActiveModelVersion();
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      isTraining: status.isTraining,
+      lastTrainingAt: status.lastTrainingAt,
+      totalSamples: status.totalSamples,
+      newSamplesSinceLastTrain: status.newSamplesSinceLastTrain,
+      nextTrainingEligible: status.nextTrainingEligible,
+      sampleCounts,
+      activeVersion,
+      modelLoaded: rugPredictor.isModelLoaded(),
+    }));
+  }
+
+  /**
+   * Get ML metrics
+   */
+  private handleGetMLMetrics(req: http.IncomingMessage, res: http.ServerResponse): void {
+    const latestRun = database.getLatestTrainingRun();
+
+    if (!latestRun) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ metrics: null, message: 'No training runs yet' }));
+      return;
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      metrics: {
+        modelVersion: latestRun.model_version,
+        accuracy: latestRun.accuracy,
+        precision: latestRun.precision_score,
+        recall: latestRun.recall_score,
+        f1Score: latestRun.f1_score,
+        auc: latestRun.auc_score,
+        samplesUsed: latestRun.samples_used,
+        epochs: latestRun.epochs,
+        trainingDurationMs: latestRun.training_duration_ms,
+        trainedAt: latestRun.trained_at,
+        confusionMatrix: latestRun.confusion_matrix,
+      },
+    }));
+  }
+
+  /**
+   * Get pending labels
+   */
+  private handleGetPendingLabels(req: http.IncomingMessage, res: http.ServerResponse, url: URL): void {
+    const limit = parseInt(url.searchParams.get('limit') || '50', 10);
+
+    const pending = manualLabelingService.getPendingTokens(limit);
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ pending }));
+  }
+
+  /**
+   * Add manual label
+   */
+  private async handleAddLabel(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+    if (!this.verifyApiKey(req)) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Unauthorized' }));
+      return;
+    }
+
+    try {
+      const body = await this.parseBody(req);
+      const { mint, label, labeledBy } = body;
+
+      if (!mint || !label) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'mint and label are required' }));
+        return;
+      }
+
+      const validLabels = ['rug', 'pump', 'stable', 'decline'];
+      if (!validLabels.includes(label)) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: `Invalid label. Valid options: ${validLabels.join(', ')}` }));
+        return;
+      }
+
+      // Get features for the token
+      const analysis = database.getAnalysisByMint(mint);
+      let features: Record<string, number>;
+
+      if (analysis) {
+        const enhancedFeatures = featureEngineering.extractFeaturesBasic({
+          liquidityUsd: analysis.liquidity_usd,
+          riskScore: analysis.risk_score,
+          holderCount: analysis.holder_count,
+          top10Percent: analysis.top_10_percent,
+          mintRevoked: analysis.mint_revoked,
+          freezeRevoked: analysis.freeze_revoked,
+          lpBurnedPercent: analysis.lp_burned_percent,
+          hasSocials: analysis.has_twitter || analysis.has_telegram || analysis.has_website,
+          tokenAgeHours: 24,
+        });
+        features = featureEngineering.featuresToRecord(enhancedFeatures);
+      } else {
+        const enhancedFeatures = featureEngineering.extractFeaturesBasic({
+          liquidityUsd: 0,
+          riskScore: 50,
+          holderCount: 100,
+          top10Percent: 50,
+          mintRevoked: false,
+          freezeRevoked: false,
+          lpBurnedPercent: 0,
+          hasSocials: false,
+          tokenAgeHours: 24,
+        });
+        features = featureEngineering.featuresToRecord(enhancedFeatures);
+      }
+
+      const success = manualLabelingService.labelToken(mint, label, labeledBy || 'api', features);
+
+      if (success) {
+        trainingPipeline.recordNewSample();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, message: 'Label added' }));
+      } else {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Failed to add label' }));
+      }
+    } catch (error) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: (error as Error).message }));
+    }
+  }
+
+  /**
+   * Trigger model training
+   */
+  private async handleTriggerTraining(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+    if (!this.verifyApiKey(req)) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Unauthorized' }));
+      return;
+    }
+
+    const status = trainingPipeline.getStatus();
+
+    if (status.isTraining) {
+      res.writeHead(409, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Training already in progress' }));
+      return;
+    }
+
+    const sampleCounts = database.getMLSampleCount();
+    if (sampleCounts.labeled < 50) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        error: 'Insufficient samples',
+        required: 50,
+        current: sampleCounts.labeled,
+      }));
+      return;
+    }
+
+    // Start training asynchronously
+    res.writeHead(202, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      success: true,
+      message: 'Training started',
+      samplesUsed: sampleCounts.labeled,
+    }));
+
+    // Run training in background
+    trainingPipeline.train().catch(err => {
+      logger.error('API', 'Training failed', err);
+    });
+  }
+
+  /**
+   * Get training history
+   */
+  private handleGetTrainingHistory(req: http.IncomingMessage, res: http.ServerResponse, url: URL): void {
+    const limit = parseInt(url.searchParams.get('limit') || '20', 10);
+
+    const runs = database.getTrainingRuns(limit);
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ runs }));
   }
 
   /**
