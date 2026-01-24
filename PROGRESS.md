@@ -120,6 +120,8 @@
 ---
 
 ## Recent Commits
+- `e37eb74` - Add /monitor command for price monitor control
+- `f5d65e8` - Add signal price monitor and progress tracking
 - `5d8807d` - Add automated trading signals and enhanced ML training pipeline (22 files, 7146 insertions)
 - `67a0582` - Improve Telegram UI with main menu and back navigation
 - `cc595bd` - Revamp Telegram UI: compact messages, menu navigation, chart links

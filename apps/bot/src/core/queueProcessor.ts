@@ -200,8 +200,13 @@ export class QueueProcessor {
       incrementTokensAnalyzed();
 
       if (analysis) {
-        // Get ML prediction for rug probability
-        const mlPrediction = await rugPredictor.predict({
+        // Get DexScreener data for price/volume info (needed for enhanced ML features)
+        const pairData = await dexScreenerService.getTokenData(analysis.token.mint);
+        const priceUsd = pairData ? parseFloat(pairData.priceUsd || '0') : 0;
+
+        // Get ML prediction for rug probability using enhanced 25-feature model
+        const mlPrediction = await rugPredictor.predictEnhanced({
+          // Base features (9)
           liquidityUsd: analysis.liquidity.totalLiquidityUsd,
           riskScore: analysis.risk.score,
           holderCount: analysis.holders.totalHolders,
@@ -213,6 +218,27 @@ export class QueueProcessor {
           tokenAgeHours: analysis.pool.createdAt
             ? (Date.now() - new Date(analysis.pool.createdAt).getTime()) / 3600000
             : 0,
+          // Momentum features (6)
+          priceChange5m: pairData?.priceChange?.m5,
+          priceChange1h: pairData?.priceChange?.h1,
+          priceChange24h: pairData?.priceChange?.h24,
+          volumeChange1h: pairData?.volume?.h1 && pairData?.volume?.h24
+            ? ((pairData.volume.h1 * 24) / pairData.volume.h24 - 1) * 100
+            : undefined,
+          volumeChange24h: undefined, // Not available directly
+          buyPressure1h: pairData?.txns?.h1
+            ? pairData.txns.h1.buys / (pairData.txns.h1.buys + pairData.txns.h1.sells || 1)
+            : undefined,
+          // Smart money features (3)
+          smartMoneyNetBuys: analysis.smartMoney?.netSmartMoney,
+          smartMoneyHolding: analysis.smartMoney?.smartMoneyHolding,
+          isSmartMoneyBullish: analysis.smartMoney?.isSmartMoneyBullish,
+          // Pattern features (3)
+          hasVolumeSpike: pairData?.volume?.h1 && pairData?.volume?.h6
+            ? pairData.volume.h1 > (pairData.volume.h6 / 6) * 3
+            : undefined,
+          isPumping: pairData?.priceChange?.h1 ? pairData.priceChange.h1 > 50 : undefined,
+          isDumping: pairData?.priceChange?.h1 ? pairData.priceChange.h1 < -30 : undefined,
         });
 
         // Save analysis to database (async, don't await)
@@ -221,7 +247,7 @@ export class QueueProcessor {
         );
 
         // Generate trading signal if conditions are met
-        this.generateSignal(analysis, mlPrediction).catch(e =>
+        this.generateSignal(analysis, mlPrediction, pairData, priceUsd).catch(e =>
           logger.silentError('Signals', 'Failed to generate signal', e as Error)
         );
 
@@ -321,13 +347,11 @@ export class QueueProcessor {
    */
   private async generateSignal(
     analysis: TokenAnalysis,
-    mlPrediction: { rugProbability: number; confidence: number; recommendation: string }
+    mlPrediction: { rugProbability: number; confidence: number; recommendation: string },
+    pairData: any,
+    priceUsd: number
   ): Promise<void> {
     try {
-      // Get DexScreener data for price/volume info
-      const pairData = await dexScreenerService.getTokenData(analysis.token.mint);
-      const priceUsd = pairData ? parseFloat(pairData.priceUsd || '0') : 0;
-
       if (priceUsd <= 0) return; // Skip if no price data
 
       // Prepare signal generation input
