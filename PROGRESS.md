@@ -247,6 +247,22 @@
   - Statistics tracking (moon count, rug count, win rate, avg profit)
   - Format stats for display
 
+### Completed - Phase 26 (Strategy Automation) ✅ 🤖
+- [x] **Automated Decision Pipeline** - Connect all features into workflows
+  - strategyAutomation.ts service (510 lines) - Complete automation engine
+  - Database tables: automation_rules, automation_decisions (migration v8)
+  - **IF/THEN Rule Engine:** Define conditions & actions
+  - **Auto-categorize tokens:** gem, watch, avoid, unknown
+  - **Condition Types:** scanner_match, ml_confidence, risk_score, sentiment, security, liquidity, holders
+  - **Action Types:** alert, categorize, generate_signal, auto_trade, blacklist
+  - **Priority System:** Rules execute in priority order (highest first)
+  - **Rule Statistics:** Track matches, successes, win rates
+  - **Preset Rules:** High-Confidence Gem, Security Threat, Positive Sentiment
+  - **Complete Pipeline:** Discovery → Analysis → Decision → Action
+  - Record all decisions with reasons & confidence
+  - Telegram alerts for matched rules
+  - Default categorization fallback
+
 ### Completed - Phase 25 (Live Dashboard) ✅ 📊
 - [x] **Real-Time Visualization Dashboard** - See everything in one place
   - dashboard-v2.html (685 lines) - Live dashboard with charts & feeds

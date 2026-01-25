@@ -812,5 +812,60 @@ export const MIGRATIONS: { version: number; sql: string }[] = [
       CREATE INDEX IF NOT EXISTS idx_outcomes_v2_discovered ON token_outcomes_v2(discovered_at);
       CREATE INDEX IF NOT EXISTS idx_outcomes_v2_traded ON token_outcomes_v2(was_traded);
     `
+  },
+  {
+    version: 8,
+    description: 'Add strategy automation tables',
+    sql: `
+      -- ============================================
+      -- Automation Rules Table
+      -- Defines IF/THEN automation strategies
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS automation_rules (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        description TEXT,
+        enabled INTEGER DEFAULT 1,
+        priority INTEGER DEFAULT 50,
+        
+        -- Rule logic (JSON)
+        conditions TEXT NOT NULL,  -- Array of conditions
+        actions TEXT NOT NULL,     -- Array of actions
+        
+        -- Statistics
+        match_count INTEGER DEFAULT 0,
+        success_count INTEGER DEFAULT 0,
+        
+        -- Metadata
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_automation_rules_enabled ON automation_rules(enabled);
+      CREATE INDEX IF NOT EXISTS idx_automation_rules_priority ON automation_rules(priority DESC);
+
+      -- ============================================
+      -- Automation Decisions Table
+      -- Records all automation decisions
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS automation_decisions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        token_mint TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        category TEXT NOT NULL,  -- gem, watch, avoid, unknown
+        confidence REAL DEFAULT 0,
+        
+        -- Decision details
+        reasons TEXT,  -- JSON array of reason strings
+        actions TEXT,  -- JSON array of actions taken
+        rule_name TEXT,
+        
+        -- Metadata
+        timestamp INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_automation_decisions_mint ON automation_decisions(token_mint);
+      CREATE INDEX IF NOT EXISTS idx_automation_decisions_category ON automation_decisions(category);
+      CREATE INDEX IF NOT EXISTS idx_automation_decisions_time ON automation_decisions(timestamp);
+    `
   }
 ];
