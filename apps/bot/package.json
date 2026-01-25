@@ -18,7 +18,8 @@
     "typecheck": "tsc --noEmit",
     "migrate:data": "ts-node ../../scripts/migrate-to-supabase.ts migrate",
     "migrate:rollback": "ts-node ../../scripts/migrate-to-supabase.ts rollback",
-    "db:test": "ts-node -e \"require('./src/database/supabase').testConnection().then(r => console.log('Connection:', r ? 'OK' : 'FAILED'))\""
+    "db:test": "ts-node -e \"require('./src/database/supabase').testConnection().then(r => console.log('Connection:', r ? 'OK' : 'FAILED'))\"",
+    "db:test-full": "ts-node ../../scripts/test-supabase.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",
