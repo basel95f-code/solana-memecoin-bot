@@ -7,6 +7,7 @@ import { storageService } from './storage';
 import { solanaService } from './solana';
 import { dexScreenerService } from './dexscreener';
 import { smartMoneyTracker } from './smartMoneyTracker';
+import { whaleActivityTracker } from './whaleActivityTracker';
 import type { TrackedWallet, WalletTransaction, WalletActivityAlert} from '../types';
 import { SOL_MINT, DEFAULT_CATEGORY_PRIORITIES } from '../types';
 import { logger } from '../utils/logger';
@@ -285,6 +286,24 @@ export class WalletMonitorService extends EventEmitter {
       }
     } catch (error) {
       logger.silentError('WalletMonitor', 'Failed to record trade with smart money tracker', error as Error);
+    }
+
+    // Record activity with whale activity tracker
+    try {
+      if ((tx.type === 'buy' || tx.type === 'sell') && tx.amount && tx.solAmount) {
+        whaleActivityTracker.recordActivity(
+          wallet.address,
+          wallet.label,
+          tx.tokenMint,
+          tx.tokenSymbol,
+          tx.type,
+          tx.amount,
+          tx.solAmount,
+          tx.priceUsd
+        );
+      }
+    } catch (error) {
+      logger.silentError('WalletMonitor', 'Failed to record whale activity', error as Error);
     }
 
     // Update last alerted time

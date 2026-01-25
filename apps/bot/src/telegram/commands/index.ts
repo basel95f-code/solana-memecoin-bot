@@ -19,6 +19,7 @@ import { registerScannerCommands } from './scanner';
 import { registerLearningCommands } from './learning';
 import { registerContractCommands } from './contract';
 import { registerSmartMoneyCommands } from './smartmoney';
+import { registerWhaleActivityCommands } from './whaleactivity';
 
 export function registerAllCommands(bot: Telegraf): void {
   // Register all command handlers
@@ -42,6 +43,7 @@ export function registerAllCommands(bot: Telegraf): void {
   registerLearningCommands(bot);
   registerContractCommands(bot);
   registerSmartMoneyCommands(bot);
+  registerWhaleActivityCommands(bot);
 
   // Set up bot commands menu
   bot.telegram.setMyCommands([
@@ -101,6 +103,11 @@ export function registerAllCommands(bot: Telegraf): void {
     { command: 'leaderboard', description: 'Top performing wallets' },
     { command: 'smstats', description: 'Smart money stats' },
     { command: 'smartmoney', description: 'Smart money suggestions' },
+    // Whale Activity
+    { command: 'whale', description: 'Whale timeline & patterns' },
+    { command: 'whaleactivity', description: 'Token whale activity' },
+    { command: 'accumulating', description: 'Active accumulation patterns' },
+    { command: 'distributing', description: 'Active distribution patterns' },
     // Backtesting
     { command: 'strategies', description: 'List backtest strategies' },
     { command: 'backtest', description: 'Run a backtest' },

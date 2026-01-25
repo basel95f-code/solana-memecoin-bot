@@ -7,6 +7,7 @@ import { watchlistService } from './services/watchlist';
 import { advancedMonitor } from './services/advancedMonitor';
 import { walletMonitorService } from './services/walletMonitor';
 import { smartMoneyTracker } from './services/smartMoneyTracker';
+import { whaleActivityTracker } from './services/whaleActivityTracker';
 import { telegramMtprotoService } from './services/telegramMtproto';
 import { discordBotService } from './services/discordBot';
 import { raydiumMonitor } from './monitors/raydium';
@@ -25,7 +26,9 @@ import { trainingPipeline } from './ml/trainingPipeline';
 import { learningOrchestrator } from './services/learningOrchestrator';
 import { queueProcessor, setupEventListeners, setupWalletMonitorListeners } from './core';
 import { formatSmartMoneyAlertMessage } from './telegram/commands/smartmoney';
+import { formatAccumulationAlert, formatDistributionAlert, formatCoordinatedMovement } from './telegram/commands/whaleactivity';
 import type { SmartMoneyAlert } from './services/smartMoneyTracker';
+import type { AccumulationAlert, DistributionAlert, CoordinatedMovement } from './services/whaleActivityTracker';
 
 class SolanaMemecoinBot {
   private isRunning: boolean = false;
@@ -113,6 +116,39 @@ class SolanaMemecoinBot {
           logger.error('Main', 'Failed to send smart money alert', error as Error);
         }
       });
+
+      // Set up whale activity alert listeners
+      whaleActivityTracker.on('accumulation', async (alert: AccumulationAlert) => {
+        try {
+          const message = formatAccumulationAlert(alert);
+          await telegramService.sendMessage(config.telegramChatId, message);
+        } catch (error) {
+          logger.error('Main', 'Failed to send accumulation alert', error as Error);
+        }
+      });
+
+      whaleActivityTracker.on('distribution', async (alert: DistributionAlert) => {
+        try {
+          const message = formatDistributionAlert(alert);
+          await telegramService.sendMessage(config.telegramChatId, message);
+        } catch (error) {
+          logger.error('Main', 'Failed to send distribution alert', error as Error);
+        }
+      });
+
+      whaleActivityTracker.on('coordinatedMovement', async (movement: CoordinatedMovement) => {
+        try {
+          const message = formatCoordinatedMovement(movement);
+          await telegramService.sendMessage(config.telegramChatId, message);
+        } catch (error) {
+          logger.error('Main', 'Failed to send coordinated movement alert', error as Error);
+        }
+      });
+
+      // Periodic cleanup for whale activity tracker
+      setInterval(() => {
+        whaleActivityTracker.cleanup();
+      }, 24 * 60 * 60 * 1000); // Daily cleanup
 
       // Start advanced monitoring (volume spikes, whale alerts, etc.)
       await advancedMonitor.start();
