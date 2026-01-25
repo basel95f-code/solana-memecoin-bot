@@ -1,74 +1,95 @@
-import type { AxiosInstance } from 'axios';
-import axios from 'axios';
 import type { DexScreenerPair, DexScreenerResponse, TrendingToken } from '../types';
-import { withRetry, RateLimiter } from '../utils/retry';
+import { ResilientApiClient, validators } from './resilientApi';
+import { logger } from '../utils/logger';
 
 const BASE_URL = 'https://api.dexscreener.com/latest/dex';
 const BOOSTS_URL = 'https://api.dexscreener.com/token-boosts/latest/v1';
 const PROFILES_URL = 'https://api.dexscreener.com/token-profiles/latest/v1';
-const CACHE_TTL = 60000; // 60 seconds for trending data
 
-// Rate limiter for DexScreener (avoid getting rate limited)
-const rateLimiter = new RateLimiter(10, 2); // 10 tokens, 2/sec refill
-
-interface CacheEntry<T> {
-  data: T;
-  timestamp: number;
-}
+// ============================================
+// Resilient DexScreener Client
+// ============================================
 
 class DexScreenerService {
-  private client: AxiosInstance;
-  private cache: Map<string, CacheEntry<any>> = new Map();
+  private api: ResilientApiClient;
+  private boostsApi: ResilientApiClient;
+  private profilesApi: ResilientApiClient;
 
   constructor() {
-    this.client = axios.create({
+    // Main API client (rate limit: 10 req/2s = 5 req/s)
+    this.api = new ResilientApiClient({
+      name: 'DexScreener',
       baseURL: BASE_URL,
-      timeout: 10000,
+      timeout: 15000,
+      maxRetries: 3,
+      rateLimit: { maxTokens: 10, refillRate: 5 },
+      circuitBreaker: { threshold: 5, resetTimeMs: 60000 },
+      cacheTTL: 300000, // 5 minutes
       headers: {
         'Accept': 'application/json',
       },
     });
+
+    // Boosts API (separate client to avoid rate limit conflicts)
+    this.boostsApi = new ResilientApiClient({
+      name: 'DexScreener-Boosts',
+      baseURL: BOOSTS_URL.replace('/latest/v1', ''),
+      timeout: 15000,
+      maxRetries: 2,
+      rateLimit: { maxTokens: 5, refillRate: 2 },
+      circuitBreaker: { threshold: 5, resetTimeMs: 60000 },
+      cacheTTL: 60000, // 1 minute for trending data
+    });
+
+    // Profiles API
+    this.profilesApi = new ResilientApiClient({
+      name: 'DexScreener-Profiles',
+      baseURL: PROFILES_URL.replace('/latest/v1', ''),
+      timeout: 15000,
+      maxRetries: 2,
+      rateLimit: { maxTokens: 5, refillRate: 2 },
+      circuitBreaker: { threshold: 5, resetTimeMs: 60000 },
+      cacheTTL: 60000,
+    });
   }
 
-  private getCached<T>(key: string): T | null {
-    const entry = this.cache.get(key);
-    if (entry && Date.now() - entry.timestamp < CACHE_TTL) {
-      return entry.data as T;
-    }
-    this.cache.delete(key);
-    return null;
-  }
+  // ============================================
+  // Core API Methods
+  // ============================================
 
-  private setCache<T>(key: string, data: T): void {
-    this.cache.set(key, { data, timestamp: Date.now() });
-  }
-
+  /**
+   * Get all pairs for a token address
+   */
   async getTokenPairs(tokenAddress: string): Promise<DexScreenerPair[]> {
-    const cacheKey = `token:${tokenAddress}`;
-    const cached = this.getCached<DexScreenerPair[]>(cacheKey);
-    if (cached) return cached;
+    const response = await this.api.get<DexScreenerResponse>(
+      `/tokens/${tokenAddress}`,
+      {
+        cache: true,
+        cacheKey: `token:${tokenAddress}`,
+        cacheTTL: 300000, // 5 minutes
+        validator: validators.hasFields(['pairs']),
+        transform: (data) => data,
+      }
+    );
 
-    try {
-      await rateLimiter.acquire();
-      const response = await withRetry(
-        () => this.client.get<DexScreenerResponse>(`/tokens/${tokenAddress}`),
-        { maxRetries: 3, initialDelayMs: 500 }
-      );
-      const pairs = response.data.pairs || [];
-      // Filter for Solana pairs only
-      const solanaPairs = pairs.filter(p => p.chainId === 'solana');
-      this.setCache(cacheKey, solanaPairs);
-      return solanaPairs;
-    } catch (error) {
-      console.error(`DexScreener: Failed to fetch token ${tokenAddress}:`, error);
+    if (response.error || !response.data) {
+      logger.warn('DexScreener', `Failed to fetch token ${tokenAddress}: ${response.error}`);
       return [];
     }
+
+    const pairs = response.data.pairs || [];
+    // Filter for Solana pairs only
+    return pairs.filter(p => p.chainId === 'solana');
   }
 
+  /**
+   * Get best pair for a token (highest liquidity)
+   */
   async getTokenData(tokenAddress: string): Promise<DexScreenerPair | null> {
     const pairs = await this.getTokenPairs(tokenAddress);
     if (pairs.length === 0) return null;
-    // Return the pair with highest liquidity
+
+    // Return pair with highest liquidity
     return pairs.reduce((best, current) => {
       const bestLiq = best.liquidity?.usd || 0;
       const currentLiq = current.liquidity?.usd || 0;
@@ -77,14 +98,12 @@ class DexScreenerService {
   }
 
   /**
-   * Batch fetch multiple tokens in a single API call
-   * DexScreener supports up to 30 tokens per request
+   * Batch fetch multiple tokens (up to 30 per request)
    */
   async getMultipleTokensData(tokenAddresses: string[]): Promise<Map<string, DexScreenerPair>> {
     const results = new Map<string, DexScreenerPair>();
     if (tokenAddresses.length === 0) return results;
 
-    // DexScreener supports comma-separated addresses (up to 30)
     const batchSize = 30;
     const batches: string[][] = [];
     for (let i = 0; i < tokenAddresses.length; i += batchSize) {
@@ -92,409 +111,277 @@ class DexScreenerService {
     }
 
     for (const batch of batches) {
-      // Check cache first
-      const uncached: string[] = [];
-      for (const addr of batch) {
-        const cached = this.getCached<DexScreenerPair[]>(`token:${addr}`);
-        if (cached && cached.length > 0) {
-          // Get best pair by liquidity
-          const best = cached.reduce((a, b) =>
+      const response = await this.api.get<DexScreenerResponse>(
+        `/tokens/${batch.join(',')}`,
+        {
+          cache: true,
+          cacheKey: `tokens:batch:${batch.join(',')}`,
+          cacheTTL: 300000,
+          validator: (data) => data && typeof data === 'object',
+        }
+      );
+
+      if (response.error || !response.data) {
+        logger.warn('DexScreener', `Batch fetch failed: ${response.error}`);
+        continue;
+      }
+
+      const pairs = response.data.pairs || [];
+      const solanaPairs = pairs.filter(p => p.chainId === 'solana');
+
+      // Group pairs by token and get best for each
+      const pairsByToken = new Map<string, DexScreenerPair[]>();
+      for (const pair of solanaPairs) {
+        const addr = pair.baseToken.address;
+        if (!pairsByToken.has(addr)) {
+          pairsByToken.set(addr, []);
+        }
+        pairsByToken.get(addr)!.push(pair);
+      }
+
+      for (const [addr, tokenPairs] of pairsByToken) {
+        if (tokenPairs.length > 0) {
+          const best = tokenPairs.reduce((a, b) =>
             (b.liquidity?.usd || 0) > (a.liquidity?.usd || 0) ? b : a
           );
           results.set(addr, best);
-        } else {
-          uncached.push(addr);
         }
-      }
-
-      if (uncached.length === 0) continue;
-
-      try {
-        await rateLimiter.acquire();
-        const response = await withRetry(
-          () => this.client.get<DexScreenerResponse>(`/tokens/${uncached.join(',')}`),
-          { maxRetries: 2, initialDelayMs: 500 }
-        );
-
-        const pairs = response.data.pairs || [];
-        const solanaPairs = pairs.filter(p => p.chainId === 'solana');
-
-        // Group pairs by token address
-        const pairsByToken = new Map<string, DexScreenerPair[]>();
-        for (const pair of solanaPairs) {
-          const addr = pair.baseToken.address;
-          if (!pairsByToken.has(addr)) {
-            pairsByToken.set(addr, []);
-          }
-          pairsByToken.get(addr)!.push(pair);
-        }
-
-        // Cache and get best pair for each token
-        for (const [addr, tokenPairs] of pairsByToken) {
-          this.setCache(`token:${addr}`, tokenPairs);
-          if (tokenPairs.length > 0) {
-            const best = tokenPairs.reduce((a, b) =>
-              (b.liquidity?.usd || 0) > (a.liquidity?.usd || 0) ? b : a
-            );
-            results.set(addr, best);
-          }
-        }
-      } catch (error) {
-        console.error(`DexScreener: Batch fetch failed for ${uncached.length} tokens:`, error);
       }
     }
 
     return results;
   }
 
+  /**
+   * Search tokens by query
+   */
   async searchTokens(query: string): Promise<DexScreenerPair[]> {
-    const cacheKey = `search:${query}`;
-    const cached = this.getCached<DexScreenerPair[]>(cacheKey);
-    if (cached) return cached;
+    const response = await this.api.get<DexScreenerResponse>(
+      `/search?q=${encodeURIComponent(query)}`,
+      {
+        cache: true,
+        cacheKey: `search:${query}`,
+        cacheTTL: 180000, // 3 minutes
+        validator: (data) => data && typeof data === 'object',
+      }
+    );
 
-    try {
-      await rateLimiter.acquire();
-      const response = await withRetry(
-        () => this.client.get<DexScreenerResponse>(`/search?q=${encodeURIComponent(query)}`),
-        { maxRetries: 2, initialDelayMs: 500 }
-      );
-      const pairs = response.data.pairs || [];
-      const solanaPairs = pairs.filter(p => p.chainId === 'solana');
-      this.setCache(cacheKey, solanaPairs);
-      return solanaPairs;
-    } catch (error) {
-      console.error(`DexScreener: Failed to search "${query}":`, error);
+    if (response.error || !response.data) {
+      logger.warn('DexScreener', `Search failed for "${query}": ${response.error}`);
       return [];
     }
+
+    const pairs = response.data.pairs || [];
+    return pairs.filter(p => p.chainId === 'solana');
   }
 
+  // ============================================
+  // Trending & Discovery
+  // ============================================
+
+  /**
+   * Get trending tokens from boosts/profiles
+   */
   async getTrendingTokens(limit: number = 10): Promise<TrendingToken[]> {
-    const cacheKey = `trending:${limit}`;
-    const cached = this.getCached<TrendingToken[]>(cacheKey);
-    if (cached) return cached;
+    // Try boosts endpoint first
+    const boostsResponse = await this.boostsApi.get<any[]>(
+      '/latest/v1',
+      {
+        cache: true,
+        cacheKey: `boosts:trending:${limit}`,
+        cacheTTL: 60000, // 1 minute
+        validator: validators.isArray(0),
+      }
+    );
 
-    try {
-      // Use token-boosts endpoint for actually trending/boosted tokens
-      await rateLimiter.acquire();
-      const boostsResponse = await withRetry(
-        () => axios.get(BOOSTS_URL, { timeout: 10000 }),
-        { maxRetries: 2, initialDelayMs: 500 }
-      );
-      const boosts = boostsResponse.data || [];
+    let solanaTokens: any[] = [];
 
-      // Filter for Solana tokens and get token addresses
-      const solanaTokens = boosts
+    if (!boostsResponse.error && boostsResponse.data) {
+      solanaTokens = boostsResponse.data
         .filter((b: any) => b.chainId === 'solana')
         .slice(0, limit * 2);
+    }
 
-      if (solanaTokens.length === 0) {
-        // Fallback to profiles endpoint
-        return await this.getTrendingFromProfiles(limit);
-      }
-
-      // Batch fetch all token data at once instead of one-by-one
-      const tokenAddresses = solanaTokens.map((t: any) => t.tokenAddress);
-      const pairDataMap = await this.getMultipleTokensData(tokenAddresses);
-
-      const trending: TrendingToken[] = [];
-      for (const token of solanaTokens) {
-        if (trending.length >= limit) break;
-        const pairData = pairDataMap.get(token.tokenAddress);
-        if (pairData && pairData.baseToken.symbol !== 'SOL' && (pairData.liquidity?.usd || 0) >= 1000) {
-          trending.push(this.pairToTrendingToken(pairData));
-        }
-      }
-
-      this.setCache(cacheKey, trending);
-      return trending;
-    } catch (error) {
-      console.error('DexScreener: Failed to fetch trending, trying profiles:', error);
+    // Fallback to profiles if no boosts
+    if (solanaTokens.length === 0) {
       return await this.getTrendingFromProfiles(limit);
     }
+
+    // Batch fetch token data
+    const tokenAddresses = solanaTokens.map((t: any) => t.tokenAddress);
+    const pairDataMap = await this.getMultipleTokensData(tokenAddresses);
+
+    const trending: TrendingToken[] = [];
+    for (const token of solanaTokens) {
+      if (trending.length >= limit) break;
+      const pairData = pairDataMap.get(token.tokenAddress);
+      if (pairData && pairData.baseToken.symbol !== 'SOL' && (pairData.liquidity?.usd || 0) >= 1000) {
+        trending.push(this.pairToTrendingToken(pairData));
+      }
+    }
+
+    // Fill with profiles if not enough
+    if (trending.length < limit) {
+      const profileTokens = await this.getTrendingFromProfiles(limit - trending.length);
+      trending.push(...profileTokens);
+    }
+
+    return trending.slice(0, limit);
   }
 
   private async getTrendingFromProfiles(limit: number): Promise<TrendingToken[]> {
-    try {
-      await rateLimiter.acquire();
-      const response = await withRetry(
-        () => axios.get(PROFILES_URL, { timeout: 10000 }),
-        { maxRetries: 2, initialDelayMs: 500 }
-      );
-      const profiles = response.data || [];
-
-      const solanaProfiles = profiles
-        .filter((p: any) => p.chainId === 'solana')
-        .slice(0, limit * 2);
-
-      // Batch fetch all token data
-      const tokenAddresses = solanaProfiles.map((p: any) => p.tokenAddress);
-      const pairDataMap = await this.getMultipleTokensData(tokenAddresses);
-
-      const trending: TrendingToken[] = [];
-      for (const profile of solanaProfiles) {
-        if (trending.length >= limit) break;
-        const pairData = pairDataMap.get(profile.tokenAddress);
-        if (pairData && pairData.baseToken.symbol !== 'SOL' && (pairData.liquidity?.usd || 0) >= 1000) {
-          trending.push(this.pairToTrendingToken(pairData));
-        }
+    const response = await this.profilesApi.get<any[]>(
+      '/latest/v1',
+      {
+        cache: true,
+        cacheKey: `profiles:trending:${limit}`,
+        cacheTTL: 60000,
+        validator: validators.isArray(0),
       }
+    );
 
-      return trending;
-    } catch (error) {
-      console.error('DexScreener: Failed to fetch profiles:', error);
+    if (response.error || !response.data) {
+      logger.warn('DexScreener', `Failed to fetch profiles: ${response.error}`);
       return [];
     }
-  }
 
-  async getTopGainers(limit: number = 10): Promise<TrendingToken[]> {
-    const cacheKey = `gainers:${limit}`;
-    const cached = this.getCached<TrendingToken[]>(cacheKey);
-    if (cached) return cached;
+    const solanaProfiles = response.data
+      .filter((p: any) => p.chainId === 'solana')
+      .slice(0, limit * 2);
 
-    try {
-      // Get trending tokens and sort by price change
-      const trending = await this.fetchSolanaPairsFromBoosts();
-      const gainers = trending
-        .filter((p: DexScreenerPair) => (p.priceChange?.h24 || 0) > 0)
-        .sort((a: DexScreenerPair, b: DexScreenerPair) => (b.priceChange?.h24 || 0) - (a.priceChange?.h24 || 0))
-        .slice(0, limit)
-        .map((p: DexScreenerPair) => this.pairToTrendingToken(p));
+    const tokenAddresses = solanaProfiles.map((p: any) => p.tokenAddress);
+    const pairDataMap = await this.getMultipleTokensData(tokenAddresses);
 
-      this.setCache(cacheKey, gainers);
-      return gainers;
-    } catch (error) {
-      console.error('DexScreener: Failed to fetch gainers:', error);
-      return [];
-    }
-  }
-
-  async getTopLosers(limit: number = 10): Promise<TrendingToken[]> {
-    const cacheKey = `losers:${limit}`;
-    const cached = this.getCached<TrendingToken[]>(cacheKey);
-    if (cached) return cached;
-
-    try {
-      const trending = await this.fetchSolanaPairsFromBoosts();
-      const losers = trending
-        .filter((p: DexScreenerPair) => (p.priceChange?.h24 || 0) < 0)
-        .sort((a: DexScreenerPair, b: DexScreenerPair) => (a.priceChange?.h24 || 0) - (b.priceChange?.h24 || 0))
-        .slice(0, limit)
-        .map((p: DexScreenerPair) => this.pairToTrendingToken(p));
-
-      this.setCache(cacheKey, losers);
-      return losers;
-    } catch (error) {
-      console.error('DexScreener: Failed to fetch losers:', error);
-      return [];
-    }
-  }
-
-  async getVolumeLeaders(limit: number = 10): Promise<TrendingToken[]> {
-    const cacheKey = `volume:${limit}`;
-    const cached = this.getCached<TrendingToken[]>(cacheKey);
-    if (cached) return cached;
-
-    try {
-      const trending = await this.fetchSolanaPairsFromBoosts();
-      const leaders = trending
-        .sort((a: DexScreenerPair, b: DexScreenerPair) => (b.volume?.h24 || 0) - (a.volume?.h24 || 0))
-        .slice(0, limit)
-        .map((p: DexScreenerPair) => this.pairToTrendingToken(p));
-
-      this.setCache(cacheKey, leaders);
-      return leaders;
-    } catch (error) {
-      console.error('DexScreener: Failed to fetch volume leaders:', error);
-      return [];
-    }
-  }
-
-  async getNewTokens(maxAgeHours: number = 24, limit: number = 10): Promise<TrendingToken[]> {
-    const cacheKey = `new:${maxAgeHours}:${limit}`;
-    const cached = this.getCached<TrendingToken[]>(cacheKey);
-    if (cached) return cached;
-
-    try {
-      const trending = await this.fetchSolanaPairsFromBoosts();
-      const now = Date.now();
-      const maxAge = maxAgeHours * 60 * 60 * 1000;
-
-      const newTokens = trending
-        .filter((p: DexScreenerPair) => {
-          if (!p.pairCreatedAt) return false;
-          return (now - p.pairCreatedAt) <= maxAge;
-        })
-        .sort((a: DexScreenerPair, b: DexScreenerPair) => (b.pairCreatedAt || 0) - (a.pairCreatedAt || 0))
-        .slice(0, limit)
-        .map((p: DexScreenerPair) => this.pairToTrendingToken(p));
-
-      this.setCache(cacheKey, newTokens);
-      return newTokens;
-    } catch (error) {
-      console.error('DexScreener: Failed to fetch new tokens:', error);
-      return [];
-    }
-  }
-
-  // Helper to fetch Solana pairs from boosts/profiles
-  private async fetchSolanaPairsFromBoosts(): Promise<DexScreenerPair[]> {
-    const cacheKey = 'solana_pairs_raw';
-    const cached = this.getCached<DexScreenerPair[]>(cacheKey);
-    if (cached) return cached;
-
-    try {
-      // Try boosts first
-      await rateLimiter.acquire();
-      const boostsResponse = await withRetry(
-        () => axios.get(BOOSTS_URL, { timeout: 10000 }),
-        { maxRetries: 2, initialDelayMs: 500 }
-      );
-      const boosts = boostsResponse.data || [];
-      const solanaTokens = boosts.filter((b: any) => b.chainId === 'solana').slice(0, 30);
-
-      // Batch fetch all token data
-      const tokenAddresses = solanaTokens.map((t: any) => t.tokenAddress);
-      const pairDataMap = await this.getMultipleTokensData(tokenAddresses);
-
-      const pairs: DexScreenerPair[] = [];
-      const seenAddresses = new Set<string>();
-
-      for (const token of solanaTokens) {
-        const pairData = pairDataMap.get(token.tokenAddress);
-        if (pairData && pairData.baseToken.symbol !== 'SOL' && (pairData.liquidity?.usd || 0) >= 500) {
-          if (!seenAddresses.has(pairData.baseToken.address)) {
-            pairs.push(pairData);
-            seenAddresses.add(pairData.baseToken.address);
-          }
-        }
+    const trending: TrendingToken[] = [];
+    for (const profile of solanaProfiles) {
+      if (trending.length >= limit) break;
+      const pairData = pairDataMap.get(profile.tokenAddress);
+      if (pairData && pairData.baseToken.symbol !== 'SOL' && (pairData.liquidity?.usd || 0) >= 1000) {
+        trending.push(this.pairToTrendingToken(pairData));
       }
-
-      // If not enough from boosts, try profiles
-      if (pairs.length < 10) {
-        await rateLimiter.acquire();
-        const profilesResponse = await withRetry(
-          () => axios.get(PROFILES_URL, { timeout: 10000 }),
-          { maxRetries: 2, initialDelayMs: 500 }
-        );
-        const profiles = profilesResponse.data || [];
-        const solanaProfiles = profiles.filter((p: any) => p.chainId === 'solana').slice(0, 30);
-
-        // Batch fetch profiles tokens
-        const profileAddresses = solanaProfiles.map((p: any) => p.tokenAddress);
-        const profilePairMap = await this.getMultipleTokensData(profileAddresses);
-
-        for (const profile of solanaProfiles) {
-          const pairData = profilePairMap.get(profile.tokenAddress);
-          if (pairData && pairData.baseToken.symbol !== 'SOL' && (pairData.liquidity?.usd || 0) >= 500) {
-            if (!seenAddresses.has(pairData.baseToken.address)) {
-              pairs.push(pairData);
-              seenAddresses.add(pairData.baseToken.address);
-            }
-          }
-        }
-      }
-
-      this.setCache(cacheKey, pairs);
-      return pairs;
-    } catch (error) {
-      console.error('DexScreener: Failed to fetch Solana pairs:', error);
-      return [];
     }
-  }
 
-  private pairToTrendingToken(pair: DexScreenerPair): TrendingToken {
-    return {
-      mint: pair.baseToken.address,
-      symbol: pair.baseToken.symbol,
-      name: pair.baseToken.name,
-      priceUsd: parseFloat(pair.priceUsd || '0'),
-      priceChange1h: pair.priceChange?.h1 || 0,
-      priceChange24h: pair.priceChange?.h24 || 0,
-      volume1h: pair.volume?.h1 || 0,
-      volume24h: pair.volume?.h24 || 0,
-      liquidity: pair.liquidity?.usd || 0,
-      marketCap: pair.marketCap,
-      txns24h: {
-        buys: pair.txns?.h24?.buys || 0,
-        sells: pair.txns?.h24?.sells || 0,
-      },
-      pairAddress: pair.pairAddress,
-      dexId: pair.dexId,
-      createdAt: pair.pairCreatedAt,
-    };
+    return trending;
   }
 
   /**
-   * Get pair data by pair address
+   * Get top gainers
+   */
+  async getTopGainers(limit: number = 10): Promise<TrendingToken[]> {
+    const trending = await this.fetchSolanaPairsFromBoosts();
+    return trending
+      .filter((p: DexScreenerPair) => (p.priceChange?.h24 || 0) > 0)
+      .sort((a: DexScreenerPair, b: DexScreenerPair) => (b.priceChange?.h24 || 0) - (a.priceChange?.h24 || 0))
+      .slice(0, limit)
+      .map((p: DexScreenerPair) => this.pairToTrendingToken(p));
+  }
+
+  /**
+   * Get top losers
+   */
+  async getTopLosers(limit: number = 10): Promise<TrendingToken[]> {
+    const trending = await this.fetchSolanaPairsFromBoosts();
+    return trending
+      .filter((p: DexScreenerPair) => (p.priceChange?.h24 || 0) < 0)
+      .sort((a: DexScreenerPair, b: DexScreenerPair) => (a.priceChange?.h24 || 0) - (b.priceChange?.h24 || 0))
+      .slice(0, limit)
+      .map((p: DexScreenerPair) => this.pairToTrendingToken(p));
+  }
+
+  /**
+   * Get volume leaders
+   */
+  async getVolumeLeaders(limit: number = 10): Promise<TrendingToken[]> {
+    const trending = await this.fetchSolanaPairsFromBoosts();
+    return trending
+      .sort((a: DexScreenerPair, b: DexScreenerPair) => (b.volume?.h24 || 0) - (a.volume?.h24 || 0))
+      .slice(0, limit)
+      .map((p: DexScreenerPair) => this.pairToTrendingToken(p));
+  }
+
+  /**
+   * Get new tokens
+   */
+  async getNewTokens(maxAgeHours: number = 24, limit: number = 10): Promise<TrendingToken[]> {
+    const trending = await this.fetchSolanaPairsFromBoosts();
+    const now = Date.now();
+    const maxAge = maxAgeHours * 60 * 60 * 1000;
+
+    return trending
+      .filter((p: DexScreenerPair) => {
+        if (!p.pairCreatedAt) return false;
+        return (now - p.pairCreatedAt) <= maxAge;
+      })
+      .sort((a: DexScreenerPair, b: DexScreenerPair) => (b.pairCreatedAt || 0) - (a.pairCreatedAt || 0))
+      .slice(0, limit)
+      .map((p: DexScreenerPair) => this.pairToTrendingToken(p));
+  }
+
+  // ============================================
+  // Pair Methods
+  // ============================================
+
+  /**
+   * Get pair by address
    */
   async getPairByAddress(pairAddress: string): Promise<DexScreenerPair | null> {
-    const cacheKey = `pair:${pairAddress}`;
-    const cached = this.getCached<DexScreenerPair>(cacheKey);
-    if (cached) return cached;
+    const response = await this.api.get<DexScreenerResponse>(
+      `/pairs/solana/${pairAddress}`,
+      {
+        cache: true,
+        cacheKey: `pair:${pairAddress}`,
+        cacheTTL: 300000,
+        validator: validators.hasFields(['pairs']),
+      }
+    );
 
-    try {
-      await rateLimiter.acquire();
-      const response = await withRetry(
-        () => this.client.get<DexScreenerResponse>(`/pairs/solana/${pairAddress}`),
-        { maxRetries: 2, initialDelayMs: 500 }
-      );
-      const pairs = response.data.pairs || [];
-      if (pairs.length === 0) return null;
-
-      const pair = pairs[0];
-      this.setCache(cacheKey, pair);
-      return pair;
-    } catch (error) {
-      console.error(`DexScreener: Failed to fetch pair ${pairAddress}:`, error);
+    if (response.error || !response.data) {
+      logger.warn('DexScreener', `Failed to fetch pair ${pairAddress}: ${response.error}`);
       return null;
     }
+
+    const pairs = response.data.pairs || [];
+    return pairs.length > 0 ? pairs[0] : null;
   }
 
   /**
-   * Get multiple pairs by addresses in batch
+   * Get multiple pairs in batch
    */
   async getMultiplePairs(pairAddresses: string[]): Promise<Map<string, DexScreenerPair>> {
     const results = new Map<string, DexScreenerPair>();
     if (pairAddresses.length === 0) return results;
 
-    // Check cache first
-    const uncached: string[] = [];
-    for (const addr of pairAddresses) {
-      const cached = this.getCached<DexScreenerPair>(`pair:${addr}`);
-      if (cached) {
-        results.set(addr, cached);
-      } else {
-        uncached.push(addr);
-      }
-    }
-
-    if (uncached.length === 0) return results;
-
-    // DexScreener pairs endpoint supports comma-separated addresses
     const batchSize = 30;
-    for (let i = 0; i < uncached.length; i += batchSize) {
-      const batch = uncached.slice(i, i + batchSize);
-      try {
-        await rateLimiter.acquire();
-        const response = await withRetry(
-          () => this.client.get<DexScreenerResponse>(`/pairs/solana/${batch.join(',')}`),
-          { maxRetries: 2, initialDelayMs: 500 }
-        );
-
-        for (const pair of response.data.pairs || []) {
-          this.setCache(`pair:${pair.pairAddress}`, pair);
-          results.set(pair.pairAddress, pair);
+    for (let i = 0; i < pairAddresses.length; i += batchSize) {
+      const batch = pairAddresses.slice(i, i + batchSize);
+      const response = await this.api.get<DexScreenerResponse>(
+        `/pairs/solana/${batch.join(',')}`,
+        {
+          cache: true,
+          cacheKey: `pairs:batch:${batch.join(',')}`,
+          cacheTTL: 300000,
         }
-      } catch (error) {
-        console.error(`DexScreener: Batch pair fetch failed:`, error);
+      );
+
+      if (response.error || !response.data) {
+        logger.warn('DexScreener', `Batch pair fetch failed: ${response.error}`);
+        continue;
+      }
+
+      for (const pair of response.data.pairs || []) {
+        results.set(pair.pairAddress, pair);
       }
     }
 
     return results;
   }
 
+  // ============================================
+  // Advanced Features
+  // ============================================
+
   /**
-   * Get token profile with social links and additional info
+   * Get token profile with social links
    */
   async getTokenProfile(tokenAddress: string): Promise<{
     socials: { type: string; url: string }[];
@@ -505,7 +392,6 @@ class DexScreenerService {
     const pairs = await this.getTokenPairs(tokenAddress);
     if (pairs.length === 0) return null;
 
-    // Get the best pair with most info
     const pairWithInfo = pairs.find(p => p.info) || pairs[0];
     if (!pairWithInfo.info) return null;
 
@@ -513,51 +399,12 @@ class DexScreenerService {
       socials: pairWithInfo.info.socials || [],
       websites: pairWithInfo.info.websites || [],
       imageUrl: pairWithInfo.info.imageUrl,
-      description: undefined, // DexScreener doesn't provide description
+      description: undefined,
     };
   }
 
   /**
-   * Get recently created pairs (more reliable than token-boosts for new tokens)
-   */
-  async getRecentPairs(maxAgeMinutes: number = 30, limit: number = 20): Promise<TrendingToken[]> {
-    const cacheKey = `recent:${maxAgeMinutes}:${limit}`;
-    const cached = this.getCached<TrendingToken[]>(cacheKey);
-    if (cached) return cached;
-
-    try {
-      // Use search to find new Solana pairs
-      await rateLimiter.acquire();
-      const response = await withRetry(
-        () => this.client.get<DexScreenerResponse>('/search?q=solana'),
-        { maxRetries: 2, initialDelayMs: 500 }
-      );
-
-      const now = Date.now();
-      const maxAge = maxAgeMinutes * 60 * 1000;
-
-      const recentPairs = (response.data.pairs || [])
-        .filter(p => {
-          if (p.chainId !== 'solana') return false;
-          if (!p.pairCreatedAt) return false;
-          if ((now - p.pairCreatedAt) > maxAge) return false;
-          if ((p.liquidity?.usd || 0) < 500) return false;
-          return true;
-        })
-        .sort((a, b) => (b.pairCreatedAt || 0) - (a.pairCreatedAt || 0))
-        .slice(0, limit)
-        .map(p => this.pairToTrendingToken(p));
-
-      this.setCache(cacheKey, recentPairs);
-      return recentPairs;
-    } catch (error) {
-      console.error('DexScreener: Failed to fetch recent pairs:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Enhanced token data with buy/sell ratio analysis
+   * Get token with buy/sell analysis
    */
   async getTokenWithBuySellAnalysis(tokenAddress: string): Promise<{
     pair: DexScreenerPair;
@@ -590,8 +437,149 @@ class DexScreenerService {
     };
   }
 
+  /**
+   * Get recently created pairs
+   */
+  async getRecentPairs(maxAgeMinutes: number = 30, limit: number = 20): Promise<TrendingToken[]> {
+    const response = await this.api.get<DexScreenerResponse>(
+      '/search?q=solana',
+      {
+        cache: true,
+        cacheKey: `recent:${maxAgeMinutes}:${limit}`,
+        cacheTTL: 60000, // 1 minute
+      }
+    );
+
+    if (response.error || !response.data) {
+      logger.warn('DexScreener', `Failed to fetch recent pairs: ${response.error}`);
+      return [];
+    }
+
+    const now = Date.now();
+    const maxAge = maxAgeMinutes * 60 * 1000;
+
+    return (response.data.pairs || [])
+      .filter(p => {
+        if (p.chainId !== 'solana') return false;
+        if (!p.pairCreatedAt) return false;
+        if ((now - p.pairCreatedAt) > maxAge) return false;
+        if ((p.liquidity?.usd || 0) < 500) return false;
+        return true;
+      })
+      .sort((a, b) => (b.pairCreatedAt || 0) - (a.pairCreatedAt || 0))
+      .slice(0, limit)
+      .map(p => this.pairToTrendingToken(p));
+  }
+
+  // ============================================
+  // Helper Methods
+  // ============================================
+
+  private async fetchSolanaPairsFromBoosts(): Promise<DexScreenerPair[]> {
+    // Try boosts first
+    const boostsResponse = await this.boostsApi.get<any[]>(
+      '/latest/v1',
+      { cache: true, cacheKey: 'solana_pairs_raw', cacheTTL: 60000 }
+    );
+
+    const pairs: DexScreenerPair[] = [];
+    const seenAddresses = new Set<string>();
+
+    if (!boostsResponse.error && boostsResponse.data) {
+      const solanaTokens = boostsResponse.data
+        .filter((b: any) => b.chainId === 'solana')
+        .slice(0, 30);
+
+      const tokenAddresses = solanaTokens.map((t: any) => t.tokenAddress);
+      const pairDataMap = await this.getMultipleTokensData(tokenAddresses);
+
+      for (const token of solanaTokens) {
+        const pairData = pairDataMap.get(token.tokenAddress);
+        if (pairData && pairData.baseToken.symbol !== 'SOL' && (pairData.liquidity?.usd || 0) >= 500) {
+          if (!seenAddresses.has(pairData.baseToken.address)) {
+            pairs.push(pairData);
+            seenAddresses.add(pairData.baseToken.address);
+          }
+        }
+      }
+    }
+
+    // Fill from profiles if not enough
+    if (pairs.length < 10) {
+      const profilesResponse = await this.profilesApi.get<any[]>(
+        '/latest/v1',
+        { cache: true, cacheTTL: 60000 }
+      );
+
+      if (!profilesResponse.error && profilesResponse.data) {
+        const solanaProfiles = profilesResponse.data
+          .filter((p: any) => p.chainId === 'solana')
+          .slice(0, 30);
+
+        const profileAddresses = solanaProfiles.map((p: any) => p.tokenAddress);
+        const profilePairMap = await this.getMultipleTokensData(profileAddresses);
+
+        for (const profile of solanaProfiles) {
+          const pairData = profilePairMap.get(profile.tokenAddress);
+          if (pairData && pairData.baseToken.symbol !== 'SOL' && (pairData.liquidity?.usd || 0) >= 500) {
+            if (!seenAddresses.has(pairData.baseToken.address)) {
+              pairs.push(pairData);
+              seenAddresses.add(pairData.baseToken.address);
+            }
+          }
+        }
+      }
+    }
+
+    return pairs;
+  }
+
+  private pairToTrendingToken(pair: DexScreenerPair): TrendingToken {
+    return {
+      mint: pair.baseToken.address,
+      symbol: pair.baseToken.symbol,
+      name: pair.baseToken.name,
+      priceUsd: parseFloat(pair.priceUsd || '0'),
+      priceChange1h: pair.priceChange?.h1 || 0,
+      priceChange24h: pair.priceChange?.h24 || 0,
+      volume1h: pair.volume?.h1 || 0,
+      volume24h: pair.volume?.h24 || 0,
+      liquidity: pair.liquidity?.usd || 0,
+      marketCap: pair.marketCap,
+      txns24h: {
+        buys: pair.txns?.h24?.buys || 0,
+        sells: pair.txns?.h24?.sells || 0,
+      },
+      pairAddress: pair.pairAddress,
+      dexId: pair.dexId,
+      createdAt: pair.pairCreatedAt,
+    };
+  }
+
+  // ============================================
+  // Utility Methods
+  // ============================================
+
   clearCache(): void {
-    this.cache.clear();
+    this.api.clearCache();
+    this.boostsApi.clearCache();
+    this.profilesApi.clearCache();
+  }
+
+  getStats(): {
+    main: any;
+    boosts: any;
+    profiles: any;
+  } {
+    return {
+      main: this.api.getStats(),
+      boosts: this.boostsApi.getStats(),
+      profiles: this.profilesApi.getStats(),
+    };
+  }
+
+  isHealthy(): boolean {
+    return this.api.isHealthy();
   }
 }
 

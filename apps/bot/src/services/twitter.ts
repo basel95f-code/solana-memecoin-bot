@@ -1,6 +1,6 @@
-import type { AxiosInstance } from 'axios';
-import axios from 'axios';
 import { SENTIMENT, TIMEOUTS } from '../constants';
+import { ResilientApiClient, validators } from './resilientApi';
+import { logger } from '../utils/logger';
 
 const BASE_URL = 'https://api.twitter.com/2';
 
@@ -34,8 +34,12 @@ interface TwitterSearchResponse {
   };
 }
 
+// ============================================
+// Resilient Twitter Client
+// ============================================
+
 class TwitterService {
-  private client: AxiosInstance;
+  private api: ResilientApiClient | null = null;
   private bearerToken: string | undefined;
   private cache: Map<string, CachedSearch> = new Map();
   private rateLimitRemaining: number = SENTIMENT.TWITTER_RATE_LIMIT;
@@ -43,85 +47,105 @@ class TwitterService {
 
   constructor() {
     this.bearerToken = process.env.TWITTER_BEARER_TOKEN;
-    this.client = axios.create({
-      baseURL: BASE_URL,
-      timeout: TIMEOUTS.HTTP_REQUEST_MS,
-      headers: {
-        'Authorization': `Bearer ${this.bearerToken}`,
-      },
-    });
+
+    // Only create API client if configured
+    if (this.bearerToken) {
+      this.api = new ResilientApiClient({
+        name: 'Twitter',
+        baseURL: BASE_URL,
+        timeout: TIMEOUTS.HTTP_REQUEST_MS || 10000,
+        maxRetries: 2, // Twitter is strict, don't retry too much
+        rateLimit: { maxTokens: 15, refillRate: 0.25 }, // 15 requests per minute
+        circuitBreaker: { threshold: 3, resetTimeMs: 300000 }, // 5 minutes
+        cacheTTL: SENTIMENT.CACHE_TTL_MS || 300000,
+        headers: {
+          'Authorization': `Bearer ${this.bearerToken}`,
+        },
+      });
+    }
   }
 
   isConfigured(): boolean {
-    return !!this.bearerToken;
+    return !!this.bearerToken && !!this.api;
   }
 
+  /**
+   * Search recent tweets with robust error handling
+   */
   async searchRecentTweets(
     searchTerms: string[],
     options: TwitterSearchOptions = {}
   ): Promise<string[]> {
-    if (!this.isConfigured()) {
+    if (!this.isConfigured() || !this.api) {
+      logger.debug('Twitter', 'Service not configured (missing bearer token)');
       return [];
     }
 
     // Check rate limit
     if (!this.canMakeRequest()) {
-      console.log('Twitter: Rate limit reached, using cached data if available');
+      logger.info('Twitter', 'Rate limit reached, using cached data');
       return this.getCachedResults(searchTerms);
     }
 
     const query = this.buildQuery(searchTerms, options);
+    const maxResults = Math.min(options.maxResults || SENTIMENT.MAX_TWEETS || 100, 100);
 
-    // Check cache first
-    const cached = this.cache.get(query);
-    if (cached && Date.now() - cached.cachedAt < SENTIMENT.CACHE_TTL_MS) {
-      return cached.tweets;
-    }
-
-    try {
-      const maxResults = Math.min(options.maxResults || SENTIMENT.MAX_TWEETS, 100);
-
-      const response = await this.client.get<TwitterSearchResponse>('/tweets/search/recent', {
-        params: {
-          query,
-          max_results: maxResults,
-          'tweet.fields': 'created_at,public_metrics',
+    // Make API request with resilience
+    const response = await this.api.get<TwitterSearchResponse>(
+      '/tweets/search/recent',
+      {
+        cache: true,
+        cacheKey: `search:${query}:${maxResults}`,
+        cacheTTL: SENTIMENT.CACHE_TTL_MS || 300000,
+        validator: (data) => data && typeof data === 'object',
+        config: {
+          params: {
+            query,
+            max_results: maxResults,
+            'tweet.fields': 'created_at,public_metrics',
+          },
         },
-      });
+      }
+    );
 
-      // Update rate limit tracking
-      this.updateRateLimit(response.headers);
-
-      const tweets = response.data?.data || [];
-      const tweetTexts = tweets.map((t) => t.text);
-
-      // Cache results
-      this.cache.set(query, {
-        query,
-        tweets: tweetTexts,
-        cachedAt: Date.now(),
-      });
-
-      return tweetTexts;
-    } catch (error: any) {
-      if (error.response?.status === 429) {
-        // Rate limited - update reset time
-        const resetHeader = error.response.headers['x-rate-limit-reset'];
-        if (resetHeader) {
-          this.rateLimitReset = parseInt(resetHeader, 10) * 1000;
-        }
+    // Handle errors
+    if (response.error) {
+      if (response.error.includes('429')) {
+        logger.warn('Twitter', 'Rate limited, using cached data');
         this.rateLimitRemaining = 0;
-        console.log('Twitter: Rate limited, using cached data');
-      } else if (error.response?.status === 401) {
-        console.error('Twitter: Invalid bearer token');
+        this.rateLimitReset = Date.now() + 900000; // 15 minutes
+      } else if (response.error.includes('401')) {
+        logger.error('Twitter', 'Invalid bearer token');
       } else {
-        console.error('Twitter: Search failed:', error.message);
+        logger.warn('Twitter', `Search failed: ${response.error}`);
       }
 
-      // Return cached results if available
       return this.getCachedResults(searchTerms);
     }
+
+    // Extract tweets
+    if (!response.data) {
+      logger.warn('Twitter', 'Empty response from API');
+      return this.getCachedResults(searchTerms);
+    }
+
+    const tweets = response.data.data || [];
+    const tweetTexts = tweets.map((t) => t.text);
+
+    // Cache results
+    this.cache.set(query, {
+      query,
+      tweets: tweetTexts,
+      cachedAt: Date.now(),
+    });
+
+    logger.debug('Twitter', `Found ${tweetTexts.length} tweets for: ${searchTerms.join(', ')}`);
+    return tweetTexts;
   }
+
+  // ============================================
+  // Helper Methods
+  // ============================================
 
   private buildQuery(searchTerms: string[], options: TwitterSearchOptions): string {
     // Build OR query from search terms
@@ -141,7 +165,7 @@ class TwitterService {
   }
 
   private canMakeRequest(): boolean {
-    if (this.rateLimitRemaining > SENTIMENT.TWITTER_RATE_LIMIT_BUFFER) {
+    if (this.rateLimitRemaining > (SENTIMENT.TWITTER_RATE_LIMIT_BUFFER || 2)) {
       return true;
     }
 
@@ -154,44 +178,64 @@ class TwitterService {
     return false;
   }
 
-  private updateRateLimit(headers: any): void {
-    const remaining = headers['x-rate-limit-remaining'];
-    const reset = headers['x-rate-limit-reset'];
-
-    if (remaining !== undefined) {
-      this.rateLimitRemaining = parseInt(remaining, 10);
-    }
-    if (reset !== undefined) {
-      this.rateLimitReset = parseInt(reset, 10) * 1000;
-    }
-  }
-
   private getCachedResults(searchTerms: string[]): string[] {
     // Try to find any cached results for these terms (including stale)
+    const staleTTL = SENTIMENT.STALE_CACHE_TTL_MS || 3600000; // 1 hour
     for (const [query, cached] of this.cache.entries()) {
-      const isStaleValid = Date.now() - cached.cachedAt < SENTIMENT.STALE_CACHE_TTL_MS;
+      const isStaleValid = Date.now() - cached.cachedAt < staleTTL;
       if (isStaleValid && searchTerms.some((term) => query.includes(term))) {
+        logger.debug('Twitter', `Using cached results for: ${searchTerms.join(', ')}`);
         return cached.tweets;
       }
     }
     return [];
   }
 
+  /**
+   * Clean up old cache entries
+   */
   cleanupCache(): void {
     const now = Date.now();
+    const staleTTL = SENTIMENT.STALE_CACHE_TTL_MS || 3600000;
 
+    let cleaned = 0;
     for (const [query, cached] of this.cache.entries()) {
-      if (now - cached.cachedAt > SENTIMENT.STALE_CACHE_TTL_MS) {
+      if (now - cached.cachedAt > staleTTL) {
         this.cache.delete(query);
+        cleaned++;
       }
+    }
+
+    if (cleaned > 0) {
+      logger.debug('Twitter', `Cleaned ${cleaned} stale cache entries`);
     }
   }
 
-  getStats(): { cacheSize: number; rateLimitRemaining: number } {
+  // ============================================
+  // Stats & Health
+  // ============================================
+
+  getStats(): {
+    configured: boolean;
+    cacheSize: number;
+    rateLimitRemaining: number;
+    healthy: boolean;
+  } {
     return {
+      configured: this.isConfigured(),
       cacheSize: this.cache.size,
       rateLimitRemaining: this.rateLimitRemaining,
+      healthy: this.api?.isHealthy() ?? false,
     };
+  }
+
+  clearCache(): void {
+    this.cache.clear();
+    this.api?.clearCache();
+  }
+
+  isHealthy(): boolean {
+    return this.isConfigured() && (this.api?.isHealthy() ?? false);
   }
 }
 

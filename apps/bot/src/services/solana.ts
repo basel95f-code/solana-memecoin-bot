@@ -17,13 +17,32 @@ import {
 import { config } from '../config';
 import type { TokenInfo, TokenMetadata } from '../types';
 import { withRetry, ResilientExecutor } from '../utils/retry';
+import { logger } from '../utils/logger';
 import axios from 'axios';
 
-// Resilient executor for RPC calls
+// Resilient executor for RPC calls with enhanced configuration
 const rpcExecutor = new ResilientExecutor({
   circuitBreaker: { threshold: 10, resetTimeMs: 30000 },
   rateLimiter: { maxTokens: 20, refillRate: 5 },
-  retry: { maxRetries: 3, initialDelayMs: 500 },
+  retry: {
+    maxRetries: 3,
+    initialDelayMs: 500,
+    maxDelayMs: 15000,
+    backoffMultiplier: 2,
+    retryableErrors: [
+      'ECONNRESET',
+      'ETIMEDOUT',
+      'ECONNREFUSED',
+      'ENOTFOUND',
+      '429',
+      '500',
+      '502',
+      '503',
+      '504',
+      'timeout',
+      'network',
+    ],
+  },
 });
 
 class SolanaService {
@@ -51,18 +70,28 @@ class SolanaService {
 
   async verifyConnection(): Promise<void> {
     try {
-      const version = await this.connection.getVersion();
-      console.log(`Solana RPC connected: ${config.solanaRpcUrl}`);
-      console.log(`Solana version: ${version['solana-core']}`);
+      const version = await rpcExecutor.execute(
+        () => this.connection.getVersion(),
+        'verifyConnection'
+      );
+      logger.info('Solana', `RPC connected: ${config.solanaRpcUrl}`);
+      logger.info('Solana', `Version: ${version['solana-core']}`);
     } catch (error) {
-      console.error('Failed to connect to Solana RPC:', error);
-      throw new Error(`Cannot connect to Solana RPC at ${config.solanaRpcUrl}`);
+      logger.error('Solana', `Failed to connect to RPC: ${(error as Error).message}`);
+      throw new Error(`Unable to connect to Solana network. Please check your RPC endpoint.`);
     }
   }
 
   async getTokenInfo(mintAddress: string): Promise<TokenInfo | null> {
     try {
-      const mintPubkey = new PublicKey(mintAddress);
+      // Validate address
+      let mintPubkey: PublicKey;
+      try {
+        mintPubkey = new PublicKey(mintAddress);
+      } catch {
+        logger.warn('Solana', `Invalid token address: ${mintAddress}`);
+        return null;
+      }
 
       // Try Token Program first, then Token-2022, with retry logic
       const mint = await rpcExecutor.execute(async () => {
@@ -72,6 +101,12 @@ class SolanaService {
           return await getMint(this.connection, mintPubkey, 'confirmed', TOKEN_2022_PROGRAM_ID);
         }
       }, `getMint:${mintAddress.slice(0, 8)}`);
+
+      // Validate mint data
+      if (!mint || typeof mint.decimals !== 'number' || mint.decimals < 0 || mint.decimals > 18) {
+        logger.warn('Solana', `Invalid mint data for ${mintAddress}`);
+        return null;
+      }
 
       const metadata = await this.getTokenMetadata(mintAddress);
 
@@ -84,7 +119,7 @@ class SolanaService {
         metadata: metadata ?? undefined,
       };
     } catch (error) {
-      console.error(`Failed to get token info for ${mintAddress}:`, error);
+      logger.error('Solana', `Failed to get token info for ${mintAddress}: ${(error as Error).message}`);
       return null;
     }
   }
@@ -101,18 +136,29 @@ class SolanaService {
       if (accountInfo) {
         const metadata = this.parseMetadata(accountInfo.data);
 
-        // If there's a URI, fetch additional metadata
-        if (metadata.uri) {
-          const extendedMetadata = await this.fetchMetadataUri(metadata.uri);
-          return { ...metadata, ...extendedMetadata };
+        // Validate parsed metadata
+        if (!metadata.name && !metadata.symbol) {
+          logger.debug('Solana', `Invalid parsed metadata for ${mintAddress}`);
+        } else {
+          // If there's a URI, fetch additional metadata
+          if (metadata.uri) {
+            const extendedMetadata = await this.fetchMetadataUri(metadata.uri);
+            return { ...metadata, ...extendedMetadata };
+          }
+          return metadata;
         }
-        return metadata;
       }
 
       // Fallback: try Jupiter token list
-      return await this.getJupiterMetadata(mintAddress);
+      const jupiterData = await this.getJupiterMetadata(mintAddress);
+      if (jupiterData) {
+        return jupiterData;
+      }
+
+      logger.debug('Solana', `No metadata found for ${mintAddress}`);
+      return null;
     } catch (error) {
-      console.error(`Failed to get metadata for ${mintAddress}:`, error);
+      logger.debug('Solana', `Failed to get metadata for ${mintAddress}: ${(error as Error).message}`);
       return null;
     }
   }
@@ -160,6 +206,11 @@ class SolanaService {
 
   private async fetchMetadataUri(uri: string): Promise<Partial<TokenMetadata>> {
     try {
+      // Validate URI
+      if (!uri || typeof uri !== 'string' || uri.trim().length === 0) {
+        return {};
+      }
+
       // Handle IPFS URIs
       let fetchUri = uri;
       if (fetchUri.startsWith('ipfs://')) {
@@ -170,16 +221,24 @@ class SolanaService {
         () => axios.get(fetchUri, { timeout: 5000 }),
         { maxRetries: 2, initialDelayMs: 300 }
       );
+
+      // Validate response data
+      if (!response.data || typeof response.data !== 'object') {
+        logger.debug('Solana', `Invalid metadata from URI: ${uri}`);
+        return {};
+      }
+
       const data = response.data;
 
       return {
-        image: data.image,
-        description: data.description,
-        twitter: data.twitter || data.extensions?.twitter,
-        telegram: data.telegram || data.extensions?.telegram,
-        website: data.website || data.external_url || data.extensions?.website,
+        image: data.image || undefined,
+        description: data.description || undefined,
+        twitter: data.twitter || data.extensions?.twitter || undefined,
+        telegram: data.telegram || data.extensions?.telegram || undefined,
+        website: data.website || data.external_url || data.extensions?.website || undefined,
       };
-    } catch {
+    } catch (error) {
+      logger.debug('Solana', `Failed to fetch metadata URI ${uri}: ${(error as Error).message}`);
       return {};
     }
   }
