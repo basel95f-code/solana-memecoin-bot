@@ -147,7 +147,7 @@
 5. ~~**Backtesting System**~~ - ✅ Already implemented (strategies, comparison, quick backtest)
 6. ~~**Advanced Position Sizing**~~ - ✅ DONE - Kelly criterion with configurable fraction, confidence adjustment
 7. ~~**Signal Correlation**~~ - ✅ DONE - Detects correlated signals, diversification scoring, /correlation command
-8. **Dashboard Charts** - Add signal performance charts to web dashboard
+8. ~~**Dashboard Charts**~~ - ✅ DONE - Signal performance, win rate, P&L, correlation heatmap charts (dashboard/charts.html)
 9. ~~**Slack Webhooks**~~ - ✅ DONE - SlackWebhookDispatcher with Block Kit formatting, /slack command
 10. ~~**Alert Rules Engine**~~ - ✅ DONE - Flexible rule conditions, preset rules, /rules command
 

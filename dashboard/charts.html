@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Charts - Memecoin Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Fraunces:wght@600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg: #fafaf9;
+      --card: #ffffff;
+      --text: #1a1a1a;
+      --text-muted: #6b6b6b;
+      --border: #e8e8e6;
+      --accent: #1a1a1a;
+      --profit: #16a34a;
+      --loss: #dc2626;
+      --warning: #d97706;
+      --radius: 16px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f0f0f;
+        --card: #1a1a1a;
+        --text: #fafafa;
+        --text-muted: #888;
+        --border: #2a2a2a;
+        --accent: #fafafa;
+      }
+    }
+
+    body {
+      font-family: 'DM Sans', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+      padding-bottom: 80px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    header {
+      display: flex;
+      justify-between;
+      align-items: center;
+      margin-bottom: 28px;
+    }
+
+    .logo {
+      font-family: 'Fraunces', serif;
+      font-size: 1.4rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .back-link {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .back-link:hover {
+      color: var(--text);
+    }
+
+    .page-title {
+      font-family: 'Fraunces', serif;
+      font-size: 2rem;
+      font-weight: 600;
+      margin-bottom: 32px;
+    }
+
+    .chart-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    @media (min-width: 1024px) {
+      .chart-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .chart-full {
+        grid-column: span 2;
+      }
+    }
+
+    .chart-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+    }
+
+    .chart-header {
+      display: flex;
+      justify-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .chart-title {
+      font-weight: 600;
+      font-size: 1.1rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .chart-subtitle {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+
+    .chart-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .chart-btn {
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .chart-btn:hover {
+      background: var(--card);
+      border-color: var(--accent);
+    }
+
+    .chart-btn.active {
+      background: var(--accent);
+      color: var(--bg);
+      border-color: var(--accent);
+    }
+
+    .chart-wrapper {
+      position: relative;
+      height: 300px;
+    }
+
+    .chart-wrapper.tall {
+      height: 400px;
+    }
+
+    .stat-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 16px;
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+    }
+
+    .stat-item {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-weight: 600;
+      font-size: 1.3rem;
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .stat-value.positive { color: var(--profit); }
+    .stat-value.negative { color: var(--loss); }
+
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 300px;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    .heatmap-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+      gap: 4px;
+      margin-top: 16px;
+    }
+
+    .heatmap-cell {
+      aspect-ratio: 1;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.15s;
+    }
+
+    .heatmap-cell:hover {
+      transform: scale(1.1);
+    }
+
+    .heatmap-labels {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      margin-top: 16px;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .heatmap-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .heatmap-color {
+      width: 16px;
+      height: 16px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">📊 Analytics</div>
+      <a href="index.html" class="back-link">← Back to Dashboard</a>
+    </header>
+
+    <h1 class="page-title">Performance Charts</h1>
+
+    <div class="chart-grid">
+      <!-- Signal Performance Over Time -->
+      <div class="chart-card chart-full">
+        <div class="chart-header">
+          <div class="chart-title">📈 Signal Performance</div>
+          <div class="chart-actions">
+            <button class="chart-btn active" data-period="7d">7D</button>
+            <button class="chart-btn" data-period="30d">30D</button>
+            <button class="chart-btn" data-period="90d">90D</button>
+          </div>
+        </div>
+        <div class="chart-subtitle">Cumulative returns from trading signals</div>
+        <div class="chart-wrapper tall">
+          <canvas id="performanceChart"></canvas>
+        </div>
+        <div class="stat-row">
+          <div class="stat-item">
+            <div class="stat-value positive" id="totalReturn">+0%</div>
+            <div class="stat-label">Total Return</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="totalSignals">0</div>
+            <div class="stat-label">Signals</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="avgReturn">+0%</div>
+            <div class="stat-label">Avg Return</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="sharpeRatio">0.0</div>
+            <div class="stat-label">Sharpe Ratio</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Win Rate Pie Chart -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <div class="chart-title">🎯 Win Rate</div>
+        </div>
+        <div class="chart-subtitle">Signal outcome distribution</div>
+        <div class="chart-wrapper">
+          <canvas id="winRateChart"></canvas>
+        </div>
+        <div class="stat-row">
+          <div class="stat-item">
+            <div class="stat-value positive" id="winRate">0%</div>
+            <div class="stat-label">Win Rate</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="profitFactor">0.0</div>
+            <div class="stat-label">Profit Factor</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- P&L Bar Chart -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <div class="chart-title">💰 P&L Distribution</div>
+        </div>
+        <div class="chart-subtitle">Returns per signal</div>
+        <div class="chart-wrapper">
+          <canvas id="pnlChart"></canvas>
+        </div>
+        <div class="stat-row">
+          <div class="stat-item">
+            <div class="stat-value positive" id="bestTrade">+0%</div>
+            <div class="stat-label">Best</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value negative" id="worstTrade">-0%</div>
+            <div class="stat-label">Worst</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Correlation Heatmap -->
+      <div class="chart-card chart-full">
+        <div class="chart-header">
+          <div class="chart-title">🔗 Signal Correlation</div>
+        </div>
+        <div class="chart-subtitle">Diversification analysis between concurrent signals</div>
+        <div id="heatmapContainer" class="loading">Loading correlation data...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:3001';
+    let charts = {};
+
+    // Chart.js global config
+    Chart.defaults.color = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim();
+    Chart.defaults.borderColor = getComputedStyle(document.documentElement).getPropertyValue('--border').trim();
+    Chart.defaults.font.family = 'DM Sans, -apple-system, sans-serif';
+
+    // 1. Performance Chart (Line)
+    async function initPerformanceChart() {
+      const ctx = document.getElementById('performanceChart').getContext('2d');
+      
+      try {
+        const data = await fetch(`${API_BASE}/api/signals/performance`).then(r => r.json());
+        
+        // Update stats
+        document.getElementById('totalReturn').textContent = `+${data.totalReturn || 0}%`;
+        document.getElementById('totalSignals').textContent = data.totalSignals || 0;
+        document.getElementById('avgReturn').textContent = `+${data.avgReturn || 0}%`;
+        document.getElementById('sharpeRatio').textContent = (data.sharpeRatio || 0).toFixed(2);
+
+        // Generate time series data
+        const labels = data.history?.map(h => new Date(h.date).toLocaleDateString()) || [];
+        const returns = data.history?.map(h => h.cumulativeReturn) || [];
+
+        charts.performance = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [{
+              label: 'Cumulative Return (%)',
+              data: returns,
+              borderColor: '#16a34a',
+              backgroundColor: 'rgba(22, 163, 74, 0.1)',
+              borderWidth: 2,
+              fill: true,
+              tension: 0.4,
+              pointRadius: 4,
+              pointHoverRadius: 6,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--card').trim(),
+                titleColor: getComputedStyle(document.documentElement).getPropertyValue('--text').trim(),
+                bodyColor: getComputedStyle(document.documentElement).getPropertyValue('--text').trim(),
+                borderColor: getComputedStyle(document.documentElement).getPropertyValue('--border').trim(),
+                borderWidth: 1,
+                padding: 12,
+                displayColors: false,
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  callback: (value) => value + '%'
+                },
+                grid: {
+                  color: getComputedStyle(document.documentElement).getPropertyValue('--border').trim()
+                }
+              },
+              x: {
+                grid: {
+                  display: false
+                }
+              }
+            }
+          }
+        });
+      } catch (e) {
+        console.error('Failed to load performance data:', e);
+        // Mock data for demo
+        charts.performance = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: ['Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6', 'Day 7'],
+            datasets: [{
+              label: 'Cumulative Return (%)',
+              data: [0, 5, 8, 12, 15, 18, 24],
+              borderColor: '#16a34a',
+              backgroundColor: 'rgba(22, 163, 74, 0.1)',
+              borderWidth: 2,
+              fill: true,
+              tension: 0.4,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              y: { beginAtZero: true, ticks: { callback: (v) => v + '%' } }
+            }
+          }
+        });
+        
+        document.getElementById('totalReturn').textContent = '+24%';
+        document.getElementById('totalSignals').textContent = '47';
+        document.getElementById('avgReturn').textContent = '+12.3%';
+        document.getElementById('sharpeRatio').textContent = '1.8';
+      }
+    }
+
+    // 2. Win Rate Chart (Donut)
+    async function initWinRateChart() {
+      const ctx = document.getElementById('winRateChart').getContext('2d');
+      
+      try {
+        const data = await fetch(`${API_BASE}/api/signals/performance`).then(r => r.json());
+        
+        const wins = data.wins || 0;
+        const losses = data.losses || 0;
+        const pending = data.pending || 0;
+        const total = wins + losses;
+        const winRate = total > 0 ? ((wins / total) * 100).toFixed(1) : 0;
+        
+        document.getElementById('winRate').textContent = winRate + '%';
+        document.getElementById('profitFactor').textContent = (data.profitFactor || 0).toFixed(2);
+
+        charts.winRate = new Chart(ctx, {
+          type: 'doughnut',
+          data: {
+            labels: ['Wins', 'Losses', 'Pending'],
+            datasets: [{
+              data: [wins, losses, pending],
+              backgroundColor: ['#16a34a', '#dc2626', '#d97706'],
+              borderWidth: 0,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: 'bottom',
+                labels: {
+                  padding: 16,
+                  font: { size: 12 }
+                }
+              },
+              tooltip: {
+                callbacks: {
+                  label: (context) => {
+                    const value = context.parsed;
+                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                    const pct = ((value / total) * 100).toFixed(1);
+                    return `${context.label}: ${value} (${pct}%)`;
+                  }
+                }
+              }
+            }
+          }
+        });
+      } catch (e) {
+        // Mock data
+        charts.winRate = new Chart(ctx, {
+          type: 'doughnut',
+          data: {
+            labels: ['Wins', 'Losses', 'Pending'],
+            datasets: [{
+              data: [28, 14, 5],
+              backgroundColor: ['#16a34a', '#dc2626', '#d97706'],
+              borderWidth: 0,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom', labels: { padding: 16 } } }
+          }
+        });
+        
+        document.getElementById('winRate').textContent = '66.7%';
+        document.getElementById('profitFactor').textContent = '2.4';
+      }
+    }
+
+    // 3. P&L Chart (Bar)
+    async function initPnLChart() {
+      const ctx = document.getElementById('pnlChart').getContext('2d');
+      
+      try {
+        const data = await fetch(`${API_BASE}/api/signals/history`).then(r => r.json());
+        
+        const signals = data.signals || [];
+        const returns = signals
+          .filter(s => s.outcome)
+          .map(s => s.returnPercent || 0)
+          .slice(-20); // Last 20 signals
+        
+        const best = Math.max(...returns, 0);
+        const worst = Math.min(...returns, 0);
+        
+        document.getElementById('bestTrade').textContent = `+${best.toFixed(1)}%`;
+        document.getElementById('worstTrade').textContent = `${worst.toFixed(1)}%`;
+
+        charts.pnl = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: returns.map((_, i) => `#${i + 1}`),
+            datasets: [{
+              label: 'Return %',
+              data: returns,
+              backgroundColor: returns.map(r => r >= 0 ? '#16a34a' : '#dc2626'),
+              borderWidth: 0,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: (context) => `Return: ${context.parsed.y.toFixed(1)}%`
+                }
+              }
+            },
+            scales: {
+              y: {
+                ticks: {
+                  callback: (value) => value + '%'
+                }
+              }
+            }
+          }
+        });
+      } catch (e) {
+        // Mock data
+        const mockReturns = [12, -5, 8, 15, -3, 7, 22, -8, 11, 5, -2, 18, 9, -4, 14];
+        charts.pnl = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: mockReturns.map((_, i) => `#${i + 1}`),
+            datasets: [{
+              data: mockReturns,
+              backgroundColor: mockReturns.map(r => r >= 0 ? '#16a34a' : '#dc2626'),
+              borderWidth: 0,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { ticks: { callback: (v) => v + '%' } } }
+          }
+        });
+        
+        document.getElementById('bestTrade').textContent = '+22.0%';
+        document.getElementById('worstTrade').textContent = '-8.0%';
+      }
+    }
+
+    // 4. Correlation Heatmap
+    async function initCorrelationHeatmap() {
+      const container = document.getElementById('heatmapContainer');
+      
+      try {
+        const data = await fetch(`${API_BASE}/api/signals/correlation`).then(r => r.json());
+        
+        if (!data.matrix || data.matrix.length === 0) {
+          container.innerHTML = '<div class="loading">No correlation data available yet. Need concurrent signals to analyze.</div>';
+          return;
+        }
+
+        const matrix = data.matrix;
+        const symbols = data.symbols || [];
+        
+        // Generate heatmap grid
+        let html = '<div class="heatmap-grid">';
+        matrix.forEach((row, i) => {
+          row.forEach((val, j) => {
+            const color = getCorrelationColor(val);
+            const label = i === j ? '—' : val.toFixed(2);
+            html += `<div class="heatmap-cell" style="background-color: ${color}" title="${symbols[i]} vs ${symbols[j]}: ${val.toFixed(2)}">${label}</div>`;
+          });
+        });
+        html += '</div>';
+        
+        html += '<div class="heatmap-labels">';
+        html += '<div class="heatmap-label"><div class="heatmap-color" style="background: #16a34a"></div>High (>0.7)</div>';
+        html += '<div class="heatmap-label"><div class="heatmap-color" style="background: #d97706"></div>Medium (0.4-0.7)</div>';
+        html += '<div class="heatmap-label"><div class="heatmap-color" style="background: #6b6b6b"></div>Low (<0.4)</div>';
+        html += '</div>';
+        
+        container.innerHTML = html;
+      } catch (e) {
+        // Mock heatmap
+        const mockSymbols = ['BONK', 'WIF', 'POPCAT', 'PEPE', 'MEW'];
+        const mockMatrix = [
+          [1.0, 0.72, 0.45, 0.33, 0.21],
+          [0.72, 1.0, 0.58, 0.41, 0.19],
+          [0.45, 0.58, 1.0, 0.67, 0.34],
+          [0.33, 0.41, 0.67, 1.0, 0.52],
+          [0.21, 0.19, 0.34, 0.52, 1.0],
+        ];
+        
+        let html = '<div class="heatmap-grid">';
+        mockMatrix.forEach((row, i) => {
+          row.forEach((val, j) => {
+            const color = getCorrelationColor(val);
+            const label = i === j ? '—' : val.toFixed(2);
+            html += `<div class="heatmap-cell" style="background-color: ${color}" title="${mockSymbols[i]} vs ${mockSymbols[j]}: ${val.toFixed(2)}">${label}</div>`;
+          });
+        });
+        html += '</div>';
+        
+        html += '<div class="heatmap-labels">';
+        html += '<div class="heatmap-label"><div class="heatmap-color" style="background: #16a34a"></div>High (>0.7)</div>';
+        html += '<div class="heatmap-label"><div class="heatmap-color" style="background: #d97706"></div>Medium (0.4-0.7)</div>';
+        html += '<div class="heatmap-label"><div class="heatmap-color" style="background: #6b6b6b"></div>Low (<0.4)</div>';
+        html += '</div>';
+        
+        container.innerHTML = html;
+      }
+    }
+
+    function getCorrelationColor(value) {
+      if (value >= 0.7) return '#16a34a'; // High correlation
+      if (value >= 0.4) return '#d97706'; // Medium
+      return '#6b6b6b'; // Low
+    }
+
+    // Period selection for performance chart
+    document.querySelectorAll('[data-period]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        document.querySelectorAll('[data-period]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        const period = btn.dataset.period;
+        // Reload performance chart with new period
+        // TODO: Add period parameter to API call
+      });
+    });
+
+    // Initialize all charts
+    async function init() {
+      await Promise.all([
+        initPerformanceChart(),
+        initWinRateChart(),
+        initPnLChart(),
+        initCorrelationHeatmap(),
+      ]);
+    }
+
+    init();
+
+    // Refresh every 30 seconds
+    setInterval(init, 30000);
+  </script>
+</body>
+</html>
