@@ -15,6 +15,9 @@ import { registerMLCommands } from './ml';
 import { registerSentimentCommands } from './sentiment';
 import { registerRulesCommands } from './rules';
 import { registerPortfolioCommands } from './portfolio';
+import { registerScannerCommands } from './scanner';
+import { registerLearningCommands } from './learning';
+import { registerContractCommands } from './contract';
 
 export function registerAllCommands(bot: Telegraf): void {
   // Register all command handlers
@@ -34,6 +37,9 @@ export function registerAllCommands(bot: Telegraf): void {
   registerSentimentCommands(bot);
   registerRulesCommands(bot);
   registerPortfolioCommands(bot);
+  registerScannerCommands(bot);
+  registerLearningCommands(bot);
+  registerContractCommands(bot);
 
   // Set up bot commands menu
   bot.telegram.setMyCommands([
@@ -109,6 +115,14 @@ export function registerAllCommands(bot: Telegraf): void {
     { command: 'ml', description: 'ML model status' },
     // Sentiment
     { command: 'sentiment', description: 'Multi-platform sentiment settings' },
+    // Scanner
+    { command: 'scanner', description: 'Token scanner & filters' },
+    // Learning
+    { command: 'learn', description: 'Learning system stats' },
+    { command: 'outcomes', description: 'Token outcomes' },
+    // Security
+    { command: 'contract', description: 'Contract security analysis' },
+    { command: 'honeypot', description: 'Quick honeypot check' },
     // Health
     { command: 'health', description: 'Service health status' },
   ]).catch(err => console.error('Failed to set bot commands:', err));

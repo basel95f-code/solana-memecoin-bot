@@ -247,6 +247,28 @@
   - Statistics tracking (moon count, rug count, win rate, avg profit)
   - Format stats for display
 
+### Completed - Phase 24 (Telegram Command Suite) ✅ 📱
+- [x] **Full Command Interface** - Telegram commands for all new features
+  - scanner.ts (395 lines) - Token scanner commands
+    - `/scanner` - Scanner status with inline buttons
+    - `/scanner filters` - List all filters
+    - `/scanner matches` - Recent scanner matches
+    - `/scanner preset` - Create preset filters (Gem Finder, Safe Haven, Moonshot)
+    - `/scanner start/stop` - Control scanner
+    - Inline keyboard navigation
+  - learning.ts (302 lines) - Learning system commands
+    - `/learn` - Learning stats (outcomes tracked, trading performance, ML model status)
+    - `/outcomes [filter]` - View recent token outcomes (moon/rug/stable/decline)
+    - Outcome filtering by type
+    - Best/worst performers view
+  - contract.ts (170 lines) - Contract security commands
+    - `/contract <mint>` - Full security analysis
+    - `/honeypot <mint>` - Quick honeypot check
+    - Security scoring, safety levels, warnings
+    - Formatted reports with recommendations
+  - Updated command menu with 4 new commands
+  - All commands integrated into bot startup
+
 ### Low Priority / Future
 14. **Cross-chain Support** - Extend to other chains (Base, etc.)
 15. **Paper Trading Mode** - Simulate trades without real execution
