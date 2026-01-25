@@ -13,6 +13,7 @@ import type {
   WebhookConfig,
 } from '../signals/types';
 import type { LiquidityAlert } from '../services/liquidityMonitor';
+import type { DevBehaviorAlert } from '../services/devWalletTracker';
 
 // ═══════════════════════════════════════════
 // UTILITY FUNCTIONS
@@ -863,6 +864,55 @@ export function formatLiquidityAlert(alert: LiquidityAlert): string {
   if (alert.severity === 'critical') {
     lines.push(\\);
     lines.push(\? <b>CRITICAL - Consider selling immediately</b>\);
+  }
+
+  return lines.join('\n');
+}
+
+
+
+// -------------------------------------------
+// DEV WALLET BEHAVIOR ALERTS
+// -------------------------------------------
+
+export function formatDevBehaviorAlert(alert: { type: string; severity: string; symbol: string; devAddress: string; message: string; details: any }): string {
+  const emojiMap: Record<string, string> = {
+    first_sell: '??',
+    large_dump: '??',
+    rapid_selling: '?',
+    complete_exit: '??',
+  };
+
+  const emoji = emojiMap[alert.type] || '??';
+  const title = alert.type === 'first_sell' ? 'DEV FIRST SELL' :
+                alert.type === 'large_dump' ? 'DEV DUMP' :
+                alert.type === 'rapid_selling' ? 'RAPID SELLING' :
+                'DEV EXIT';
+
+  const lines = [
+    \\ <b>\</b>\,
+    \\,
+    \<b>\</b>\,
+    alert.message,
+    \\,
+    \Dev: <code>\...\</code>\,
+  ];
+
+  if (alert.details.soldPercent !== undefined) {
+    lines.push(\Sold: \%\);
+  }
+
+  if (alert.details.currentHolding !== undefined) {
+    lines.push(\Remaining: \%\);
+  }
+
+  if (alert.details.sellCount !== undefined) {
+    lines.push(\Sell count: \\);
+  }
+
+  if (alert.severity === 'critical') {
+    lines.push(\\);
+    lines.push(\? <b>CRITICAL - High rug risk</b>\);
   }
 
   return lines.join('\n');

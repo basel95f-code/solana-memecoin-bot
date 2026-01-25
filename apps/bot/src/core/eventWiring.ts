@@ -9,12 +9,14 @@ import { advancedMonitor } from '../services/advancedMonitor';
 import { walletMonitorService } from '../services/walletMonitor';
 import { liquidityMonitor } from '../services/liquidityMonitor';
 import type { LiquidityAlert } from '../services/liquidityMonitor';
+import { devWalletTracker } from '../services/devWalletTracker';
+import type { DevBehaviorAlert } from '../services/devWalletTracker';
 import { raydiumMonitor } from '../monitors/raydium';
 import { pumpFunMonitor } from '../monitors/pumpfun';
 import { jupiterMonitor } from '../monitors/jupiter';
 import { apiServer } from '../api/server';
 import { formatAdvancedAlert } from '../telegram/commands/advanced';
-import { formatLiquidityAlert } from '../telegram/formatters';
+import { formatLiquidityAlert, formatDevBehaviorAlert } from '../telegram/formatters';
 import type { PoolInfo, WalletActivityAlert } from '../types';
 import { logger } from '../utils/logger';
 import { queueProcessor } from './queueProcessor';
@@ -27,6 +29,7 @@ export function setupEventListeners(): void {
   setupMonitorListeners();
   setupAdvancedMonitorListeners();
   setupLiquidityMonitorListeners();
+  setupDevWalletTrackerListeners();
 }
 
 /**
@@ -145,6 +148,41 @@ function setupLiquidityMonitorListeners(): void {
       logger.info('LiquidityMonitor', \Alert sent: \ for \\);
     } catch (error) {
       logger.error('LiquidityMonitor', 'Error sending liquidity alert', error as Error);
+    }
+  });
+}
+
+
+
+/**
+ * Set up dev wallet tracker event listeners
+ */
+function setupDevWalletTrackerListeners(): void {
+  devWalletTracker.on('alert', async (alert: DevBehaviorAlert) => {
+    try {
+      // Format and send Telegram alert
+      const message = formatDevBehaviorAlert(alert);
+      await telegramService.sendMessage(message, config.telegramChatId);
+
+      // Add to dashboard
+      const emojiMap = {
+        first_sell: '??',
+        large_dump: '??',
+        rapid_selling: '?',
+        complete_exit: '??',
+      };
+
+      apiServer.addAlert({
+        type: 'dev_' + alert.type,
+        title: alert.type.toUpperCase().replace('_', ' '),
+        description: \\ - \\,
+        emoji: emojiMap[alert.type] || '??',
+        timestamp: Date.now(),
+      });
+
+      logger.info('DevWalletTracker', \Alert sent: \ for \\);
+    } catch (error) {
+      logger.error('DevWalletTracker', 'Error sending dev behavior alert', error as Error);
     }
   });
 }
