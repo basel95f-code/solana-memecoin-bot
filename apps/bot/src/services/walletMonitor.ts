@@ -6,6 +6,7 @@ import { config } from '../config';
 import { storageService } from './storage';
 import { solanaService } from './solana';
 import { dexScreenerService } from './dexscreener';
+import { smartMoneyTracker } from './smartMoneyTracker';
 import type { TrackedWallet, WalletTransaction, WalletActivityAlert} from '../types';
 import { SOL_MINT, DEFAULT_CATEGORY_PRIORITIES } from '../types';
 import { logger } from '../utils/logger';
@@ -261,6 +262,30 @@ export class WalletMonitorService extends EventEmitter {
 
     logger.info('WalletMonitor', `[REAL-TIME] ${wallet.label} ${tx.type} ${tx.tokenMint.slice(0, 8)}...`);
     this.emit('walletActivity', alert);
+
+    // Record trade with smart money tracker
+    try {
+      if (tx.type === 'buy' && tx.amount && tx.solAmount) {
+        await smartMoneyTracker.recordBuy(
+          wallet.address,
+          tx.tokenMint,
+          tx.tokenSymbol,
+          tx.amount,
+          tx.solAmount,
+          tx.priceUsd
+        );
+      } else if (tx.type === 'sell' && tx.amount && tx.solAmount) {
+        await smartMoneyTracker.recordSell(
+          wallet.address,
+          tx.tokenMint,
+          tx.amount,
+          tx.solAmount,
+          tx.priceUsd
+        );
+      }
+    } catch (error) {
+      logger.silentError('WalletMonitor', 'Failed to record trade with smart money tracker', error as Error);
+    }
 
     // Update last alerted time
     storageService.updateTrackedWallet(chatId, wallet.address, {

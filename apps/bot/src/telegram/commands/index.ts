@@ -18,6 +18,7 @@ import { registerPortfolioCommands } from './portfolio';
 import { registerScannerCommands } from './scanner';
 import { registerLearningCommands } from './learning';
 import { registerContractCommands } from './contract';
+import { registerSmartMoneyCommands } from './smartmoney';
 
 export function registerAllCommands(bot: Telegraf): void {
   // Register all command handlers
@@ -40,6 +41,7 @@ export function registerAllCommands(bot: Telegraf): void {
   registerScannerCommands(bot);
   registerLearningCommands(bot);
   registerContractCommands(bot);
+  registerSmartMoneyCommands(bot);
 
   // Set up bot commands menu
   bot.telegram.setMyCommands([
@@ -95,6 +97,10 @@ export function registerAllCommands(bot: Telegraf): void {
     { command: 'untrack', description: 'Stop tracking wallet' },
     { command: 'wallets', description: 'List tracked wallets' },
     { command: 'wallet', description: 'Wallet activity' },
+    // Smart Money
+    { command: 'leaderboard', description: 'Top performing wallets' },
+    { command: 'smstats', description: 'Smart money stats' },
+    { command: 'smartmoney', description: 'Smart money suggestions' },
     // Backtesting
     { command: 'strategies', description: 'List backtest strategies' },
     { command: 'backtest', description: 'Run a backtest' },

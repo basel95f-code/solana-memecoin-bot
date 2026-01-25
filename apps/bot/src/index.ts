@@ -6,6 +6,7 @@ import { rateLimitService } from './services/ratelimit';
 import { watchlistService } from './services/watchlist';
 import { advancedMonitor } from './services/advancedMonitor';
 import { walletMonitorService } from './services/walletMonitor';
+import { smartMoneyTracker } from './services/smartMoneyTracker';
 import { telegramMtprotoService } from './services/telegramMtproto';
 import { discordBotService } from './services/discordBot';
 import { raydiumMonitor } from './monitors/raydium';
@@ -23,6 +24,8 @@ import { signalService, signalPriceMonitor } from './signals';
 import { trainingPipeline } from './ml/trainingPipeline';
 import { learningOrchestrator } from './services/learningOrchestrator';
 import { queueProcessor, setupEventListeners, setupWalletMonitorListeners } from './core';
+import { formatSmartMoneyAlertMessage } from './telegram/commands/smartmoney';
+import type { SmartMoneyAlert } from './services/smartMoneyTracker';
 
 class SolanaMemecoinBot {
   private isRunning: boolean = false;
@@ -84,6 +87,32 @@ class SolanaMemecoinBot {
         await walletMonitorService.start();
         setupWalletMonitorListeners();
       }
+
+      // Start smart money tracker (performance tracking for wallets)
+      await smartMoneyTracker.start();
+      logger.info('Main', 'Smart money tracker started - wallet performance monitoring active');
+
+      // Set up smart money alert listener
+      smartMoneyTracker.on('smartMoneyAlert', async (alert: SmartMoneyAlert) => {
+        try {
+          const message = formatSmartMoneyAlertMessage(
+            alert.walletLabel,
+            alert.action,
+            alert.tokenSymbol,
+            alert.tokenMint,
+            alert.solValue,
+            alert.priceUsd,
+            alert.metrics.winRate,
+            alert.metrics.totalRoi,
+            alert.metrics.last30DaysPnl
+          );
+
+          // Send alert to Telegram (using configured chat ID for now)
+          await telegramService.sendMessage(config.telegramChatId, message);
+        } catch (error) {
+          logger.error('Main', 'Failed to send smart money alert', error as Error);
+        }
+      });
 
       // Start advanced monitoring (volume spikes, whale alerts, etc.)
       await advancedMonitor.start();
