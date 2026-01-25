@@ -247,6 +247,22 @@
   - Statistics tracking (moon count, rug count, win rate, avg profit)
   - Format stats for display
 
+### Completed - Phase 27 (Advanced Risk System) ✅ ⚖️
+- [x] **Intelligent Position Sizing & Risk Management**
+  - advancedRiskManager.ts service (410 lines) - Complete risk engine
+  - Database table: risk_parameters (migration v9)
+  - **ML-Adjusted Sizing:** Position size scales with ML confidence (0.5x to 1.5x)
+  - **Risk Score Adjustment:** Higher risk score = larger position (0.8x to 1.2x)
+  - **Correlation Penalty:** Reduces size when holding correlated assets (-10% to -50%)
+  - **Daily Loss Limit:** Stops trading after 5% daily loss (configurable)
+  - **Position Limits:** Max open positions, max correlated positions
+  - **Auto Stop-Loss Calculation:** Based on risk score & volatility (10-30%)
+  - **Take-Profit Calculation:** Automatic 2:1 risk/reward ratio
+  - **Risk Parameters:** account_balance, max_daily_loss, max_position_size, base_risk_percent, max_risk_percent
+  - **Safety Checks:** Daily loss monitoring, position count limits, correlation checks
+  - Configurable parameters with database persistence
+  - Formatted output with warnings & approval status
+
 ### Completed - Phase 26 (Strategy Automation) ✅ 🤖
 - [x] **Automated Decision Pipeline** - Connect all features into workflows
   - strategyAutomation.ts service (510 lines) - Complete automation engine

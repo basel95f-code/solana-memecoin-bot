@@ -867,5 +867,34 @@ export const MIGRATIONS: { version: number; sql: string }[] = [
       CREATE INDEX IF NOT EXISTS idx_automation_decisions_category ON automation_decisions(category);
       CREATE INDEX IF NOT EXISTS idx_automation_decisions_time ON automation_decisions(timestamp);
     `
+  },
+  {
+    version: 9,
+    description: 'Add risk management parameters table',
+    sql: `
+      -- ============================================
+      -- Risk Parameters Table
+      -- Stores advanced risk management settings
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS risk_parameters (
+        id INTEGER PRIMARY KEY DEFAULT 1,
+        account_balance REAL NOT NULL,
+        max_daily_loss REAL NOT NULL,
+        max_position_size REAL NOT NULL,
+        base_risk_percent REAL NOT NULL,
+        max_risk_percent REAL NOT NULL,
+        max_open_positions INTEGER NOT NULL,
+        max_correlated_positions INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        CHECK (id = 1)  -- Only one row allowed
+      );
+
+      -- Insert default values
+      INSERT OR IGNORE INTO risk_parameters (
+        id, account_balance, max_daily_loss, max_position_size,
+        base_risk_percent, max_risk_percent, max_open_positions,
+        max_correlated_positions, updated_at
+      ) VALUES (1, 10000, 5, 10, 1, 2, 5, 2, strftime('%s', 'now'));
+    `
   }
 ];
