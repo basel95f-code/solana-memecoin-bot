@@ -1,0 +1,86 @@
+# ============================================
+# SOLANA MEMECOIN BOT - Production Dockerfile
+# Multi-stage build for optimized image size
+# ============================================
+
+# ============================================
+# Stage 1: Dependencies
+# ============================================
+FROM node:20-alpine AS dependencies
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apk add --no-cache python3 make g++
+
+# Copy package files
+COPY package*.json ./
+COPY turbo.json ./
+COPY apps/bot/package*.json ./apps/bot/
+COPY packages/shared/package*.json ./packages/shared/
+
+# Install dependencies
+RUN npm ci --only=production
+
+# ============================================
+# Stage 2: Builder
+# ============================================
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copy dependencies
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY --from=dependencies /app/apps/bot/node_modules ./apps/bot/node_modules
+COPY --from=dependencies /app/packages/shared/node_modules ./packages/shared/node_modules
+
+# Copy source code
+COPY . .
+
+# Build the bot
+RUN npm run build --filter=@memecoin/bot
+
+# ============================================
+# Stage 3: Production Runner
+# ============================================
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+
+# Install dumb-init for proper signal handling
+RUN apk add --no-cache dumb-init
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S botuser -u 1001
+
+# Copy built application
+COPY --from=builder --chown=botuser:nodejs /app/apps/bot/dist ./apps/bot/dist
+COPY --from=builder --chown=botuser:nodejs /app/packages/shared/dist ./packages/shared/dist
+COPY --from=dependencies --chown=botuser:nodejs /app/node_modules ./node_modules
+COPY --from=dependencies --chown=botuser:nodejs /app/apps/bot/node_modules ./apps/bot/node_modules
+
+# Copy package.json for scripts
+COPY --chown=botuser:nodejs apps/bot/package.json ./apps/bot/
+COPY --chown=botuser:nodejs package.json ./
+
+# Set environment
+ENV NODE_ENV=production \
+    NPM_CONFIG_LOGLEVEL=warn \
+    LOG_LEVEL=info
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+
+# Switch to non-root user
+USER botuser
+
+# Expose health check port
+EXPOSE 3000
+
+# Use dumb-init for proper signal handling
+ENTRYPOINT ["dumb-init", "--"]
+
+# Start bot
+CMD ["node", "apps/bot/dist/index.js"]

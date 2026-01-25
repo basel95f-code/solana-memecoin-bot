@@ -1,42 +1,103 @@
 version: '3.8'
 
+# ============================================
+# SOLANA MEMECOIN BOT - Production Stack
+# ============================================
+
 services:
+  # ============================================
+  # Redis - Cache & Queue
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: memecoin-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - memecoin-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================
+  # PostgreSQL - Database (Optional - if not using Supabase cloud)
+  # ============================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: memecoin-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-memecoin_bot}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./supabase/migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - memecoin-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================
+  # Bot Service
+  # ============================================
   bot:
     build:
       context: .
-      dockerfile: Dockerfile
-    container_name: solana-memecoin-bot
+      dockerfile: Dockerfile.bot
+    container_name: memecoin-bot
     restart: unless-stopped
-    
-    # Environment variables
+    env_file:
+      - .env.production
     environment:
       - NODE_ENV=production
-      - LOG_LEVEL=${LOG_LEVEL:-info}
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
-      - SOLANA_RPC_URL=${SOLANA_RPC_URL:-https://api.mainnet-beta.solana.com}
-      - SOLANA_WS_URL=${SOLANA_WS_URL}
-      - RUGCHECK_API_KEY=${RUGCHECK_API_KEY}
-      - DEXSCREENER_API_KEY=${DEXSCREENER_API_KEY}
-      - GMGN_API_KEY=${GMGN_API_KEY}
-      - DATABASE_PATH=/app/data/bot.db
-      
-      # Optional settings
-      - MIN_LIQUIDITY_USD=${MIN_LIQUIDITY_USD:-1000}
-      - MIN_RISK_SCORE=${MIN_RISK_SCORE:-0}
-      - RAYDIUM_ENABLED=${RAYDIUM_ENABLED:-true}
-      - PUMPFUN_ENABLED=${PUMPFUN_ENABLED:-true}
-      - JUPITER_ENABLED=${JUPITER_ENABLED:-true}
-      - WATCHLIST_ENABLED=${WATCHLIST_ENABLED:-true}
-      - DISCOVERY_ENABLED=${DISCOVERY_ENABLED:-true}
-      - WALLET_MONITOR_ENABLED=${WALLET_MONITOR_ENABLED:-true}
-    
-    # Persistent volume for database
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-memecoin_bot}}
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - memecoin-network
     volumes:
+      - bot-logs:/app/logs
       - bot-data:/app/data
-      - ./logs:/app/logs  # Optional: mount logs directory
-    
-    # Resource limits
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
     deploy:
       resources:
         limits:
@@ -45,30 +106,59 @@ services:
         reservations:
           cpus: '0.5'
           memory: 512M
-    
-    # Network configuration
+
+  # ============================================
+  # Web Dashboard
+  # ============================================
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+        VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:3000}
+        VITE_SUPABASE_URL: ${SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+    container_name: memecoin-web
+    restart: unless-stopped
+    ports:
+      - "80:80"
     networks:
-      - bot-network
-    
-    # Health check
+      - memecoin-network
+    depends_on:
+      - bot
     healthcheck:
-      test: ["CMD", "node", "-e", "console.log('OK')"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/health"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 10s
-    
-    # Logging configuration
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
 
+# ============================================
+# Networks
+# ============================================
+networks:
+  memecoin-network:
+    driver: bridge
+
+# ============================================
+# Volumes
+# ============================================
 volumes:
+  redis-data:
+    driver: local
+  postgres-data:
+    driver: local
+  bot-logs:
+    driver: local
   bot-data:
     driver: local
-
-networks:
-  bot-network:
-    driver: bridge

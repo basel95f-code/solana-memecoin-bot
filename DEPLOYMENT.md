@@ -1,302 +1,243 @@
-# 🚀 Deployment Guide - Solana Memecoin Bot
+# 🚀 Production Deployment Guide
 
-Complete deployment guide for production deployment using Docker or PM2.
+Complete guide for deploying the Solana Memecoin Bot to production with 24/7 reliability.
 
----
-
-## 📋 Table of Contents
+## Table of Contents
 
 1. [Prerequisites](#prerequisites)
-2. [Environment Variables](#environment-variables)
+2. [Quick Start](#quick-start)
 3. [Docker Deployment](#docker-deployment)
 4. [PM2 Deployment](#pm2-deployment)
-5. [Configuration](#configuration)
-6. [Monitoring](#monitoring)
-7. [Troubleshooting](#troubleshooting)
-8. [Security Best Practices](#security-best-practices)
+5. [Monitoring Setup](#monitoring-setup)
+6. [Backup & Restore](#backup--restore)
+7. [CI/CD Pipeline](#cicd-pipeline)
+8. [Troubleshooting](#troubleshooting)
+9. [Security Best Practices](#security-best-practices)
 
 ---
 
-## 📦 Prerequisites
+## Prerequisites
 
 ### System Requirements
 
-- **Node.js**: v18.x or higher
-- **npm**: v10.x or higher
-- **RAM**: Minimum 512MB, Recommended 1GB+
-- **Storage**: 1GB+ for logs and database
-- **OS**: Linux (Ubuntu/Debian recommended), macOS, or Windows
+- **OS**: Ubuntu 20.04+ or any Linux distribution
+- **CPU**: 2+ cores recommended
+- **RAM**: 2GB minimum, 4GB recommended
+- **Storage**: 20GB minimum
+- **Node.js**: 20.x LTS
+- **Docker**: 24.0+ (if using Docker)
+- **Docker Compose**: 2.20+ (if using Docker)
 
-### Required for Docker Deployment
+### Required Services
 
-- Docker Engine 20.10+
-- Docker Compose v2.0+
+1. **Telegram Bot Token** - Get from @BotFather
+2. **Helius API Key** - For reliable Solana RPC (required for production)
+3. **Supabase Project** - For PostgreSQL database
+4. **Redis** - For caching (included in Docker setup)
 
-### Required for PM2 Deployment
+### Optional Services
 
-- PM2 installed globally: `npm install -g pm2`
-- Git (for source control)
-
----
-
-## 🔐 Environment Variables
-
-### Required Variables
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `TELEGRAM_BOT_TOKEN` | Your Telegram bot token from @BotFather | `1234567890:ABCdefGHIjklMNOpqrsTUVwxyz` |
-
-### Optional Variables (with defaults)
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `SOLANA_RPC_URL` | Solana RPC endpoint | `https://api.mainnet-beta.solana.com` |
-| `DATABASE_PATH` | SQLite database file path | `./data/bot.db` |
-| `LOG_LEVEL` | Logging level | `info` |
-| `DEXSCREENER_API_KEY` | DexScreener API key (optional) | - |
-| `GMGN_API_KEY` | GMGN API key (optional) | - |
-| `RUGCHECK_API_KEY` | RugCheck API key (optional) | - |
-
-### Additional Configuration Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `TELEGRAM_CHAT_ID` | Default Telegram chat ID for alerts | - |
-| `SOLANA_WS_URL` | Solana WebSocket endpoint | Auto-derived from RPC |
-| `MIN_LIQUIDITY_USD` | Minimum liquidity threshold | `1000` |
-| `MIN_RISK_SCORE` | Minimum risk score threshold | `0` |
-| `RAYDIUM_ENABLED` | Enable Raydium monitoring | `true` |
-| `PUMPFUN_ENABLED` | Enable Pump.fun monitoring | `true` |
-| `JUPITER_ENABLED` | Enable Jupiter monitoring | `true` |
-| `WATCHLIST_ENABLED` | Enable watchlist feature | `true` |
-| `DISCOVERY_ENABLED` | Enable token discovery | `true` |
-| `WALLET_MONITOR_ENABLED` | Enable wallet monitoring | `true` |
-
-### Setting Up Environment Variables
-
-1. **Copy the example file:**
-   ```bash
-   cp .env.example .env
-   ```
-
-2. **Edit `.env` and add your values:**
-   ```bash
-   nano .env  # or use your preferred editor
-   ```
-
-3. **Minimum viable `.env`:**
-   ```env
-   TELEGRAM_BOT_TOKEN=your_bot_token_here
-   ```
-
-4. **Production-ready `.env`:**
-   ```env
-   # Required
-   TELEGRAM_BOT_TOKEN=your_bot_token_here
-   TELEGRAM_CHAT_ID=your_chat_id_here
-   
-   # Optional but recommended
-   SOLANA_RPC_URL=https://your-premium-rpc.com
-   RUGCHECK_API_KEY=your_rugcheck_key
-   DEXSCREENER_API_KEY=your_dexscreener_key
-   
-   # Configuration
-   LOG_LEVEL=info
-   MIN_LIQUIDITY_USD=5000
-   NODE_ENV=production
-   ```
+- Discord webhook (for alerts)
+- Sentry (for error tracking)
+- Email service (SendGrid/Resend)
+- FlareSolverr (for Cloudflare bypass)
 
 ---
 
-## 🐳 Docker Deployment
+## Quick Start
 
-### Quick Start
-
-1. **Clone the repository:**
-   ```bash
-   git clone <repository-url>
-   cd solana-memecoin-bot
-   ```
-
-2. **Configure environment:**
-   ```bash
-   cp .env.example .env
-   nano .env  # Add your configuration
-   ```
-
-3. **Build and run:**
-   ```bash
-   docker-compose up -d
-   ```
-
-4. **Check logs:**
-   ```bash
-   docker-compose logs -f bot
-   ```
-
-### Docker Commands
+### 1. Clone Repository
 
 ```bash
-# Build the image
+git clone https://github.com/youruser/solana-memecoin-bot.git
+cd solana-memecoin-bot
+```
+
+### 2. Install Dependencies
+
+```bash
+npm install
+```
+
+### 3. Configure Environment
+
+```bash
+cp .env.production.example .env.production
+# Edit .env.production with your values
+nano .env.production
+```
+
+**Critical values to set:**
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_CHAT_ID`
+- `HELIUS_API_KEY`
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `REDIS_URL`
+
+### 4. Build Application
+
+```bash
+npm run build
+```
+
+### 5. Deploy
+
+**Option A: Docker (Recommended)**
+```bash
+./scripts/deploy/deploy-local.sh
+```
+
+**Option B: PM2**
+```bash
+pm2 start ecosystem.config.js --env production
+```
+
+---
+
+## Docker Deployment
+
+### Architecture
+
+```
+┌─────────────────┐
+│  Web Dashboard  │ :80
+│   (Nginx)       │
+└────────┬────────┘
+         │
+┌────────▼────────┐
+│   Bot Service   │ :3000
+│   (Node.js)     │
+└────┬───────┬────┘
+     │       │
+┌────▼──┐ ┌─▼────┐
+│ Redis │ │ PG   │
+│ :6379 │ │ :5432│
+└───────┘ └──────┘
+```
+
+### Services
+
+1. **bot** - Main application (apps/bot)
+2. **web** - Dashboard (apps/web)
+3. **redis** - Cache & queue
+4. **postgres** - Database (optional if using Supabase cloud)
+
+### Deployment Steps
+
+#### 1. Build Images
+
+```bash
 docker-compose build
+```
 
-# Start the bot
-docker-compose up -d
+#### 2. Deploy
 
-# Stop the bot
-docker-compose down
+```bash
+# Local testing
+./scripts/deploy/deploy-local.sh
 
-# View logs
-docker-compose logs -f bot
+# Production deployment
+./scripts/deploy/deploy-production.sh
+```
 
-# Restart the bot
-docker-compose restart bot
+#### 3. Verify
 
-# View bot status
+```bash
+# Check service status
 docker-compose ps
 
-# Execute commands in container
-docker-compose exec bot sh
+# View logs
+docker-compose logs -f
 
-# Remove everything (including volumes)
-docker-compose down -v
+# Health checks
+curl http://localhost:3000/health  # Bot API
+curl http://localhost:80/health    # Web Dashboard
 ```
 
-### Production Docker Deployment
-
-1. **Use production environment file:**
-   ```bash
-   cp .env.production .env
-   ```
-
-2. **Update docker-compose.yml for production:**
-   ```yaml
-   services:
-     bot:
-       restart: always  # Change from unless-stopped
-       logging:
-         driver: "json-file"
-         options:
-           max-size: "50m"
-           max-file: "5"
-   ```
-
-3. **Deploy with optimizations:**
-   ```bash
-   docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-   ```
-
-### Docker Volume Management
+### Docker Commands Cheat Sheet
 
 ```bash
-# Backup database
-docker-compose exec bot cp /app/data/bot.db /app/data/bot.db.backup
+# Start services
+docker-compose up -d
 
-# Copy database out of container
-docker cp solana-memecoin-bot:/app/data/bot.db ./backup/
+# Stop services
+docker-compose down
 
-# Restore database
-docker cp ./backup/bot.db solana-memecoin-bot:/app/data/
+# Restart services
+docker-compose restart
 
-# Inspect volume
-docker volume inspect solana-memecoin-bot_bot-data
+# View logs
+docker-compose logs -f [service]
+
+# Execute command in container
+docker exec -it memecoin-bot sh
+
+# Scale services
+docker-compose up -d --scale bot=2
+
+# Clean up
+docker system prune -a
 ```
 
 ---
 
-## 🔄 PM2 Deployment
+## PM2 Deployment
 
-### Initial Setup
+PM2 provides process management without Docker containerization.
 
-1. **Install PM2 globally:**
-   ```bash
-   npm install -g pm2
-   ```
-
-2. **Clone and build:**
-   ```bash
-   git clone <repository-url>
-   cd solana-memecoin-bot
-   npm install
-   npm run build
-   ```
-
-3. **Configure environment:**
-   ```bash
-   cp .env.example .env
-   nano .env  # Add your configuration
-   ```
-
-4. **Create logs directory:**
-   ```bash
-   mkdir -p logs
-   ```
-
-### Starting with PM2
+### Installation
 
 ```bash
-# Start in production mode
-pm2 start ecosystem.config.js --env production
-
-# Or start in development mode
-pm2 start ecosystem.config.js
-
-# Start and save configuration
-pm2 start ecosystem.config.js --env production
-pm2 save
+npm install -g pm2
 ```
 
-### PM2 Commands
+### Start Services
 
 ```bash
-# View status
-pm2 status
-pm2 list
+# Start all services
+pm2 start ecosystem.config.js --env production
 
-# View logs
-pm2 logs solana-memecoin-bot
-pm2 logs solana-memecoin-bot --lines 100
+# Start specific service
+pm2 start ecosystem.config.js --only memecoin-bot
+```
 
-# Monitor
+### Monitoring
+
+```bash
+# Dashboard
 pm2 monit
 
-# Restart
-pm2 restart solana-memecoin-bot
+# List processes
+pm2 list
 
-# Stop
-pm2 stop solana-memecoin-bot
+# Logs
+pm2 logs
 
-# Delete from PM2
-pm2 delete solana-memecoin-bot
-
-# Reload (zero-downtime restart)
-pm2 reload solana-memecoin-bot
-
-# View detailed info
-pm2 show solana-memecoin-bot
-
-# Flush logs
-pm2 flush
+# Specific service logs
+pm2 logs memecoin-bot
 ```
 
-### PM2 Log Rotation
-
-Install PM2 log rotation module:
+### Management
 
 ```bash
-pm2 install pm2-logrotate
+# Restart
+pm2 restart memecoin-bot
 
-# Configure rotation
-pm2 set pm2-logrotate:max_size 10M
-pm2 set pm2-logrotate:retain 7
-pm2 set pm2-logrotate:compress true
-pm2 set pm2-logrotate:rotateInterval '0 0 * * *'  # Daily at midnight
+# Stop
+pm2 stop memecoin-bot
+
+# Delete
+pm2 delete memecoin-bot
+
+# Reload (zero-downtime)
+pm2 reload memecoin-bot
+
+# Show process info
+pm2 show memecoin-bot
 ```
 
-### PM2 Startup Script
-
-Configure PM2 to start on system boot:
+### Auto-Start on System Reboot
 
 ```bash
 # Generate startup script
@@ -304,324 +245,447 @@ pm2 startup
 
 # Save current process list
 pm2 save
-
-# To disable startup
-pm2 unstartup
 ```
 
-### PM2 with systemd (Linux)
+### Log Management
 
-```bash
-# Generate systemd service
-pm2 startup systemd
+PM2 automatically rotates logs. Configure in `ecosystem.config.js`:
 
-# Enable and start
-sudo systemctl enable pm2-<username>
-sudo systemctl start pm2-<username>
-
-# Check status
-sudo systemctl status pm2-<username>
-```
-
----
-
-## ⚙️ Configuration
-
-### Log Levels
-
-- **debug**: Detailed debugging information
-- **info**: General informational messages (default)
-- **warn**: Warning messages
-- **error**: Error messages only
-
-Set in `.env`:
-```env
-LOG_LEVEL=info
-```
-
-### Database Path
-
-- Default: `./data/bot.db`
-- Docker: `/app/data/bot.db` (mounted volume)
-
-Ensure the directory exists and is writable:
-```bash
-mkdir -p data
-chmod 755 data
-```
-
-### Resource Limits
-
-**Docker** (in `docker-compose.yml`):
-```yaml
-deploy:
-  resources:
-    limits:
-      cpus: '1.0'
-      memory: 1G
-```
-
-**PM2** (in `ecosystem.config.js`):
 ```javascript
-max_memory_restart: '1G'
+{
+  max_size: '100M',  // Rotate at 100MB
+  max_files: 10,     // Keep 10 files
+  compress: true     // Compress rotated logs
+}
 ```
 
 ---
 
-## 📊 Monitoring
+## Monitoring Setup
 
-### Docker Monitoring
+### Built-in Performance Monitor
 
+The bot includes a performance monitoring system in `apps/bot/src/performance/monitor.ts`.
+
+**Features:**
+- Response time tracking (avg, p50, p95, p99)
+- Cache hit rate monitoring
+- Memory usage tracking
+- Success/failure rate monitoring
+- Slow operation detection
+
+**Access metrics:**
 ```bash
-# Container stats
-docker stats solana-memecoin-bot
+# Via API
+curl http://localhost:3000/api/metrics
 
-# Health check
-docker inspect --format='{{json .State.Health}}' solana-memecoin-bot
-
-# Resource usage
-docker-compose top
+# Via logs
+grep "Performance Metrics" logs/pm2-combined.log
 ```
 
-### PM2 Monitoring
+### Health Check Endpoints
 
+**Bot API:**
 ```bash
-# Real-time monitoring
-pm2 monit
-
-# Process metrics
-pm2 describe solana-memecoin-bot
-
-# Plus (advanced monitoring - requires account)
-pm2 plus
+curl http://localhost:3000/health
 ```
 
-### Log Monitoring
-
-```bash
-# Docker
-docker-compose logs -f --tail=100 bot
-
-# PM2
-pm2 logs solana-memecoin-bot --lines 100
-
-# System logs (if using systemd)
-journalctl -u pm2-<username> -f
+**Response:**
+```json
+{
+  "status": "ok",
+  "timestamp": 1234567890,
+  "uptime": 3600,
+  "memory": {
+    "used": 512,
+    "limit": 1024
+  },
+  "services": {
+    "database": "connected",
+    "redis": "connected",
+    "telegram": "connected"
+  }
+}
 ```
 
-### Health Checks
+### Alerts
 
-Check if the bot is running:
-
-```bash
-# Docker
-docker-compose ps
-
-# PM2
-pm2 status
-
-# Process check
-ps aux | grep "solana-memecoin-bot"
-```
-
----
-
-## 🔧 Troubleshooting
-
-### Common Issues
-
-#### 1. **Bot won't start**
-
-**Symptoms:** Process exits immediately
-
-**Solutions:**
-```bash
-# Check environment variables
-cat .env
-
-# Verify required variables are set
-grep TELEGRAM_BOT_TOKEN .env
-
-# Check logs for error messages
-docker-compose logs bot  # Docker
-pm2 logs solana-memecoin-bot --err  # PM2
-```
-
-#### 2. **Missing environment variable error**
-
-**Error:** `❌ Missing required environment variable: TELEGRAM_BOT_TOKEN`
-
-**Solution:**
-```bash
-# Ensure .env file exists
-ls -la .env
-
-# Add missing variable
-echo "TELEGRAM_BOT_TOKEN=your_token_here" >> .env
-
-# Restart
-docker-compose restart bot  # Docker
-pm2 restart solana-memecoin-bot  # PM2
-```
-
-#### 3. **Database locked/permission errors**
-
-**Solution:**
-```bash
-# Docker - ensure proper permissions
-docker-compose exec bot chown -R nodejs:nodejs /app/data
-
-# PM2 - check file permissions
-ls -la data/
-chmod 644 data/bot.db
-```
-
-#### 4. **High memory usage**
-
-**Solution:**
-```bash
-# Docker - increase memory limit
-# Edit docker-compose.yml:
-memory: 2G
-
-# PM2 - restart on high memory
-# Edit ecosystem.config.js:
-max_memory_restart: '2G'
-```
-
-#### 5. **Bot not receiving updates**
-
-**Solutions:**
-```bash
-# Check bot token
-curl https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getMe
-
-# Check webhook (disable if set)
-curl https://api.telegram.org/bot<YOUR_BOT_TOKEN>/deleteWebhook
-
-# Restart bot
-docker-compose restart bot  # Docker
-pm2 restart solana-memecoin-bot  # PM2
-```
-
-### Debug Mode
-
-Enable debug logging:
+Configure alerts in `.env.production`:
 
 ```env
-LOG_LEVEL=debug
+# Memory threshold (%)
+MEMORY_ALERT_THRESHOLD=80
+
+# CPU threshold (%)
+CPU_ALERT_THRESHOLD=80
+
+# Error rate threshold (errors/min)
+ERROR_RATE_THRESHOLD=10
+
+# Alert destinations
+ALERT_TELEGRAM=true
+ALERT_DISCORD=true
+ALERT_EMAIL=true
 ```
 
-Then restart the bot and check logs.
+### External Monitoring
 
-### Getting Help
+**Recommended tools:**
 
-1. Check logs first: `docker-compose logs` or `pm2 logs`
-2. Verify environment variables: `cat .env`
-3. Check bot status: `docker-compose ps` or `pm2 status`
-4. Review error messages in logs
-5. Ensure all required variables are set
+1. **Uptime Monitoring**: UptimeRobot, Pingdom
+2. **Error Tracking**: Sentry (already integrated)
+3. **Log Management**: Logtail, Papertrail
+4. **APM**: New Relic, Datadog
 
----
-
-## 🔒 Security Best Practices
-
-### 1. **Environment Variables**
-
-- ✅ Never commit `.env` to git
-- ✅ Use `.env.example` as template
-- ✅ Rotate API keys periodically
-- ✅ Use environment-specific files (`.env.production`)
-
-### 2. **File Permissions**
-
-```bash
-# Secure .env file
-chmod 600 .env
-
-# Secure database
-chmod 644 data/bot.db
-
-# Secure logs directory
-chmod 755 logs/
-```
-
-### 3. **Docker Security**
-
-- ✅ Run as non-root user (already configured)
-- ✅ Use specific image versions (not `latest`)
-- ✅ Scan images for vulnerabilities: `docker scan`
-- ✅ Limit resource usage (configured in docker-compose.yml)
-
-### 4. **Network Security**
-
-- ✅ Use HTTPS for RPC endpoints
-- ✅ Don't expose unnecessary ports
-- ✅ Use VPN for remote deployments
-- ✅ Enable firewall rules
-
-### 5. **Backup Strategy**
-
-```bash
-# Backup database daily
-docker-compose exec bot cp /app/data/bot.db /app/data/bot.db.$(date +%Y%m%d)
-
-# Backup environment
-cp .env .env.backup
-
-# Automated backup script
-#!/bin/bash
-BACKUP_DIR="./backups/$(date +%Y%m%d)"
-mkdir -p $BACKUP_DIR
-docker cp solana-memecoin-bot:/app/data/bot.db $BACKUP_DIR/
-```
-
-### 6. **Updates and Patches**
-
-```bash
-# Pull latest changes
-git pull origin main
-
-# Rebuild
-docker-compose build  # Docker
-npm run build         # PM2
-
-# Restart
-docker-compose up -d  # Docker
-pm2 restart solana-memecoin-bot  # PM2
+**Setup Sentry:**
+```env
+SENTRY_DSN=https://your-sentry-dsn@sentry.io/project
 ```
 
 ---
 
-## 📞 Support
+## Backup & Restore
 
-For issues and questions:
-- Check logs: `docker-compose logs` or `pm2 logs`
-- Review this guide
-- Check `README.md` for project documentation
+### Automated Backups
+
+**Configure automatic backups:**
+
+```env
+BACKUP_ENABLED=true
+BACKUP_SCHEDULE="0 3 * * *"  # 3 AM daily
+BACKUP_RETENTION_DAYS=7
+```
+
+**Setup cron job:**
+```bash
+crontab -e
+
+# Add:
+0 3 * * * cd /path/to/bot && ./scripts/deploy/backup.sh
+```
+
+### Manual Backup
+
+```bash
+./scripts/deploy/backup.sh
+```
+
+**Creates backup of:**
+- PostgreSQL database
+- Redis data
+- Application files
+- Configuration
+- Logs
+
+**Backup location:**
+```
+backups/
+  backup_20240126_030000.tar.gz
+  backup_20240125_030000.tar.gz
+  ...
+```
+
+### Restore
+
+```bash
+./scripts/deploy/restore.sh
+```
+
+**Interactive menu:**
+1. Lists available backups
+2. Select backup to restore
+3. Confirms before restoring
+4. Restores all components
+5. Verifies services
+
+### Offsite Backup (S3)
+
+**Configure S3 backup:**
+
+```env
+BACKUP_S3_BUCKET=your-backup-bucket
+AWS_ACCESS_KEY_ID=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
+AWS_REGION=us-east-1
+```
+
+**Manual S3 upload:**
+```bash
+aws s3 cp backups/ s3://your-bucket/backups/ --recursive
+```
 
 ---
 
-## 📝 Quick Reference
+## CI/CD Pipeline
 
-### Docker Commands Cheat Sheet
-```bash
-docker-compose up -d              # Start
-docker-compose down               # Stop
-docker-compose restart bot        # Restart
-docker-compose logs -f bot        # Logs
-docker-compose ps                 # Status
+### GitHub Actions
+
+Workflow file: `.github/workflows/deploy.yml`
+
+**Triggers:**
+- Push to `main` branch
+- Manual workflow dispatch
+
+**Jobs:**
+
+1. **Test** - Run tests and linting
+2. **Build** - Build application
+3. **Docker** - Build and push Docker images
+4. **Deploy** - Deploy to server
+5. **Health Check** - Verify deployment
+
+### Required Secrets
+
+Configure in GitHub Settings → Secrets:
+
+```
+DOCKER_USERNAME
+DOCKER_PASSWORD
+SSH_PRIVATE_KEY
+SERVER_HOST
+SERVER_USER
+DEPLOY_PATH
+APP_URL
+WEB_URL
+VITE_API_URL
+VITE_WS_URL
+VITE_SUPABASE_URL
+VITE_SUPABASE_ANON_KEY
+SLACK_WEBHOOK (optional)
+CODECOV_TOKEN (optional)
 ```
 
-### PM2 Commands Cheat Sheet
+### Manual Deployment
+
 ```bash
-pm2 start ecosystem.config.js --env production  # Start
-pm2 stop solana-memecoin-bot     # Stop
-pm2 restart solana-memecoin-bot  # Restart
-pm2 logs solana-memecoin-bot     # Logs
-pm2 status                        # Status
+# Trigger via GitHub Actions UI
+# Or via gh CLI:
+gh workflow run deploy.yml
 ```
 
 ---
 
-**Last Updated:** January 2025
+## Troubleshooting
+
+### Bot Not Starting
+
+**Check logs:**
+```bash
+# Docker
+docker-compose logs bot
+
+# PM2
+pm2 logs memecoin-bot
+```
+
+**Common issues:**
+
+1. **Missing environment variables**
+   ```bash
+   # Verify .env.production exists and has all required values
+   cat .env.production
+   ```
+
+2. **Database connection failed**
+   ```bash
+   # Test Supabase connection
+   npm run db:test
+   ```
+
+3. **Port already in use**
+   ```bash
+   # Find process using port 3000
+   lsof -i :3000
+   # Kill process
+   kill -9 <PID>
+   ```
+
+### High Memory Usage
+
+**Check memory:**
+```bash
+# Docker
+docker stats memecoin-bot
+
+# PM2
+pm2 show memecoin-bot
+```
+
+**Solutions:**
+
+1. Increase memory limit in `ecosystem.config.js`:
+   ```javascript
+   max_memory_restart: '2G'
+   ```
+
+2. Check for memory leaks in performance monitor:
+   ```bash
+   curl http://localhost:3000/api/metrics
+   ```
+
+3. Restart service:
+   ```bash
+   docker-compose restart bot
+   # or
+   pm2 restart memecoin-bot
+   ```
+
+### Cache Issues
+
+**Clear Redis cache:**
+```bash
+# Docker
+docker exec memecoin-redis redis-cli FLUSHALL
+
+# Direct
+redis-cli FLUSHALL
+```
+
+### Database Migration Issues
+
+**Run migrations manually:**
+```bash
+npm run db:migrate
+```
+
+**Rollback migration:**
+```bash
+npm run migrate:rollback
+```
+
+### Service Not Responding
+
+**Health check failed:**
+
+1. Check service status:
+   ```bash
+   docker-compose ps
+   # or
+   pm2 list
+   ```
+
+2. Restart service:
+   ```bash
+   docker-compose restart
+   # or
+   pm2 restart all
+   ```
+
+3. Check firewall:
+   ```bash
+   sudo ufw status
+   sudo ufw allow 3000
+   ```
+
+### Rollback Deployment
+
+```bash
+./scripts/deploy/rollback.sh
+```
+
+---
+
+## Security Best Practices
+
+### 1. Environment Variables
+
+- **Never commit `.env.production`** to git
+- Use strong, unique passwords
+- Rotate API keys regularly
+- Use read-only keys where possible
+
+### 2. Database Security
+
+- **Use Supabase RLS** (Row Level Security)
+- Restrict service role key usage
+- Enable SSL connections
+- Regular backups
+
+### 3. API Security
+
+- **Rate limiting** enabled by default
+- CORS configured properly
+- JWT authentication for admin endpoints
+- Input validation on all endpoints
+
+### 4. Server Security
+
+```bash
+# Update system
+sudo apt update && sudo apt upgrade
+
+# Configure firewall
+sudo ufw enable
+sudo ufw allow 22  # SSH
+sudo ufw allow 80  # HTTP
+sudo ufw allow 443 # HTTPS
+
+# Install fail2ban
+sudo apt install fail2ban
+
+# Configure automatic updates
+sudo apt install unattended-upgrades
+```
+
+### 5. Docker Security
+
+- **Use non-root user** (already configured)
+- Scan images for vulnerabilities:
+  ```bash
+  docker scan solana-memecoin-bot:latest
+  ```
+- Keep base images updated
+- Use specific image tags, not `latest`
+
+### 6. Secrets Management
+
+**Use environment variables or secrets manager:**
+
+- AWS Secrets Manager
+- HashiCorp Vault
+- Docker Secrets (Swarm mode)
+
+### 7. SSL/TLS Setup
+
+**Use Caddy or Nginx with Let's Encrypt:**
+
+```bash
+# Install Caddy
+sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt update
+sudo apt install caddy
+
+# Configure Caddyfile
+sudo nano /etc/caddy/Caddyfile
+```
+
+**Caddyfile:**
+```
+yourdomain.com {
+    reverse_proxy localhost:80
+}
+
+api.yourdomain.com {
+    reverse_proxy localhost:3000
+}
+```
+
+```bash
+sudo systemctl restart caddy
+```
+
+---
+
+## Support
+
+- **Issues**: [GitHub Issues](https://github.com/youruser/solana-memecoin-bot/issues)
+- **Documentation**: [README.md](./README.md)
+- **Performance Monitor**: `apps/bot/src/performance/monitor.ts`
+
+---
+
+## License
+
+MIT License - see [LICENSE](./LICENSE)

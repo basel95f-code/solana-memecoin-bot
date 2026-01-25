@@ -1,113 +1,133 @@
 /**
- * PM2 Ecosystem Configuration for Solana Memecoin Bot
- * 
- * Usage:
- *   pm2 start ecosystem.config.js
- *   pm2 restart ecosystem.config.js
- *   pm2 stop ecosystem.config.js
- *   pm2 logs solana-memecoin-bot
- *   pm2 monit
+ * PM2 Configuration for Solana Memecoin Bot
+ * Production-grade process management with auto-restart, clustering, and monitoring
  */
 
 module.exports = {
   apps: [
     {
-      // Application Configuration
-      name: 'solana-memecoin-bot',
+      // ============================================
+      // Main Bot Application
+      // ============================================
+      name: 'memecoin-bot',
       script: './apps/bot/dist/index.js',
-      cwd: './',
+      cwd: process.cwd(),
       
-      // Instances & Execution Mode
-      instances: 1,  // Single instance (not cluster) - bot needs single state
-      exec_mode: 'fork',  // Fork mode for stateful applications
+      // Execution mode
+      instances: 1, // Single instance for bot (stateful)
+      exec_mode: 'fork', // Fork mode (cluster not suitable for stateful bot)
       
-      // Environment Variables
+      // Auto restart configuration
+      autorestart: true,
+      watch: false, // Don't watch files in production
+      max_memory_restart: '1G', // Restart if memory exceeds 1GB
+      
+      // Restart delays
+      min_uptime: '10s', // Consider app online after 10s
+      max_restarts: 10, // Max restarts within 1 minute
+      restart_delay: 4000, // Wait 4s before restart
+      
+      // Environment
       env: {
-        NODE_ENV: 'development',
-        LOG_LEVEL: 'debug',
-      },
-      env_production: {
         NODE_ENV: 'production',
         LOG_LEVEL: 'info',
       },
       
-      // Auto-restart Configuration
-      autorestart: true,
-      max_restarts: 10,  // Max restarts within min_uptime before considering unstable
-      min_uptime: '10s',  // Minimum uptime before considering stable
-      restart_delay: 4000,  // Delay between restarts (ms)
-      
-      // Memory & Performance
-      max_memory_restart: '1G',  // Restart if memory exceeds 1GB
-      
-      // Logging Configuration
-      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      // Logging
       error_file: './logs/pm2-error.log',
       out_file: './logs/pm2-out.log',
       log_file: './logs/pm2-combined.log',
-      merge_logs: true,  // Merge logs from all instances
+      time: true, // Prefix logs with timestamp
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
       
-      // Log Rotation (requires pm2-logrotate module)
-      // Install with: pm2 install pm2-logrotate
-      // Configure with: pm2 set pm2-logrotate:max_size 10M
+      // Log rotation
+      max_size: '100M', // Rotate logs at 100MB
+      max_files: 10, // Keep 10 rotated files
+      compress: true, // Compress rotated logs
       
-      // Process Management
-      kill_timeout: 5000,  // Time to wait for graceful shutdown (ms)
-      listen_timeout: 3000,  // Time to wait for app to listen (ms)
-      shutdown_with_message: true,  // Send shutdown message to process
+      // Graceful shutdown
+      kill_timeout: 5000, // Wait 5s for graceful shutdown
+      wait_ready: true, // Wait for ready signal
+      listen_timeout: 10000, // Timeout for listen
+      shutdown_with_message: true,
       
-      // Watch & Reload (disabled in production)
-      watch: false,  // Set to true in development if desired
-      ignore_watch: [
-        'node_modules',
-        'logs',
-        'data',
-        '*.log',
-        '.git',
-      ],
-      
-      // Advanced Features
-      exp_backoff_restart_delay: 100,  // Exponential backoff for restarts
-      
-      // Source Map Support (for better error traces)
-      source_map_support: true,
-      
-      // Interpreter (Node.js)
-      interpreter: 'node',
-      interpreter_args: '--max-old-space-size=1024',  // Node.js heap size limit
-      
-      // Cron Restart (optional - restart daily at 3 AM)
-      // cron_restart: '0 3 * * *',
-      
-      // Error Handling
-      error: './logs/pm2-error.log',
-      out: './logs/pm2-out.log',
-      
-      // Graceful Shutdown
-      wait_ready: false,  // Wait for process.send('ready')
-      
-      // Combined Logs
+      // Process monitoring
+      merge_logs: true,
       combine_logs: true,
       
-      // Timezone
+      // Advanced features
+      source_map_support: true,
+      instance_var: 'INSTANCE_ID',
+      
+      // Health monitoring
+      vizion: false, // Disable git metadata (not needed in production)
+      
+      // Crash analysis
+      pmx: true,
+      automation: false,
+    },
+    
+    // ============================================
+    // API Server (if separate from bot)
+    // ============================================
+    {
+      name: 'memecoin-api',
+      script: './apps/bot/dist/api/server.js',
+      cwd: process.cwd(),
+      
+      // Clustering for API (stateless)
+      instances: 2, // Run 2 instances
+      exec_mode: 'cluster',
+      
+      // Auto restart
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '500M',
+      
+      // Environment
+      env: {
+        NODE_ENV: 'production',
+        PORT: 3000,
+      },
+      
+      // Logging
+      error_file: './logs/api-error.log',
+      out_file: './logs/api-out.log',
+      log_file: './logs/api-combined.log',
       time: true,
+      
+      // Log rotation
+      max_size: '50M',
+      max_files: 5,
+      compress: true,
+      
+      // Graceful shutdown
+      kill_timeout: 3000,
+      wait_ready: true,
+      listen_timeout: 5000,
+      
+      // Health check
+      health_check: {
+        enable: true,
+        endpoint: 'http://localhost:3000/health',
+        interval: 30000, // 30 seconds
+        timeout: 5000,
+      },
     },
   ],
-
-  /**
-   * PM2 Deploy Configuration (Optional)
-   * Uncomment and configure for deployment automation
-   */
-  // deploy: {
-  //   production: {
-  //     user: 'node',
-  //     host: 'your-server.com',
-  //     ref: 'origin/main',
-  //     repo: 'git@github.com:username/solana-memecoin-bot.git',
-  //     path: '/var/www/solana-memecoin-bot',
-  //     'pre-deploy-local': '',
-  //     'post-deploy': 'npm install && npm run build && pm2 reload ecosystem.config.js --env production',
-  //     'pre-setup': '',
-  //   },
-  // },
+  
+  // ============================================
+  // PM2 Deploy Configuration (optional)
+  // ============================================
+  deploy: {
+    production: {
+      user: 'deploy',
+      host: 'your-server.com',
+      ref: 'origin/main',
+      repo: 'git@github.com:youruser/solana-memecoin-bot.git',
+      path: '/var/www/memecoin-bot',
+      'post-deploy': 'npm install && npm run build && pm2 reload ecosystem.config.js --env production',
+      'pre-setup': 'sudo apt-get install git -y',
+    },
+  },
 };
