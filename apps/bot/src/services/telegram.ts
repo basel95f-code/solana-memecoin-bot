@@ -3,6 +3,7 @@ import { config } from '../config';
 import type { TokenAnalysis, WatchedToken, WalletActivityAlert, TrackedWallet, WalletTransaction } from '../types';
 import type { TradingSignal } from '../signals/types';
 import { registerAllCommands, incrementAlertsSent } from '../telegram/commands';
+import { registerTopicEnforcer } from '../middleware/topicEnforcer';
 import { formatTokenAlert, formatWatchlistAlert, formatSignalAlert } from '../telegram/formatters';
 import { alertActionKeyboard, signalActionKeyboard } from '../telegram/keyboards';
 import { storageService } from './storage';
@@ -84,6 +85,9 @@ class TelegramService {
     if (this.initialized) return;
 
     try {
+      // Register topic enforcer middleware (before commands)
+      registerTopicEnforcer(this.bot);
+
       // Register all modular commands
       registerAllCommands(this.bot);
 
@@ -98,7 +102,7 @@ class TelegramService {
       });
 
       this.initialized = true;
-      console.log('Telegram bot initialized with all commands');
+      console.log('Telegram bot initialized with topic-aware middleware and all commands');
     } catch (error) {
       console.error('Failed to initialize Telegram bot:', error);
       throw error;

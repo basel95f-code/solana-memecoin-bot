@@ -3,6 +3,8 @@ import { formatHelp, formatStats, formatMainMenu, formatMarketMenu, formatAlerts
 import { mainMenuKeyboard, marketKeyboard, alertsKeyboard, backToMenuKeyboard } from '../keyboards';
 import { config } from '../../config';
 import { healthMonitor } from '../../services/retryService';
+import { topicManager } from '../../services/topicManager';
+import { chatContextService } from '../../services/chatContext';
 
 let startTime = Date.now();
 let tokensAnalyzed = 0;
@@ -103,8 +105,38 @@ export function registerBasicCommands(bot: Telegraf): void {
     await ctx.answerCbQuery();
   });
 
-  // /help command
+  // /help command - topic-aware
   bot.command('help', async (ctx: Context) => {
+    // Check if in a forum topic
+    const topicId = (ctx.message as any)?.message_thread_id;
+    const chatId = ctx.chat?.id.toString();
+
+    if (topicId && chatId) {
+      // Get topic configuration
+      const chatContext = chatContextService.getChatContext(ctx);
+      if (chatContext?.isGroup) {
+        const topicConfig = await topicManager.getTopicConfig(chatId, topicId);
+        
+        // If topic has restricted commands, show topic-specific help
+        if (topicConfig?.allowedCommands && topicConfig.allowedCommands.length > 0) {
+          let message = `ℹ️ *${topicConfig.topicName} - Available Commands*\n\n`;
+          message += `This topic only allows these commands:\n\n`;
+          
+          const commands = topicConfig.allowedCommands.map(cmd => `/${cmd}`).join('\n');
+          message += commands;
+          
+          message += `\n\n💬 For general discussion, use the General Chat topic.`;
+          message += `\n📋 Use /topicinfo for more details.`;
+          
+          return ctx.reply(message, { 
+            parse_mode: 'Markdown',
+            message_thread_id: topicId 
+          });
+        }
+      }
+    }
+
+    // Show full help
     await ctx.replyWithHTML(formatHelp(), backToMenuKeyboard());
   });
 

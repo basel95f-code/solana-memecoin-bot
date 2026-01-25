@@ -1,10 +1,11 @@
 import { database } from '../database';
 import { chatContextService } from './chatContext';
 import { groupWatchlistService } from './groupWatchlist';
+import { topicManager } from './topicManager';
 import type { GroupSettings, UserSettings } from './chatContext';
 import { logger } from '../utils/logger';
 
-export type AlertType = 'token' | 'smart_money' | 'rug_warning' | 'signal' | 'volume_spike' | 'watchlist';
+export type AlertType = 'token' | 'smart_money' | 'rug_warning' | 'signal' | 'volume_spike' | 'watchlist' | 'leaderboard';
 
 export interface AlertMetadata {
   type: AlertType;
@@ -19,6 +20,7 @@ export interface AlertMetadata {
 export interface AlertTarget {
   chatId: string;
   chatType: 'private' | 'group' | 'supergroup';
+  topicId?: number;  // Forum topic ID (if applicable)
 }
 
 class AlertRouterService {
@@ -44,9 +46,13 @@ class AlertRouterService {
         }
 
         if (await this.shouldSendToGroup(group, metadata, isWatched)) {
+          // Check if group has forum topics and route to appropriate topic
+          const topicId = await topicManager.getTopicForAlertType(group.chatId, metadata.type);
+          
           targets.push({
             chatId: group.chatId,
             chatType: group.chatType === 'supergroup' ? 'supergroup' : 'group',
+            topicId: topicId || undefined,
           });
 
           // Record alert for watchlist token

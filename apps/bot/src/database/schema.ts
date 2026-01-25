@@ -1062,5 +1062,30 @@ export const MIGRATIONS: { version: number; sql: string }[] = [
       CREATE INDEX IF NOT EXISTS idx_leaderboard_outcome ON leaderboard_entries(outcome);
       CREATE INDEX IF NOT EXISTS idx_leaderboard_tracked_until ON leaderboard_entries(tracked_until);
     `
+  },
+  {
+    version: 13,
+    description: 'Add topic configurations for Telegram forum groups',
+    sql: `
+      -- ============================================
+      -- Topic Configurations Table
+      -- Manages topic-aware bot behavior in Telegram forum groups
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS topic_configs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chat_id TEXT NOT NULL,
+        topic_id INTEGER NOT NULL,
+        topic_name TEXT NOT NULL,
+        mode TEXT NOT NULL CHECK(mode IN ('command_only', 'normal', 'read_only')),
+        allowed_commands TEXT, -- JSON array of allowed commands
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        UNIQUE(chat_id, topic_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_topic_configs_chat ON topic_configs(chat_id);
+      CREATE INDEX IF NOT EXISTS idx_topic_configs_topic ON topic_configs(chat_id, topic_id);
+      CREATE INDEX IF NOT EXISTS idx_topic_configs_mode ON topic_configs(mode);
+    `
   }
 ];
