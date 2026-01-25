@@ -2,6 +2,7 @@ import axios from 'axios';
 import type { SocialAnalysis, TokenMetadata } from '../types';
 import { logger } from '../utils/logger';
 import { TIMEOUTS } from '../constants';
+import { cacheManager, CacheKey, CacheTTL } from '../cache';
 
 export async function analyzeSocials(metadata: TokenMetadata | undefined): Promise<SocialAnalysis> {
   const result: SocialAnalysis = {
@@ -12,6 +13,13 @@ export async function analyzeSocials(metadata: TokenMetadata | undefined): Promi
 
   if (!metadata) {
     return result;
+  }
+
+  // Create cache key from metadata (use website/twitter/telegram as unique identifier)
+  const cacheKey = `social:${metadata.twitter || ''}:${metadata.telegram || ''}:${metadata.website || ''}`;
+  const cached = await cacheManager.get<SocialAnalysis>(cacheKey);
+  if (cached) {
+    return cached;
   }
 
   // Check Twitter
@@ -34,6 +42,9 @@ export async function analyzeSocials(metadata: TokenMetadata | undefined): Promi
     result.websiteUrl = normalizeWebsiteUrl(metadata.website);
     result.websiteAge = await getWebsiteAge(result.websiteUrl);
   }
+
+  // Cache the result (15 min TTL for social data)
+  await cacheManager.set(cacheKey, result, CacheTTL.SOCIAL_DATA);
 
   return result;
 }

@@ -13,6 +13,7 @@ import { FEATURE_COUNT } from './featureEngineering';
 import { modelVersionManager } from './modelVersioning';
 import { ensemblePredictor } from './ensemblePredictor';
 import { mlRetrainer } from '../services/ml/mlRetrainer';
+import { cacheManager, CacheKey, CacheTTL } from '../cache';
 
 // Legacy 9-feature input (v1 compatibility)
 export interface PredictionInput {
@@ -294,6 +295,15 @@ class RugPredictor {
       };
     }
 
+    // Create cache key from input features (rounded to reduce cache misses from tiny differences)
+    const cacheKey = `ml:${Math.round(input.liquidityUsd)}:${input.riskScore}:${input.holderCount}:${Math.round(input.top10Percent)}:${input.mintRevoked}:${input.freezeRevoked}`;
+    
+    // Check cache (1 min TTL for predictions)
+    const cached = await cacheManager.get<PredictionResult>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const features = this.extractFeatures(input);
     const inputTensor = tf.tensor2d([features]);
     this.totalPredictions++;
@@ -314,12 +324,17 @@ class RugPredictor {
       // Generate recommendation
       const recommendation = this.getRecommendation(probability, confidence);
 
-      return {
+      const result = {
         rugProbability: probability,
         confidence,
         riskFactors,
         recommendation,
       };
+
+      // Cache the result (1 min TTL)
+      await cacheManager.set(cacheKey, result, CacheTTL.ML_PREDICTION);
+
+      return result;
     } catch (error) {
       logger.error('RugPredictor', 'Prediction failed', error as Error);
 

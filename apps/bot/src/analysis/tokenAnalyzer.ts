@@ -11,6 +11,7 @@ import { analyzeSentiment, getDefaultSentiment } from './sentimentAnalysis';
 import { classifyRisk } from '../risk/classifier';
 import type { TokenAnalysis, PoolInfo, LiquidityAnalysis, HolderAnalysis, ContractAnalysis, SocialAnalysis, SentimentAnalysis } from '../types';
 import { config } from '../config';
+import { cacheManager, CacheKey, CacheTTL } from '../cache';
 
 // Track in-flight analysis requests to prevent duplicates
 const pendingAnalysis = new Map<string, Promise<TokenAnalysis | null>>();
@@ -56,13 +57,11 @@ async function performAnalysis(
   pool: PoolInfo
 ): Promise<TokenAnalysis | null> {
   try {
-    // Check if already analyzed recently
-    if (tokenCache.has(tokenMint)) {
-      const cached = tokenCache.get(tokenMint);
-      if (cached?.lastAnalysis) {
-        console.log(`Using cached analysis for ${tokenMint}`);
-        return cached.lastAnalysis;
-      }
+    // Check cache first (5 min TTL)
+    const cached = await cacheManager.get<TokenAnalysis>(CacheKey.tokenAnalysis(tokenMint));
+    if (cached) {
+      console.log(`Using cached analysis for ${tokenMint}`);
+      return cached;
     }
 
     console.log(`Analyzing token: ${tokenMint}`);
@@ -144,9 +143,10 @@ async function performAnalysis(
       analyzedAt: new Date(),
     };
 
-    // Cache the analysis
+    // Cache the analysis (both old and new cache for backward compatibility)
     tokenCache.add(tokenMint);
     tokenCache.updateAnalysis(tokenMint, analysis);
+    await cacheManager.set(CacheKey.tokenAnalysis(tokenMint), analysis, CacheTTL.TOKEN_ANALYSIS);
 
     console.log(
       `Analysis complete for ${tokenInfo.symbol}: Risk ${risk.level} (${risk.score}/100)`

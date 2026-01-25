@@ -3,8 +3,16 @@ import { solanaService } from '../services/solana';
 import type { ContractAnalysis } from '../types';
 import { logger } from '../utils/logger';
 import { PROGRAMS, CONTRACT } from '../constants';
+import { cacheManager, CacheKey, CacheTTL } from '../cache';
 
 export async function analyzeContract(mintAddress: string): Promise<ContractAnalysis> {
+  // Check cache first (5 min TTL)
+  const cacheKey = CacheKey.contractData(mintAddress);
+  const cached = await cacheManager.get<ContractAnalysis>(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   let mintAuthorityRevoked = false;
   let freezeAuthorityRevoked = false;
   let mintAuthority: string | null = null;
@@ -40,7 +48,7 @@ export async function analyzeContract(mintAddress: string): Promise<ContractAnal
     console.error(`Error analyzing contract for ${mintAddress}:`, error);
   }
 
-  return {
+  const result = {
     mintAuthorityRevoked,
     freezeAuthorityRevoked,
     mintAuthority,
@@ -50,6 +58,11 @@ export async function analyzeContract(mintAddress: string): Promise<ContractAnal
     hasTransferFee,
     transferFeePercent,
   };
+
+  // Cache the result
+  await cacheManager.set(cacheKey, result, CacheTTL.TOKEN_ANALYSIS);
+
+  return result;
 }
 
 /**

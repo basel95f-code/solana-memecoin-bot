@@ -3,6 +3,7 @@ import type { HolderAnalysis, HolderInfo, TokenInfo} from '../types';
 import { TOKEN_PROGRAM_ID } from '../types';
 import type { ParsedAccountData } from '@solana/web3.js';
 import { PublicKey } from '@solana/web3.js';
+import { cacheManager, CacheKey, CacheTTL } from '../cache';
 
 const WHALE_THRESHOLD_PERCENT = 5;
 const CONCENTRATED_THRESHOLD = 50; // Top 10 holders > 50% is concentrated
@@ -21,6 +22,13 @@ const EXCLUDED_ADDRESSES = [
 ];
 
 export async function analyzeHolders(token: TokenInfo): Promise<HolderAnalysis> {
+  // Check cache first (5 min TTL)
+  const cacheKey = CacheKey.holderData(token.mint);
+  const cached = await cacheManager.get<HolderAnalysis>(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   let totalHolders = 0;
   let top10HoldersPercent = 0;
   let top20HoldersPercent = 0;
@@ -101,7 +109,7 @@ export async function analyzeHolders(token: TokenInfo): Promise<HolderAnalysis> 
     console.error(`Error analyzing holders for ${token.mint}:`, error);
   }
 
-  return {
+  const result = {
     totalHolders,
     top10HoldersPercent,
     top20HoldersPercent,
@@ -111,6 +119,11 @@ export async function analyzeHolders(token: TokenInfo): Promise<HolderAnalysis> 
     isConcentrated,
     topHolders,
   };
+
+  // Cache the result
+  await cacheManager.set(cacheKey, result, CacheTTL.HOLDER_DATA);
+
+  return result;
 }
 
 /**

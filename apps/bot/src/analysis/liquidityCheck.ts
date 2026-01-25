@@ -3,6 +3,7 @@ import type { LiquidityAnalysis, PoolInfo} from '../types';
 import { KNOWN_LP_LOCKERS, SOL_MINT, USDC_MINT, USDT_MINT } from '../types';
 import { withRetry } from '../utils/retry';
 import axios from 'axios';
+import { cacheManager, CacheKey, CacheTTL } from '../cache';
 
 // Known burn addresses
 const BURN_ADDRESSES = [
@@ -40,6 +41,13 @@ let cachedSolPrice: { price: number; timestamp: number } | null = null;
 const SOL_PRICE_CACHE_TTL = 60000; // 1 minute
 
 export async function analyzeLiquidity(pool: PoolInfo): Promise<LiquidityAnalysis> {
+  // Check cache first (5 min TTL)
+  const cacheKey = CacheKey.liquidityData(pool.tokenMint);
+  const cached = await cacheManager.get<LiquidityAnalysis>(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   // Connection available if needed for on-chain lookups
   const _connection = solanaService.getConnection();
 
@@ -70,7 +78,7 @@ export async function analyzeLiquidity(pool: PoolInfo): Promise<LiquidityAnalysi
     console.error('Error analyzing liquidity:', error);
   }
 
-  return {
+  const result = {
     totalLiquidityUsd,
     lpBurned,
     lpBurnedPercent,
@@ -78,6 +86,11 @@ export async function analyzeLiquidity(pool: PoolInfo): Promise<LiquidityAnalysi
     lpLockedPercent,
     lpLockerAddress,
   };
+
+  // Cache the result
+  await cacheManager.set(cacheKey, result, CacheTTL.TOKEN_ANALYSIS);
+
+  return result;
 }
 
 async function getSolPrice(): Promise<number> {
