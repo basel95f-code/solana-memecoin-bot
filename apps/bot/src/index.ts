@@ -263,6 +263,15 @@ class SolanaMemecoinBot {
       logger.info('Main', 'ML auto-retrain scheduler started');
       logger.info('Main', 'Learning orchestrator started - bot will learn from results');
 
+      // Initialize pattern detector (success pattern learning)
+      await patternDetector.initialize();
+      const patternStats = patternDetector.getOverallStats();
+      logger.info('Main', `Pattern detector initialized (${patternStats.activePatterns} active patterns)`);
+
+      // Start pattern update scheduler (daily pattern refresh)
+      startPatternUpdateScheduler();
+      logger.info('Main', 'Pattern update scheduler started');
+
       // Initialize leaderboard update job (runs every 6 hours)
       initLeaderboardJob();
       logger.info('Main', 'Leaderboard update job initialized');

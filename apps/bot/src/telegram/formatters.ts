@@ -16,6 +16,7 @@ import type { LiquidityAlert } from '../services/liquidityMonitor';
 import type { DevBehaviorAlert } from '../services/devWalletTracker';
 import type { BundleAlert } from '../services/bundledWalletDetector';
 import type { HolderChangeAlert } from '../services/topHolderTracker';
+import type { PatternMatch, Prediction } from '../services/patternDetector';
 
 // ═══════════════════════════════════════════
 // UTILITY FUNCTIONS
@@ -206,6 +207,8 @@ export function formatFullAnalysis(analysis: TokenAnalysis, dexData?: DexScreene
     const emoji = net > 0 ? '🐋' : net < 0 ? '🚨' : '⚪';
     lines.push(`${emoji} ${net > 0 ? '+' : ''}${net} net (${smartMoney.smartBuys24h}B/${smartMoney.smartSells24h}S)`);
   }
+
+  // NOTE: Tracked smart money wallets section is added dynamically in /check command
 
   // Sentiment
   if (sentiment?.hasSentimentData) {
@@ -513,6 +516,51 @@ export function getSmartMoneyEmoji(netBuys: number): string {
 export function formatSmartMoney(smartMoney: SmartMoneyActivity): string {
   const net = smartMoney.netSmartMoney;
   return `${net > 0 ? '+' : ''}${net} (${smartMoney.smartBuys24h}B/${smartMoney.smartSells24h}S)`;
+}
+
+/**
+ * Format tracked smart money wallet activity for a token
+ */
+export function formatTrackedSmartMoneyActivity(activity: {
+  holders: string[];
+  recentBuys: any[];
+  recentSells: any[];
+}): string | null {
+  const { holders, recentBuys, recentSells } = activity;
+
+  // Only show if there's activity
+  if (holders.length === 0 && recentBuys.length === 0 && recentSells.length === 0) {
+    return null;
+  }
+
+  const lines: string[] = [];
+  lines.push(`<b>🎯 Tracked Wallets</b>`);
+
+  // Show holders
+  if (holders.length > 0) {
+    lines.push(`${holders.length} tracked wallet${holders.length > 1 ? 's' : ''} holding`);
+  }
+
+  // Show recent buys
+  if (recentBuys.length > 0) {
+    const buyCount = recentBuys.length;
+    lines.push(`🟢 ${buyCount} recent buy${buyCount > 1 ? 's' : ''} (24h)`);
+  }
+
+  // Show recent sells
+  if (recentSells.length > 0) {
+    const sellCount = recentSells.length;
+    lines.push(`🔴 ${sellCount} recent sell${sellCount > 1 ? 's' : ''} (24h)`);
+  }
+
+  // Add insight
+  if (recentBuys.length > recentSells.length) {
+    lines.push(`💡 Smart money accumulating`);
+  } else if (recentSells.length > recentBuys.length) {
+    lines.push(`⚠️ Smart money exiting`);
+  }
+
+  return lines.join('\n');
 }
 
 // ═══════════════════════════════════════════
@@ -1020,3 +1068,50 @@ export function formatHolderChangeAlert(alert: { type: string; severity: string;
   return lines.join('\n');
 }
 
+
+// -------------------------------------------
+// PATTERN ANALYSIS
+// -------------------------------------------
+
+export function formatPatternAnalysis(
+  matches: PatternMatch[],
+  prediction: Prediction,
+  similarTokens?: any[]
+): string {
+  if (matches.length === 0) {
+    return '';
+  }
+
+  const lines = [
+    '',
+    '<b>? Pattern Analysis</b>',
+  ];
+
+  // Top matches
+  for (const match of matches.slice(0, 3)) {
+    const emoji = match.patternType === 'success' ? '?' : '??';
+    lines.push(
+      ${emoji}  (% match, % success)
+    );
+  }
+
+  // Prediction
+  lines.push('');
+  const predEmoji = prediction.predictedOutcome === 'success' ? '??' : 
+                    prediction.predictedOutcome === 'rug' ? '??' : '?';
+  lines.push(${predEmoji} Prediction: % success probability);
+
+  // Similar tokens
+  if (similarTokens && similarTokens.length > 0) {
+    lines.push('');
+    lines.push('?? Similar Successful Tokens:');
+    for (const token of similarTokens.slice(0, 2)) {
+      const multiplier = token.max_price && token.initial_price 
+        ? (token.max_price / token.initial_price).toFixed(1) 
+        : '?';
+      lines.push(  �  (x peak) - % similar);
+    }
+  }
+
+  return lines.join('\n');
+}

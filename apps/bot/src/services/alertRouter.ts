@@ -15,6 +15,8 @@ export interface AlertMetadata {
   liquidityUsd: number;
   rugProbability?: number;
   isGroupWatched?: boolean;  // Tag if token is in group watchlist
+  smartMoneyBuying?: number;  // Number of tracked wallets buying
+  smartMoneySelling?: number;  // Number of tracked wallets selling
 }
 
 export interface AlertTarget {
@@ -117,12 +119,24 @@ class AlertRouterService {
       return false;
     }
 
-    // Check quality thresholds
-    if (metadata.riskScore < group.minRiskScore) {
+    // Priority boost for smart money activity
+    const hasSmartMoneyBuying = (metadata.smartMoneyBuying || 0) > 0;
+    const netSmartMoney = (metadata.smartMoneyBuying || 0) - (metadata.smartMoneySelling || 0);
+
+    // Check quality thresholds (relaxed if smart money is buying)
+    const riskThreshold = hasSmartMoneyBuying && netSmartMoney >= 2 
+      ? group.minRiskScore - 10  // Lower threshold by 10 if 2+ smart wallets buying
+      : group.minRiskScore;
+
+    if (metadata.riskScore < riskThreshold) {
       return false;
     }
 
-    if (metadata.liquidityUsd < group.minLiquidityUsd) {
+    const liquidityThreshold = hasSmartMoneyBuying && netSmartMoney >= 2
+      ? group.minLiquidityUsd * 0.5  // Half the liquidity requirement if smart money buying
+      : group.minLiquidityUsd;
+
+    if (metadata.liquidityUsd < liquidityThreshold) {
       return false;
     }
 

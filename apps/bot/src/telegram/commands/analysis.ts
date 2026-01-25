@@ -4,7 +4,7 @@ import { analyzeToken } from '../../analysis/tokenAnalyzer';
 import { dexScreenerService } from '../../services/dexscreener';
 import { solanaService } from '../../services/solana';
 import { rugCheckService } from '../../services/rugcheck';
-import { formatFullAnalysis, formatDexScreenerAnalysis, formatNumber, truncateAddress } from '../formatters';
+import { formatFullAnalysis, formatDexScreenerAnalysis, formatNumber, truncateAddress, formatPatternAnalysis, formatTrackedSmartMoneyActivity } from '../formatters';
 import { tokenActionKeyboard, compareKeyboard } from '../keyboards';
 import type { TokenAnalysis } from '../../types';
 import { classifyRisk, getRiskEmoji, getRiskDescription } from '../../risk/classifier';
@@ -12,6 +12,8 @@ import { analyzeHolders } from '../../analysis/holderAnalysis';
 import { analyzeContract } from '../../analysis/contractCheck';
 import { analyzeLiquidity } from '../../analysis/liquidityCheck';
 import { analyzeSocials } from '../../analysis/socialCheck';
+import { patternDetector, type TokenData } from '../../services/patternDetector';
+import { smartMoneyLearner } from '../../services/smartMoneyLearner';
 
 function isValidSolanaAddress(address: string): boolean {
   try {
@@ -82,11 +84,65 @@ export function registerAnalysisCommands(bot: Telegraf): void {
       // If full analysis worked, use it
       if (analysis) {
         const formatted = formatFullAnalysis(analysis, dexData);
+        
+        // Add pattern analysis
+        let finalMessage = formatted;
+        try {
+          const tokenData: TokenData = {
+            mint: address,
+            symbol: analysis.token.symbol,
+            liquidityUsd: analysis.liquidity.totalLiquidityUsd,
+            lpBurnedPercent: analysis.liquidity.lpBurnedPercent,
+            lpLockedPercent: analysis.liquidity.lpLockedPercent,
+            totalHolders: analysis.holders.totalHolders,
+            top10Percent: analysis.holders.top10HoldersPercent,
+            top20Percent: analysis.holders.top20HoldersPercent,
+            largestHolderPercent: analysis.holders.largestHolderPercent,
+            whaleCount: analysis.holders.whaleCount,
+            mintRevoked: analysis.contract.mintAuthorityRevoked,
+            freezeRevoked: analysis.contract.freezeAuthorityRevoked,
+            isHoneypot: analysis.contract.isHoneypot,
+            hasTransferFee: analysis.contract.hasTransferFee,
+            transferFeePercent: analysis.contract.transferFeePercent,
+            hasTwitter: analysis.social.hasTwitter,
+            hasTelegram: analysis.social.hasTelegram,
+            hasWebsite: analysis.social.hasWebsite,
+            twitterFollowers: analysis.social.twitter?.followers,
+            telegramMembers: analysis.social.telegram?.members,
+            priceChange1h: dexData.priceChange?.h1,
+            priceChange24h: dexData.priceChange?.h24,
+            volume24h: dexData.volume?.h24,
+            marketCap: dexData.marketCap,
+          };
+
+          const matches = await patternDetector.getTopMatches(tokenData, 3);
+          const prediction = await patternDetector.predictOutcome(tokenData);
+          const similarTokens = await patternDetector.getSimilarSuccessfulTokens(tokenData, 2);
+
+          const patternSection = formatPatternAnalysis(matches, prediction, similarTokens);
+          finalMessage = formatted + patternSection;
+        } catch (patternError) {
+          console.log('Pattern analysis failed:', patternError);
+          // Continue without pattern analysis
+        }
+
+        // Add tracked smart money activity
+        try {
+          const smActivity = await smartMoneyLearner.getTokenSmartMoneyActivity(address);
+          const smSection = formatTrackedSmartMoneyActivity(smActivity);
+          if (smSection) {
+            finalMessage += '\n\n' + smSection;
+          }
+        } catch (smError) {
+          console.log('Smart money activity check failed:', smError);
+          // Continue without smart money section
+        }
+        
         await ctx.telegram.editMessageText(
           ctx.chat!.id,
           loadingMsg.message_id,
           undefined,
-          formatted,
+          finalMessage,
           { parse_mode: 'HTML', ...tokenActionKeyboard(address) }
         );
       } else {
