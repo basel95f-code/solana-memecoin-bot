@@ -203,6 +203,20 @@
   - `/close <id> <price> [qty] [fees]` - Close position
   - Telegram inline keyboard navigation
 
+### Completed - Phase 21 (Token Scanner) ✅
+- [x] **Token Scanner with Custom Filters** - Find gems before they pump
+  - tokenScanner.ts service (582 lines) for automated scanning
+  - Database tables: scan_filters, scan_matches (migration v6)
+  - Custom filter creation with 20+ filter criteria
+  - Automatic background scanning every 60 seconds
+  - Filter presets: Gem Finder, Safe Haven, Moonshot
+  - Real-time alerts when tokens match filters
+  - Scan history tracking
+  - Match statistics by filter
+  - Filters: risk score, liquidity, holders, contract safety, socials, price/volume, ML predictions, token age
+  - Start/stop scanner programmatically
+  - Filter CRUD operations (add, update, delete, list)
+
 ### Low Priority / Future
 14. **Cross-chain Support** - Extend to other chains (Base, etc.)
 15. **Paper Trading Mode** - Simulate trades without real execution

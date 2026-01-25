@@ -678,5 +678,91 @@ export const MIGRATIONS: { version: number; sql: string }[] = [
 
       CREATE INDEX IF NOT EXISTS idx_snapshots_timestamp ON portfolio_snapshots(timestamp);
     `
+  },
+  {
+    version: 6,
+    description: 'Add token scanner tables',
+    sql: `
+      -- ============================================
+      -- Scan Filters Table
+      -- Custom filters for token scanning
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS scan_filters (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        description TEXT,
+        enabled INTEGER DEFAULT 1,
+        
+        -- Risk filters
+        min_risk_score INTEGER,
+        max_risk_score INTEGER,
+        
+        -- Liquidity filters
+        min_liquidity REAL,
+        max_liquidity REAL,
+        
+        -- Holder filters
+        min_holders INTEGER,
+        max_holders INTEGER,
+        max_top10_percent REAL,
+        
+        -- Contract filters
+        require_mint_revoked INTEGER DEFAULT 0,
+        require_freeze_revoked INTEGER DEFAULT 0,
+        require_lp_burned INTEGER DEFAULT 0,
+        min_lp_burned_percent REAL,
+        
+        -- Social filters
+        require_socials INTEGER DEFAULT 0,
+        
+        -- Price/Volume filters
+        min_price_change_1h REAL,
+        max_price_change_1h REAL,
+        min_volume_24h REAL,
+        
+        -- ML filters
+        max_rug_probability REAL,
+        min_ml_confidence REAL,
+        
+        -- Age filters
+        min_age_hours REAL,
+        max_age_hours REAL,
+        
+        -- Metadata
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_scan_filters_enabled ON scan_filters(enabled);
+
+      -- ============================================
+      -- Scan Matches Table
+      -- Tokens that matched scan filters
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS scan_matches (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        token_mint TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        name TEXT,
+        filter_id INTEGER NOT NULL,
+        filter_name TEXT NOT NULL,
+        
+        -- Token metrics at match time
+        risk_score INTEGER,
+        liquidity_usd REAL,
+        holder_count INTEGER,
+        rug_probability REAL,
+        
+        -- Metadata
+        matched_at INTEGER NOT NULL,
+        alerted INTEGER DEFAULT 0,
+        
+        FOREIGN KEY(filter_id) REFERENCES scan_filters(id) ON DELETE CASCADE,
+        UNIQUE(token_mint, filter_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_scan_matches_mint ON scan_matches(token_mint);
+      CREATE INDEX IF NOT EXISTS idx_scan_matches_filter ON scan_matches(filter_id);
+      CREATE INDEX IF NOT EXISTS idx_scan_matches_time ON scan_matches(matched_at);
+    `
   }
 ];
