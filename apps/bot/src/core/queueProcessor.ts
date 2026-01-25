@@ -15,6 +15,7 @@ import { apiServer } from '../api/server';
 import { outcomeTracker } from '../services/outcomeTracker';
 import { dexScreenerService } from '../services/dexscreener';
 import { signalService } from '../signals';
+import { analyzeSentiment } from '../analysis/sentimentAnalysis';
 import type { PoolInfo, TokenAnalysis } from '../types';
 import { logger } from '../utils/logger';
 import { QUEUE } from '../constants';
@@ -204,7 +205,16 @@ export class QueueProcessor {
         const pairData = await dexScreenerService.getTokenData(analysis.token.mint);
         const priceUsd = pairData ? parseFloat(pairData.priceUsd || '0') : 0;
 
-        // Get ML prediction for rug probability using enhanced 25-feature model
+        // Get sentiment analysis (Twitter, Telegram, Discord)
+        let sentimentData;
+        try {
+          sentimentData = await analyzeSentiment(analysis.token);
+        } catch (error) {
+          logger.silentError('Sentiment', 'Failed to get sentiment data', error as Error);
+          sentimentData = undefined;
+        }
+
+        // Get ML prediction for rug probability using enhanced 28-feature model (added sentiment)
         const mlPrediction = await rugPredictor.predictEnhanced({
           // Base features (9)
           liquidityUsd: analysis.liquidity.totalLiquidityUsd,
@@ -239,6 +249,10 @@ export class QueueProcessor {
             : undefined,
           isPumping: pairData?.priceChange?.h1 ? pairData.priceChange.h1 > 50 : undefined,
           isDumping: pairData?.priceChange?.h1 ? pairData.priceChange.h1 < -30 : undefined,
+          // Sentiment features (3)
+          sentimentScore: sentimentData?.sentimentScore,
+          sentimentConfidence: sentimentData?.confidence,
+          hasSentimentData: sentimentData?.hasSentimentData,
         });
 
         // Save analysis to database (async, don't await)

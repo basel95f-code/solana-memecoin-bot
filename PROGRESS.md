@@ -151,10 +151,19 @@
 9. ~~**Slack Webhooks**~~ - ✅ DONE - SlackWebhookDispatcher with Block Kit formatting, /slack command
 10. ~~**Alert Rules Engine**~~ - ✅ DONE - Flexible rule conditions, preset rules, /rules command
 
+### Completed - Phase 17 (Sentiment Integration) ✅
+- [x] **Sentiment ML Integration** - Added 3 sentiment features to ML model (28 total features)
+  - sentimentScore (-1 to +1): Multi-platform aggregated sentiment
+  - sentimentConfidence (0 to 1): Reliability of sentiment data
+  - hasSentimentData (0 or 1): Binary flag for sentiment availability
+  - Integrated into featureEngineering.ts (28 features total)
+  - Updated rugPredictor.ts with sentiment normalization
+  - Queue processor now calls sentiment analysis before ML prediction
+  - Leverages existing multi-platform sentiment (Twitter, Telegram, Discord)
+
 ### Low Priority / Future
 11. **Multi-model Ensemble** - Combine multiple ML models for predictions
 12. **Feature Selection** - Automated feature importance and selection
-13. **Sentiment Analysis** - Add social sentiment as a feature
 14. **Cross-chain Support** - Extend to other chains (Base, etc.)
 15. **Paper Trading Mode** - Simulate trades without real execution
 

@@ -5,7 +5,7 @@
 
 import { logger } from '../utils/logger';
 import { ML_TRAINING } from '../constants';
-import type { TokenAnalysis, SmartMoneyActivity, DexScreenerPair } from '../types';
+import type { TokenAnalysis, SmartMoneyActivity, DexScreenerPair, MultiPlatformSentimentAnalysis } from '../types';
 
 // ============================================
 // Feature Types
@@ -46,6 +46,11 @@ export interface EnhancedFeatures {
   hasVolumeSpike: number; // 0 or 1
   isPumping: number; // 0 or 1
   isDumping: number; // 0 or 1
+
+  // Sentiment features (3)
+  sentimentScore: number; // -1 to +1
+  sentimentConfidence: number; // 0 to 1
+  hasSentimentData: number; // 0 or 1
 }
 
 export interface NormalizedFeatures {
@@ -86,9 +91,13 @@ export const FEATURE_NAMES: (keyof EnhancedFeatures)[] = [
   'hasVolumeSpike',
   'isPumping',
   'isDumping',
+  // Sentiment (3)
+  'sentimentScore',
+  'sentimentConfidence',
+  'hasSentimentData',
 ];
 
-export const FEATURE_COUNT = FEATURE_NAMES.length; // 25
+export const FEATURE_COUNT = FEATURE_NAMES.length; // 28
 
 // ============================================
 // Feature Extraction
@@ -102,7 +111,8 @@ export class FeatureEngineering {
     analysis: TokenAnalysis,
     dexData?: DexScreenerPair | null,
     smartMoney?: SmartMoneyActivity | null,
-    previousSnapshot?: { priceUsd: number; volume1h: number; liquidityUsd: number; holderCount: number } | null
+    previousSnapshot?: { priceUsd: number; volume1h: number; liquidityUsd: number; holderCount: number } | null,
+    sentiment?: MultiPlatformSentimentAnalysis | null
   ): EnhancedFeatures {
     const now = Date.now();
     const tokenAgeHours = analysis.pool?.createdAt
@@ -144,6 +154,11 @@ export class FeatureEngineering {
       hasVolumeSpike: this.detectVolumeSpike(dexData?.volume) ? 1 : 0,
       isPumping: this.detectPumping(dexData?.priceChange) ? 1 : 0,
       isDumping: this.detectDumping(dexData?.priceChange) ? 1 : 0,
+
+      // Sentiment features
+      sentimentScore: sentiment?.sentimentScore ?? 0,
+      sentimentConfidence: sentiment?.confidence ?? 0,
+      hasSentimentData: sentiment?.hasSentimentData ? 1 : 0,
     };
 
     return features;
@@ -198,6 +213,11 @@ export class FeatureEngineering {
       hasVolumeSpike: 0,
       isPumping: 0,
       isDumping: 0,
+
+      // Default values for sentiment features
+      sentimentScore: 0,
+      sentimentConfidence: 0,
+      hasSentimentData: 0,
     };
   }
 
@@ -327,6 +347,11 @@ export class FeatureEngineering {
     normalized.push(features.isPumping);
     normalized.push(features.isDumping);
 
+    // Sentiment features
+    normalized.push((features.sentimentScore + 1) / 2); // -1 to +1 -> 0 to 1
+    normalized.push(features.sentimentConfidence); // Already 0-1
+    normalized.push(features.hasSentimentData); // Binary 0 or 1
+
     // Clamp all values to 0-1
     const clampedNormalized = normalized.map(v => Math.max(0, Math.min(1, v)));
 
@@ -393,6 +418,9 @@ export class FeatureEngineering {
       hasVolumeSpike: 'Volume Spike',
       isPumping: 'Is Pumping',
       isDumping: 'Is Dumping',
+      sentimentScore: 'Sentiment Score',
+      sentimentConfidence: 'Sentiment Confidence',
+      hasSentimentData: 'Has Sentiment Data',
     };
   }
 }

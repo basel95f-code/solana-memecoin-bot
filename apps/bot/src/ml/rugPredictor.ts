@@ -1,7 +1,7 @@
 /**
  * Rug Pull Predictor using TensorFlow.js
  * Neural network trained on historical token data to predict rug probability
- * Supports 25 enhanced features (v2) with backward compatibility for 9 features (v1)
+ * Supports 28 enhanced features (v2) with backward compatibility for 9 features (v1)
  */
 
 import * as tf from '@tensorflow/tfjs';
@@ -25,7 +25,7 @@ export interface PredictionInput {
   tokenAgeHours: number;
 }
 
-// Enhanced 25-feature input (v2)
+// Enhanced 28-feature input (v2)
 export interface EnhancedPredictionInput extends PredictionInput {
   // Momentum features
   priceChange5m?: number;
@@ -47,6 +47,10 @@ export interface EnhancedPredictionInput extends PredictionInput {
   hasVolumeSpike?: boolean;
   isPumping?: boolean;
   isDumping?: boolean;
+  // Sentiment features
+  sentimentScore?: number;
+  sentimentConfidence?: number;
+  hasSentimentData?: boolean;
 }
 
 export interface PredictionResult {
@@ -73,7 +77,7 @@ class RugPredictor {
     ageHoursMax: 168, // 1 week
   };
 
-  // V1 has 9 features, V2 has 25 features
+  // V1 has 9 features, V2 has 28 features (added 3 sentiment features)
   private readonly FEATURE_COUNT_V1 = 9;
   private readonly FEATURE_COUNT_V2 = FEATURE_COUNT;
 
@@ -345,7 +349,7 @@ class RugPredictor {
   }
 
   /**
-   * Extract enhanced features from input (v2 - 25 features)
+   * Extract enhanced features from input (v2 - 28 features with sentiment)
    */
   private extractEnhancedFeatures(input: EnhancedPredictionInput): number[] {
     // Start with v1 features
@@ -374,6 +378,11 @@ class RugPredictor {
     features.push(input.hasVolumeSpike ? 1 : 0);
     features.push(input.isPumping ? 1 : 0);
     features.push(input.isDumping ? 1 : 0);
+
+    // Add sentiment features (3)
+    features.push(((input.sentimentScore ?? 0) + 1) / 2); // -1 to +1 -> 0 to 1
+    features.push(input.sentimentConfidence ?? 0); // Already 0-1
+    features.push(input.hasSentimentData ? 1 : 0); // Boolean to 0 or 1
 
     // Clamp all values to 0-1
     return features.map(v => Math.max(0, Math.min(1, v)));
