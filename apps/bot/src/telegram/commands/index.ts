@@ -22,6 +22,7 @@ import { registerSmartMoneyCommands } from './smartmoney';
 import { registerWhaleActivityCommands } from './whaleactivity';
 import { registerWalletProfileCommands } from './walletprofile';
 import { registerClusterCommands } from './clusters';
+import { registerCompareCommands } from './compare';
 
 export function registerAllCommands(bot: Telegraf): void {
   // Register all command handlers
@@ -48,6 +49,7 @@ export function registerAllCommands(bot: Telegraf): void {
   registerWhaleActivityCommands(bot);
   registerWalletProfileCommands(bot);
   registerClusterCommands(bot);
+  registerCompareCommands(bot);
 
   // Set up bot commands menu
   bot.telegram.setMyCommands([
@@ -118,6 +120,9 @@ export function registerAllCommands(bot: Telegraf): void {
     // Cluster Detection
     { command: 'clusters', description: 'Detect wallet clusters' },
     { command: 'sybil', description: 'Check for Sybil attack' },
+    // Wallet Comparison
+    { command: 'compare', description: 'Compare two wallets' },
+    { command: 'vsleader', description: 'Compare vs leaderboard #1' },
     // Backtesting
     { command: 'strategies', description: 'List backtest strategies' },
     { command: 'backtest', description: 'Run a backtest' },
