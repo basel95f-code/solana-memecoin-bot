@@ -27,6 +27,7 @@ import smartMoneyRouter from './routes/smartMoney.js';
 import alertsRouter from './routes/alerts.js';
 import statsRouter from './routes/stats.js';
 import adminRouter from './routes/admin.js';
+import portfolioRouter from './routes/portfolio.js';
 
 const app = express();
 const PORT = parseInt(process.env.API_PORT || '3001');
@@ -80,6 +81,7 @@ app.use(`/api/${API_VERSION}`, authenticateAPIKey, patternsRouter);
 app.use(`/api/${API_VERSION}`, authenticateAPIKey, smartMoneyRouter);
 app.use(`/api/${API_VERSION}`, authenticateAPIKey, alertsRouter);
 app.use(`/api/${API_VERSION}`, authenticateAPIKey, statsRouter);
+app.use(`/api/${API_VERSION}`, authenticateAPIKey, portfolioRouter);
 
 // Admin routes (require admin key)
 app.use(`/api/${API_VERSION}`, adminRouter);

@@ -97,6 +97,15 @@ export function loadConfig(): ExtendedBotConfig {
       maxWalletsPerUser: getEnvNumber('WALLET_MAX_PER_USER', 10),
     },
 
+    // Copy Trading / Wallet Tracking
+    walletTracking: {
+      enabled: getEnvBoolean('WALLET_TRACKING_ENABLED', true),
+      minWalletScore: getEnvNumber('WALLET_TRACKING_MIN_SCORE', 60),
+      minWinRate: getEnvNumber('WALLET_TRACKING_MIN_WIN_RATE', 55),
+      minTradeValueUsd: getEnvNumber('WALLET_TRACKING_MIN_VALUE_USD', 100),
+      largeTradeThresholdUsd: getEnvNumber('WALLET_TRACKING_LARGE_TRADE_USD', 5000),
+    },
+
     // Telegram MTProto (for sentiment analysis)
     telegramMtproto: {
       apiId: getEnvNumber('TELEGRAM_API_ID', 0),

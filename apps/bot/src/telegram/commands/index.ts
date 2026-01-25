@@ -31,12 +31,14 @@ import { registerGroupSetupCommand } from './groupsetup';
 import { registerTopicSetupCommands } from './topicsetup';
 import { registerMLManagerCommands } from './mlmanager';
 import { registerDexStatsCommands } from './dexstats';
+import { registerCopyTradingCommands } from './copytrading';
 
 export function registerAllCommands(bot: Telegraf): void {
   // Register all command handlers
   registerGroupSetupCommand(bot);
   registerTopicSetupCommands(bot);
   registerMLManagerCommands(bot);
+  registerCopyTradingCommands(bot);
   registerBasicCommands(bot);
   registerAlertCommands(bot);
   registerFilterCommands(bot);
@@ -129,6 +131,14 @@ export function registerAllCommands(bot: Telegraf): void {
     { command: 'untrack', description: 'Stop tracking wallet' },
     { command: 'wallets', description: 'List tracked wallets' },
     { command: 'wallet', description: 'Wallet activity' },
+    // Copy Trading
+    { command: 'track_wallet', description: 'Add wallet to copy trading watchlist' },
+    { command: 'untrack_wallet', description: 'Remove from copy trading watchlist' },
+    { command: 'watchlist', description: 'Show copy trading watchlist' },
+    { command: 'wallet_stats', description: 'Detailed wallet performance stats' },
+    { command: 'top_wallets', description: 'Top performing wallets' },
+    { command: 'wallet_trades', description: 'Recent wallet trades' },
+    { command: 'copy_status', description: 'Copy trading monitor status' },
     // Smart Money
     { command: 'leaderboard', description: 'Top performing wallets' },
     { command: 'smstats', description: 'Smart money stats' },

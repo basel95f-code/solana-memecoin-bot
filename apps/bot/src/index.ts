@@ -43,9 +43,12 @@ import { queueProcessor, setupEventListeners, setupWalletMonitorListeners } from
 import { formatSmartMoneyAlertMessage } from './telegram/commands/smartmoney';
 import { formatAccumulationAlert, formatDistributionAlert, formatCoordinatedMovement } from './telegram/commands/whaleactivity';
 import { formatClusterAlert, formatSybilAttackAlert } from './telegram/commands/clusters';
+import { walletTransactionMonitor } from './monitors/walletTransactions';
+import { copyTradingAlertHandler } from './alerts/copyTradingAlerts';
 import type { SmartMoneyAlert } from './services/smartMoneyTracker';
 import type { AccumulationAlert, DistributionAlert, CoordinatedMovement } from './services/whaleActivityTracker';
 import type { WalletCluster, SybilAttack } from './services/enhancedClusterDetector';
+import type { WalletActivity } from './monitors/walletTransactions';
 
 class SolanaMemecoinBot {
   private isRunning: boolean = false;
@@ -140,6 +143,22 @@ class SolanaMemecoinBot {
       smartMoneyLearner.initialize();
       await smartMoneyMonitor.start();
       logger.info('Main', 'Smart money learning system started - tracking wallet patterns');
+
+      // Start copy trading system (wallet transaction monitor)
+      if (config.walletTracking?.enabled !== false) {
+        await walletTransactionMonitor.start();
+        await copyTradingAlertHandler.initialize();
+        logger.info('Main', 'Copy trading system started - monitoring tracked wallet transactions');
+
+        // Set up copy trading alert listener
+        copyTradingAlertHandler.on('send_telegram', async ({ message, priority }: any) => {
+          try {
+            await telegramService.sendMessage(config.telegramChatId, message, { parse_mode: 'Markdown' });
+          } catch (error) {
+            logger.error('Main', 'Failed to send copy trading alert', error as Error);
+          }
+        });
+      }
 
       // Set up smart money alert listener
       smartMoneyTracker.on('smartMoneyAlert', async (alert: SmartMoneyAlert) => {

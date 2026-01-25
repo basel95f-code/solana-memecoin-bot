@@ -1,246 +1,391 @@
 /**
  * Portfolio Commands
- * Commands for tracking positions and PnL
+ * Commands for tracking positions, P&L, performance, and tax reporting
  */
 
 import type { Context, Telegraf } from 'telegraf';
 import { Markup } from 'telegraf';
-import { portfolioTracker } from '../../services/portfolioTracker';
+import { positionTracker } from '../../portfolio/positionTracker';
+import { pnlCalculator } from '../../portfolio/pnlCalculator';
+import { performanceAnalytics } from '../../portfolio/performanceAnalytics';
+import { taxReporting } from '../../portfolio/taxReporting';
+import { logger } from '../../utils/logger';
 
 export function registerPortfolioCommands(bot: Telegraf): void {
-  // /portfolio command - show summary
+  
+  // ========================================
+  // /portfolio - Portfolio summary
+  // ========================================
   bot.command('portfolio', async (ctx: Context) => {
     await ctx.replyWithHTML('<i>📊 Loading portfolio...</i>');
 
     try {
-      const summary = await portfolioTracker.getPortfolioSummary();
-      const formatted = portfolioTracker.formatSummary(summary);
-
-      await ctx.replyWithHTML(
-        `<pre>${formatted}</pre>`,
-        {
-          reply_markup: {
-            inline_keyboard: [
-              [
-                { text: '📋 Positions', callback_data: 'portfolio_positions' },
-                { text: '📊 PnL Report', callback_data: 'portfolio_pnl' }
-              ],
-              [
-                { text: '🔄 Refresh', callback_data: 'portfolio_refresh' }
-              ]
-            ]
-          }
-        }
-      );
-    } catch (error) {
-      await ctx.replyWithHTML('<b>❌ Failed to load portfolio</b>');
-      console.error(error);
-    }
-  });
-
-  // /positions command - list all open positions
-  bot.command('positions', async (ctx: Context) => {
-    try {
-      const positions = portfolioTracker.getOpenPositions();
-
-      if (positions.length === 0) {
-        await ctx.replyWithHTML('<i>No open positions</i>');
-        return;
+      const summary = await pnlCalculator.getPnLSummary();
+      
+      let message = '<b>📊 Portfolio Summary</b>\n\n';
+      
+      message += `💼 Positions: ${summary.openPositions} open / ${summary.totalPositions} total\n`;
+      message += `💰 Portfolio Value: <b>$${summary.totalValue.toFixed(2)}</b>\n`;
+      message += `💵 Total Invested: $${summary.totalInvested.toFixed(2)}\n\n`;
+      
+      const pnlSymbol = summary.totalPnl >= 0 ? '📈' : '📉';
+      const pnlSign = summary.totalPnl >= 0 ? '+' : '';
+      message += `${pnlSymbol} <b>Total P&L: ${pnlSign}$${summary.totalPnl.toFixed(2)} (${pnlSign}${summary.totalPnlPercent.toFixed(2)}%)</b>\n`;
+      message += `  ├ Realized: $${summary.realizedPnl.toFixed(2)}\n`;
+      message += `  └ Unrealized: $${summary.unrealizedPnl.toFixed(2)}\n\n`;
+      
+      message += `📊 Distribution:\n`;
+      message += `  ├ Winners: ${summary.winningPositions} 🟢\n`;
+      message += `  ├ Losers: ${summary.losingPositions} 🔴\n`;
+      message += `  └ Break-even: ${summary.breakEvenPositions} ⚪\n\n`;
+      
+      if (summary.bestPosition) {
+        message += `🏆 Best: <b>${summary.bestPosition.symbol}</b> (+$${summary.bestPosition.unrealizedPnl.toFixed(2)})\n`;
       }
-
-      let message = `<b>📋 Open Positions (${positions.length})</b>\n\n`;
-
-      for (const pos of positions) {
-        const pnlSymbol = pos.unrealizedPnl >= 0 ? '📈' : '📉';
-        const pnlSign = pos.unrealizedPnl >= 0 ? '+' : '';
-        
-        message += `<b>${pos.symbol}</b> ${pos.side === 'long' ? '🟢' : '🔴'}\n`;
-        message += `  Entry: $${pos.entryPrice.toFixed(6)}\n`;
-        message += `  Current: $${pos.currentPrice.toFixed(6)}\n`;
-        message += `  Qty: ${pos.quantity.toFixed(2)}\n`;
-        message += `  ${pnlSymbol} PnL: ${pnlSign}$${pos.unrealizedPnl.toFixed(2)} (${pnlSign}${pos.unrealizedPnlPercent.toFixed(2)}%)\n`;
-        message += `  Age: ${this.formatAge(Date.now() - pos.entryTime)}\n\n`;
+      if (summary.worstPosition) {
+        message += `📉 Worst: <b>${summary.worstPosition.symbol}</b> ($${summary.worstPosition.unrealizedPnl.toFixed(2)})\n`;
       }
 
       await ctx.replyWithHTML(message, {
         reply_markup: {
           inline_keyboard: [
             [
-              { text: '🔄 Refresh', callback_data: 'portfolio_positions_refresh' },
-              { text: '« Back', callback_data: 'portfolio_refresh' }
+              { text: '📋 Positions', callback_data: 'portfolio_positions' },
+              { text: '📊 P&L', callback_data: 'portfolio_pnl' }
+            ],
+            [
+              { text: '📈 Performance', callback_data: 'portfolio_performance' },
+              { text: '🔄 Refresh', callback_data: 'portfolio_refresh' }
             ]
           ]
         }
       });
     } catch (error) {
-      await ctx.replyWithHTML('<b>❌ Failed to load positions</b>');
-      console.error(error);
+      await ctx.replyWithHTML('<b>❌ Failed to load portfolio</b>');
+      logger.error('Portfolio', 'Failed to load summary', error as Error);
     }
   });
 
-  // /pnl command - show PnL report
-  bot.command('pnl', async (ctx: Context) => {
-    const text = ctx.message && 'text' in ctx.message ? ctx.message.text : '';
-    const args = text.split(' ').slice(1);
-    const period = (args[0] as any) || 'all';
-
-    try {
-      const report = portfolioTracker.getPnLReport(period);
-      const formatted = portfolioTracker.formatPnLReport(report);
-
-      await ctx.replyWithHTML(
-        `<pre>${formatted}</pre>`,
-        {
-          reply_markup: {
-            inline_keyboard: [
-              [
-                { text: 'Today', callback_data: 'pnl_today' },
-                { text: '7d', callback_data: 'pnl_7d' },
-                { text: '30d', callback_data: 'pnl_30d' },
-                { text: 'All', callback_data: 'pnl_all' }
-              ],
-              [
-                { text: '« Back', callback_data: 'portfolio_refresh' }
-              ]
-            ]
-          }
-        }
-      );
-    } catch (error) {
-      await ctx.replyWithHTML('<b>❌ Failed to load PnL report</b>');
-      console.error(error);
-    }
-  });
-
-  // /open command - open a position
-  bot.command('open', async (ctx: Context) => {
+  // ========================================
+  // /add_position - Add entry to position
+  // ========================================
+  bot.command('add_position', async (ctx: Context) => {
     const text = ctx.message && 'text' in ctx.message ? ctx.message.text : '';
     const args = text.split(' ').slice(1);
 
-    if (args.length < 5) {
+    if (args.length < 3) {
       await ctx.replyWithHTML(
-        '<b>📝 Open Position</b>\n\n' +
-        '<code>/open &lt;mint&gt; &lt;symbol&gt; &lt;side&gt; &lt;price&gt; &lt;quantity&gt;</code>\n\n' +
+        '<b>📝 Add Position</b>\n\n' +
+        '<code>/add_position &lt;token&gt; &lt;amount&gt; &lt;price&gt;</code>\n\n' +
         'Example:\n' +
-        '<code>/open So11...ABC BONK long 0.000012 1000000</code>'
+        '<code>/add_position BONK 1000000 0.000012</code>'
       );
       return;
     }
 
-    const [mint, symbol, side, priceStr, quantityStr] = args;
-
-    if (side !== 'long' && side !== 'short') {
-      await ctx.replyWithHTML('<b>❌ Side must be "long" or "short"</b>');
-      return;
-    }
-
+    const [token, amountStr, priceStr] = args;
+    const amount = parseFloat(amountStr);
     const price = parseFloat(priceStr);
-    const quantity = parseFloat(quantityStr);
 
-    if (isNaN(price) || isNaN(quantity)) {
-      await ctx.replyWithHTML('<b>❌ Invalid price or quantity</b>');
+    if (isNaN(amount) || isNaN(price)) {
+      await ctx.replyWithHTML('<b>❌ Invalid amount or price</b>');
       return;
     }
 
     try {
-      const entryValue = price * quantity;
-      const positionId = portfolioTracker.openPosition({
-        tokenMint: mint,
-        symbol: symbol.toUpperCase(),
-        name: symbol,
-        side: side as 'long' | 'short',
-        entryPrice: price,
-        quantity,
-        entryValue,
+      const position = await positionTracker.addEntry({
+        tokenMint: token,
+        symbol: token.toUpperCase(),
+        price,
+        amount,
+        notes: 'Manual entry via Telegram',
       });
 
       await ctx.replyWithHTML(
-        `<b>✅ Position Opened</b>\n\n` +
-        `ID: ${positionId}\n` +
-        `Token: ${symbol}\n` +
-        `Side: ${side}\n` +
-        `Entry: $${price.toFixed(6)}\n` +
-        `Quantity: ${quantity}\n` +
-        `Value: $${entryValue.toFixed(2)}`
+        `<b>✅ Position Added</b>\n\n` +
+        `Token: <b>${position.symbol}</b>\n` +
+        `Amount: ${position.currentAmount}\n` +
+        `Price: $${position.currentPrice.toFixed(6)}\n` +
+        `Value: $${position.currentValue.toFixed(2)}\n\n` +
+        `Avg Entry: $${position.avgEntryPrice.toFixed(6)}`
       );
     } catch (error) {
-      await ctx.replyWithHTML('<b>❌ Failed to open position</b>');
-      console.error(error);
+      await ctx.replyWithHTML('<b>❌ Failed to add position</b>');
+      logger.error('Portfolio', 'Failed to add position', error as Error);
     }
   });
 
-  // /close command - close a position
-  bot.command('close', async (ctx: Context) => {
+  // ========================================
+  // /close_position - Exit position
+  // ========================================
+  bot.command('close_position', async (ctx: Context) => {
     const text = ctx.message && 'text' in ctx.message ? ctx.message.text : '';
     const args = text.split(' ').slice(1);
 
     if (args.length < 2) {
       await ctx.replyWithHTML(
         '<b>📝 Close Position</b>\n\n' +
-        '<code>/close &lt;position_id&gt; &lt;exit_price&gt; [quantity] [fees]</code>\n\n' +
-        'Example:\n' +
-        '<code>/close 1 0.000015</code>\n' +
-        '<code>/close 1 0.000015 500000 0.25</code> (partial close with fees)'
+        '<code>/close_position &lt;token&gt; &lt;exit_price&gt; [amount]</code>\n\n' +
+        'Examples:\n' +
+        '<code>/close_position BONK 0.000015</code> (full exit)\n' +
+        '<code>/close_position BONK 0.000015 500000</code> (partial)'
       );
       return;
     }
 
-    const positionId = parseInt(args[0]);
-    const exitPrice = parseFloat(args[1]);
-    const quantity = args[2] ? parseFloat(args[2]) : undefined;
-    const fees = args[3] ? parseFloat(args[3]) : 0;
+    const [token, exitPriceStr, amountStr] = args;
+    const exitPrice = parseFloat(exitPriceStr);
+    const amount = amountStr ? parseFloat(amountStr) : undefined;
 
-    if (isNaN(positionId) || isNaN(exitPrice)) {
-      await ctx.replyWithHTML('<b>❌ Invalid position ID or exit price</b>');
+    if (isNaN(exitPrice)) {
+      await ctx.replyWithHTML('<b>❌ Invalid exit price</b>');
       return;
     }
 
     try {
-      portfolioTracker.closePosition({
-        positionId,
+      // Find position
+      const position = await positionTracker.getPositionByToken(token);
+      
+      if (!position) {
+        await ctx.replyWithHTML(`<b>❌ No open position found for ${token}</b>`);
+        return;
+      }
+
+      const exitAmount = amount || position.currentAmount;
+      const isFullExit = exitAmount === position.currentAmount;
+
+      const updated = await positionTracker.partialExit({
+        positionId: position.id!,
         exitPrice,
-        quantity,
-        fees,
+        exitAmount,
+        notes: 'Manual exit via Telegram',
       });
 
       await ctx.replyWithHTML(
-        `<b>✅ Position Closed</b>\n\n` +
+        `<b>✅ Position ${isFullExit ? 'Closed' : 'Partially Closed'}</b>\n\n` +
+        `Token: <b>${position.symbol}</b>\n` +
         `Exit Price: $${exitPrice.toFixed(6)}\n` +
-        `${quantity ? `Quantity: ${quantity}\n` : ''}` +
-        `${fees > 0 ? `Fees: $${fees.toFixed(2)}` : ''}`
+        `Amount: ${exitAmount}\n\n` +
+        `${!isFullExit ? `Remaining: ${updated.currentAmount}\n` : ''}` +
+        `Realized P&L: ${updated.realizedPnl >= 0 ? '+' : ''}$${updated.realizedPnl.toFixed(2)}`
       );
     } catch (error) {
       const err = error as Error;
       await ctx.replyWithHTML(`<b>❌ Failed to close position</b>\n\n${err.message}`);
-      console.error(error);
+      logger.error('Portfolio', 'Failed to close position', error as Error);
     }
   });
 
-  // Callback handlers
-  bot.action('portfolio_refresh', async (ctx) => {
-    await ctx.answerCbQuery('Refreshing...');
+  // ========================================
+  // /pnl - Show P&L report
+  // ========================================
+  bot.command('pnl', async (ctx: Context) => {
+    try {
+      const summary = await pnlCalculator.getPnLSummary();
+      const roi = await pnlCalculator.getROIMetrics();
+      
+      let message = '<b>📊 P&L Report</b>\n\n';
+      
+      const totalSymbol = summary.totalPnl >= 0 ? '📈' : '📉';
+      const totalSign = summary.totalPnl >= 0 ? '+' : '';
+      message += `${totalSymbol} <b>Total P&L: ${totalSign}$${summary.totalPnl.toFixed(2)} (${totalSign}${summary.totalPnlPercent.toFixed(2)}%)</b>\n`;
+      message += `  ├ Realized: $${summary.realizedPnl.toFixed(2)}\n`;
+      message += `  └ Unrealized: $${summary.unrealizedPnl.toFixed(2)}\n\n`;
+      
+      message += `💰 Portfolio:\n`;
+      message += `  ├ Value: $${summary.totalValue.toFixed(2)}\n`;
+      message += `  ├ Invested: $${summary.totalInvested.toFixed(2)}\n`;
+      message += `  └ ROI: ${totalSign}${roi.roi.toFixed(2)}%\n\n`;
+      
+      message += `📊 Annualized Returns:\n`;
+      message += `  ├ Daily: ${roi.roiDaily >= 0 ? '+' : ''}${roi.roiDaily.toFixed(3)}%\n`;
+      message += `  ├ Weekly: ${roi.roiWeekly >= 0 ? '+' : ''}${roi.roiWeekly.toFixed(2)}%\n`;
+      message += `  ├ Monthly: ${roi.roiMonthly >= 0 ? '+' : ''}${roi.roiMonthly.toFixed(2)}%\n`;
+      message += `  └ Yearly: ${roi.roiYearly >= 0 ? '+' : ''}${roi.roiYearly.toFixed(2)}%\n`;
+
+      await ctx.replyWithHTML(message);
+    } catch (error) {
+      await ctx.replyWithHTML('<b>❌ Failed to load P&L</b>');
+      logger.error('Portfolio', 'Failed to load P&L', error as Error);
+    }
+  });
+
+  // ========================================
+  // /performance - Performance analytics
+  // ========================================
+  bot.command('performance', async (ctx: Context) => {
+    await ctx.replyWithHTML('<i>📈 Calculating performance...</i>');
 
     try {
-      const summary = await portfolioTracker.getPortfolioSummary();
-      const formatted = portfolioTracker.formatSummary(summary);
+      const metrics = await performanceAnalytics.calculatePerformance();
+      
+      let message = '<b>📈 Performance Metrics</b>\n\n';
+      
+      message += `💰 Returns:\n`;
+      message += `  ├ Total P&L: ${metrics.totalPnl >= 0 ? '+' : ''}$${metrics.totalPnl.toFixed(2)}\n`;
+      message += `  └ ROI: ${metrics.roiPercent >= 0 ? '+' : ''}${metrics.roiPercent.toFixed(2)}%\n\n`;
+      
+      message += `📊 Trading Stats:\n`;
+      message += `  ├ Total Trades: ${metrics.totalTrades}\n`;
+      message += `  ├ Win Rate: ${metrics.winRate.toFixed(1)}% (${metrics.winningTrades}/${metrics.totalTrades})\n`;
+      message += `  ├ Avg Win: $${metrics.avgWin.toFixed(2)}\n`;
+      message += `  ├ Avg Loss: $${Math.abs(metrics.avgLoss).toFixed(2)}\n`;
+      message += `  └ Profit Factor: ${metrics.profitFactor.toFixed(2)}\n\n`;
+      
+      message += `🎯 Best/Worst:\n`;
+      message += `  ├ Best Trade: $${metrics.largestWin.toFixed(2)}\n`;
+      message += `  └ Worst Trade: $${metrics.largestLoss.toFixed(2)}\n\n`;
+      
+      message += `📉 Risk Metrics:\n`;
+      message += `  ├ Max Drawdown: $${metrics.maxDrawdown.toFixed(2)} (${metrics.maxDrawdownPercent.toFixed(2)}%)\n`;
+      if (metrics.sharpeRatio !== null) {
+        message += `  └ Sharpe Ratio: ${metrics.sharpeRatio.toFixed(2)}\n\n`;
+      } else {
+        message += `  └ Sharpe Ratio: N/A\n\n`;
+      }
+      
+      message += `🔥 Streaks:\n`;
+      message += `  ├ Current: ${metrics.currentStreak > 0 ? '🟢' : '🔴'} ${Math.abs(metrics.currentStreak)}\n`;
+      message += `  ├ Best: ${metrics.bestStreak} wins\n`;
+      message += `  └ Worst: ${Math.abs(metrics.worstStreak)} losses\n\n`;
+      
+      message += `⏱️ Holding Time:\n`;
+      message += `  ├ Average: ${(metrics.avgHoldingTimeHours / 24).toFixed(1)} days\n`;
+      message += `  └ Median: ${(metrics.medianHoldingTimeHours / 24).toFixed(1)} days\n`;
 
-      await ctx.editMessageText(
-        `<pre>${formatted}</pre>`,
-        {
-          parse_mode: 'HTML',
-          reply_markup: {
-            inline_keyboard: [
-              [
-                { text: '📋 Positions', callback_data: 'portfolio_positions' },
-                { text: '📊 PnL Report', callback_data: 'portfolio_pnl' }
-              ],
-              [
-                { text: '🔄 Refresh', callback_data: 'portfolio_refresh' }
-              ]
+      await ctx.replyWithHTML(message);
+    } catch (error) {
+      await ctx.replyWithHTML('<b>❌ Failed to calculate performance</b>');
+      logger.error('Portfolio', 'Failed to calculate performance', error as Error);
+    }
+  });
+
+  // ========================================
+  // /winners - Show winning positions
+  // ========================================
+  bot.command('winners', async (ctx: Context) => {
+    try {
+      const breakdown = await pnlCalculator.getWinnersLosers();
+      
+      if (breakdown.winners.length === 0) {
+        await ctx.replyWithHTML('<i>No winning positions</i>');
+        return;
+      }
+      
+      let message = `<b>🏆 Winners (${breakdown.winnersCount})</b>\n\n`;
+      
+      for (const pos of breakdown.winners.slice(0, 10)) {
+        message += `<b>${pos.symbol}</b>\n`;
+        message += `  Entry: $${pos.avgEntryPrice.toFixed(6)}\n`;
+        message += `  Current: $${pos.currentPrice.toFixed(6)}\n`;
+        message += `  P&L: <b>+$${pos.unrealizedPnl.toFixed(2)} (+${pos.unrealizedPnlPercent.toFixed(2)}%)</b>\n\n`;
+      }
+      
+      message += `💰 Total Gains: <b>+$${breakdown.totalWinAmount.toFixed(2)}</b>\n`;
+      message += `📊 Avg Gain: +${breakdown.avgWinPercent.toFixed(2)}%`;
+
+      await ctx.replyWithHTML(message);
+    } catch (error) {
+      await ctx.replyWithHTML('<b>❌ Failed to load winners</b>');
+      logger.error('Portfolio', 'Failed to load winners', error as Error);
+    }
+  });
+
+  // ========================================
+  // /losers - Show losing positions
+  // ========================================
+  bot.command('losers', async (ctx: Context) => {
+    try {
+      const breakdown = await pnlCalculator.getWinnersLosers();
+      
+      if (breakdown.losers.length === 0) {
+        await ctx.replyWithHTML('<i>No losing positions</i>');
+        return;
+      }
+      
+      let message = `<b>📉 Losers (${breakdown.losersCount})</b>\n\n`;
+      
+      for (const pos of breakdown.losers.slice(0, 10)) {
+        message += `<b>${pos.symbol}</b>\n`;
+        message += `  Entry: $${pos.avgEntryPrice.toFixed(6)}\n`;
+        message += `  Current: $${pos.currentPrice.toFixed(6)}\n`;
+        message += `  P&L: <b>$${pos.unrealizedPnl.toFixed(2)} (${pos.unrealizedPnlPercent.toFixed(2)}%)</b>\n\n`;
+      }
+      
+      message += `💸 Total Losses: <b>$${breakdown.totalLossAmount.toFixed(2)}</b>\n`;
+      message += `📊 Avg Loss: ${breakdown.avgLossPercent.toFixed(2)}%`;
+
+      await ctx.replyWithHTML(message);
+    } catch (error) {
+      await ctx.replyWithHTML('<b>❌ Failed to load losers</b>');
+      logger.error('Portfolio', 'Failed to load losers', error as Error);
+    }
+  });
+
+  // ========================================
+  // /tax_report - Generate tax report
+  // ========================================
+  bot.command('tax_report', async (ctx: Context) => {
+    const text = ctx.message && 'text' in ctx.message ? ctx.message.text : '';
+    const args = text.split(' ').slice(1);
+    const year = args[0] ? parseInt(args[0]) : undefined;
+
+    await ctx.replyWithHTML('<i>📊 Generating tax report...</i>');
+
+    try {
+      const report = await taxReporting.generateTaxReport('default', year);
+      const formatted = taxReporting.formatTaxReport(report);
+
+      await ctx.replyWithHTML(`<pre>${formatted}</pre>`, {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '📄 Export CSV', callback_data: `tax_csv_${report.year}` },
+              { text: '📋 Form 8949', callback_data: `tax_8949_${report.year}` }
             ]
-          }
+          ]
         }
-      );
+      });
+    } catch (error) {
+      await ctx.replyWithHTML('<b>❌ Failed to generate tax report</b>');
+      logger.error('Portfolio', 'Failed to generate tax report', error as Error);
+    }
+  });
+
+  // ========================================
+  // Callback handlers
+  // ========================================
+  
+  bot.action('portfolio_refresh', async (ctx) => {
+    await ctx.answerCbQuery('Refreshing...');
+    
+    try {
+      const summary = await pnlCalculator.getPnLSummary();
+      
+      let message = '<b>📊 Portfolio Summary</b>\n\n';
+      message += `💼 Positions: ${summary.openPositions} open / ${summary.totalPositions} total\n`;
+      message += `💰 Portfolio Value: <b>$${summary.totalValue.toFixed(2)}</b>\n`;
+      message += `💵 Total Invested: $${summary.totalInvested.toFixed(2)}\n\n`;
+      
+      const pnlSymbol = summary.totalPnl >= 0 ? '📈' : '📉';
+      const pnlSign = summary.totalPnl >= 0 ? '+' : '';
+      message += `${pnlSymbol} <b>Total P&L: ${pnlSign}$${summary.totalPnl.toFixed(2)} (${pnlSign}${summary.totalPnlPercent.toFixed(2)}%)</b>\n`;
+      
+      await ctx.editMessageText(message, {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '📋 Positions', callback_data: 'portfolio_positions' },
+              { text: '📊 P&L', callback_data: 'portfolio_pnl' }
+            ],
+            [
+              { text: '📈 Performance', callback_data: 'portfolio_performance' },
+              { text: '🔄 Refresh', callback_data: 'portfolio_refresh' }
+            ]
+          ]
+        }
+      });
     } catch (error) {
       await ctx.editMessageText('<b>❌ Failed to refresh</b>', { parse_mode: 'HTML' });
     }
@@ -248,37 +393,33 @@ export function registerPortfolioCommands(bot: Telegraf): void {
 
   bot.action('portfolio_positions', async (ctx) => {
     await ctx.answerCbQuery();
-
+    
     try {
-      const positions = portfolioTracker.getOpenPositions();
-
+      const positions = await positionTracker.getOpenPositions();
+      
       if (positions.length === 0) {
         await ctx.editMessageText('<i>No open positions</i>', { parse_mode: 'HTML' });
         return;
       }
-
+      
       let message = `<b>📋 Open Positions (${positions.length})</b>\n\n`;
-
-      for (const pos of positions) {
+      
+      for (const pos of positions.slice(0, 15)) {
         const pnlSymbol = pos.unrealizedPnl >= 0 ? '📈' : '📉';
         const pnlSign = pos.unrealizedPnl >= 0 ? '+' : '';
         
-        message += `<b>${pos.symbol}</b> ${pos.side === 'long' ? '🟢' : '🔴'}\n`;
-        message += `  Entry: $${pos.entryPrice.toFixed(6)}\n`;
+        message += `<b>${pos.symbol}</b>\n`;
+        message += `  Entry: $${pos.avgEntryPrice.toFixed(6)}\n`;
         message += `  Current: $${pos.currentPrice.toFixed(6)}\n`;
-        message += `  Qty: ${pos.quantity.toFixed(2)}\n`;
-        message += `  ${pnlSymbol} PnL: ${pnlSign}$${pos.unrealizedPnl.toFixed(2)} (${pnlSign}${pos.unrealizedPnlPercent.toFixed(2)}%)\n`;
-        message += `  Age: ${formatAge(Date.now() - pos.entryTime)}\n\n`;
+        message += `  Amount: ${pos.currentAmount.toFixed(2)}\n`;
+        message += `  ${pnlSymbol} P&L: ${pnlSign}$${pos.unrealizedPnl.toFixed(2)} (${pnlSign}${pos.unrealizedPnlPercent.toFixed(2)}%)\n\n`;
       }
-
+      
       await ctx.editMessageText(message, {
         parse_mode: 'HTML',
         reply_markup: {
           inline_keyboard: [
-            [
-              { text: '🔄 Refresh', callback_data: 'portfolio_positions_refresh' },
-              { text: '« Back', callback_data: 'portfolio_refresh' }
-            ]
+            [{ text: '« Back', callback_data: 'portfolio_refresh' }]
           ]
         }
       });
@@ -287,88 +428,48 @@ export function registerPortfolioCommands(bot: Telegraf): void {
     }
   });
 
-  bot.action('portfolio_positions_refresh', async (ctx) => {
-    await ctx.answerCbQuery('Refreshing...');
-    await ctx.answerCbQuery();
-    // Trigger positions view
-    ctx.callbackQuery!.data = 'portfolio_positions';
-    return bot.handleUpdate(ctx as any);
-  });
-
-  bot.action('portfolio_pnl', async (ctx) => {
-    await ctx.answerCbQuery();
-
+  // Tax export callbacks
+  bot.action(/^tax_csv_(\d+)$/, async (ctx) => {
+    const year = parseInt(ctx.match[1]);
+    await ctx.answerCbQuery('Generating CSV...');
+    
     try {
-      const report = portfolioTracker.getPnLReport('all');
-      const formatted = portfolioTracker.formatPnLReport(report);
-
-      await ctx.editMessageText(
-        `<pre>${formatted}</pre>`,
-        {
-          parse_mode: 'HTML',
-          reply_markup: {
-            inline_keyboard: [
-              [
-                { text: 'Today', callback_data: 'pnl_today' },
-                { text: '7d', callback_data: 'pnl_7d' },
-                { text: '30d', callback_data: 'pnl_30d' },
-                { text: 'All', callback_data: 'pnl_all' }
-              ],
-              [
-                { text: '« Back', callback_data: 'portfolio_refresh' }
-              ]
-            ]
-          }
-        }
-      );
+      const csv = await taxReporting.exportCSV('default', year);
+      
+      // Send as document
+      await ctx.replyWithDocument({
+        source: Buffer.from(csv, 'utf-8'),
+        filename: `tax_report_${year}.csv`,
+      }, {
+        caption: `📄 Tax Report ${year} (CSV)`,
+      });
     } catch (error) {
-      await ctx.editMessageText('<b>❌ Failed to load PnL report</b>', { parse_mode: 'HTML' });
+      await ctx.reply('<b>❌ Failed to export CSV</b>', { parse_mode: 'HTML' });
     }
   });
 
-  // PnL period handlers
-  for (const period of ['today', '7d', '30d', 'all']) {
-    bot.action(`pnl_${period}`, async (ctx) => {
-      await ctx.answerCbQuery();
-
-      try {
-        const report = portfolioTracker.getPnLReport(period as any);
-        const formatted = portfolioTracker.formatPnLReport(report);
-
-        await ctx.editMessageText(
-          `<pre>${formatted}</pre>`,
-          {
-            parse_mode: 'HTML',
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  { text: 'Today', callback_data: 'pnl_today' },
-                  { text: '7d', callback_data: 'pnl_7d' },
-                  { text: '30d', callback_data: 'pnl_30d' },
-                  { text: 'All', callback_data: 'pnl_all' }
-                ],
-                [
-                  { text: '« Back', callback_data: 'portfolio_refresh' }
-                ]
-              ]
-            }
-          }
-        );
-      } catch (error) {
-        await ctx.editMessageText('<b>❌ Failed to load PnL report</b>', { parse_mode: 'HTML' });
-      }
-    });
-  }
-}
-
-function formatAge(ms: number): string {
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-
-  if (days > 0) return `${days}d ${hours % 24}h`;
-  if (hours > 0) return `${hours}h ${minutes % 60}m`;
-  if (minutes > 0) return `${minutes}m`;
-  return `${seconds}s`;
+  bot.action(/^tax_8949_(\d+)$/, async (ctx) => {
+    const year = parseInt(ctx.match[1]);
+    await ctx.answerCbQuery('Generating Form 8949...');
+    
+    try {
+      const { shortTermCSV, longTermCSV } = await taxReporting.exportForm8949CSV('default', year);
+      
+      await ctx.replyWithDocument({
+        source: Buffer.from(shortTermCSV, 'utf-8'),
+        filename: `form_8949_short_term_${year}.csv`,
+      }, {
+        caption: `📄 Form 8949 - Short-Term ${year}`,
+      });
+      
+      await ctx.replyWithDocument({
+        source: Buffer.from(longTermCSV, 'utf-8'),
+        filename: `form_8949_long_term_${year}.csv`,
+      }, {
+        caption: `📄 Form 8949 - Long-Term ${year}`,
+      });
+    } catch (error) {
+      await ctx.reply('<b>❌ Failed to export Form 8949</b>', { parse_mode: 'HTML' });
+    }
+  });
 }
