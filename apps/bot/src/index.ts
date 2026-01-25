@@ -15,6 +15,7 @@ import { logger } from './utils/logger';
 import { CLEANUP } from './constants';
 import { database } from './database';
 import { rugPredictor } from './ml/rugPredictor';
+import { ensemblePredictor } from './ml/ensemblePredictor';
 import { claudeExplainer } from './ml/claudeExplainer';
 import { apiServer } from './api/server';
 import { outcomeTracker } from './services/outcomeTracker';
@@ -39,6 +40,11 @@ class SolanaMemecoinBot {
       await rugPredictor.initialize();
       const mlStats = rugPredictor.getStats();
       logger.info('Main', `ML predictor ready (${mlStats.totalPredictions} predictions made)`);
+
+      // Initialize ensemble predictor
+      await ensemblePredictor.initialize();
+      const ensembleStats = ensemblePredictor.getStats();
+      logger.info('Main', `Ensemble predictor ready (${ensembleStats.totalModels} models)`);
 
       // Log Claude explainer status
       const claudeStats = claudeExplainer.getStats();

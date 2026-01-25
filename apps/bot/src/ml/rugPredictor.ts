@@ -11,6 +11,7 @@ import { database } from '../database';
 import { logger } from '../utils/logger';
 import { FEATURE_COUNT } from './featureEngineering';
 import { modelVersionManager } from './modelVersioning';
+import { ensemblePredictor } from './ensemblePredictor';
 
 // Legacy 9-feature input (v1 compatibility)
 export interface PredictionInput {
@@ -69,6 +70,7 @@ class RugPredictor {
   private trainingHistory: { loss: number; accuracy: number }[] = [];
   private totalPredictions: number = 0;
   private featureVersion: 'v1' | 'v2' = 'v1';
+  private useEnsemble: boolean = false; // Toggle for ensemble predictions
 
   // Feature normalization parameters
   private readonly NORMALIZATION = {
@@ -408,6 +410,12 @@ class RugPredictor {
    * Predict with enhanced features (v2)
    */
   async predictEnhanced(input: EnhancedPredictionInput): Promise<PredictionResult> {
+    // Use ensemble if enabled
+    if (this.useEnsemble) {
+      const features = this.extractEnhancedFeatures(input);
+      return ensemblePredictor.predict(input, features);
+    }
+
     // If v2 model is available, use it
     if (this.modelV2) {
       return this.predictWithModel(this.modelV2, this.extractEnhancedFeatures(input), input);
@@ -415,6 +423,21 @@ class RugPredictor {
 
     // Fall back to v1 model
     return this.predict(input);
+  }
+
+  /**
+   * Enable or disable ensemble predictions
+   */
+  setUseEnsemble(enabled: boolean): void {
+    this.useEnsemble = enabled;
+    logger.info('RugPredictor', `Ensemble predictions ${enabled ? 'enabled' : 'disabled'}`);
+  }
+
+  /**
+   * Check if ensemble is enabled
+   */
+  isEnsembleEnabled(): boolean {
+    return this.useEnsemble;
   }
 
   /**

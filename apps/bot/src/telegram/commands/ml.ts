@@ -12,6 +12,7 @@ import { modelVersionManager } from '../../ml/modelVersioning';
 import { rugPredictor } from '../../ml/rugPredictor';
 import { featureEngineering } from '../../ml/featureEngineering';
 import { featureSelection } from '../../ml/featureSelection';
+import { ensemblePredictor } from '../../ml/ensemblePredictor';
 import {
   formatMLStatus,
   formatPendingLabels,
@@ -339,6 +340,45 @@ export function registerMLCommands(bot: Telegraf): void {
       return;
     }
 
+    if (subcommand === 'ensemble') {
+      // Ensemble predictor stats and controls
+      const statsArg = args[1]?.toLowerCase();
+
+      if (statsArg === 'on') {
+        rugPredictor.setUseEnsemble(true);
+        await ctx.replyWithHTML('<b>✅ Ensemble predictions enabled</b>\n\nAll predictions will now use the ensemble.');
+        return;
+      }
+
+      if (statsArg === 'off') {
+        rugPredictor.setUseEnsemble(false);
+        await ctx.replyWithHTML('<b>❌ Ensemble predictions disabled</b>\n\nUsing single model predictions.');
+        return;
+      }
+
+      // Show stats
+      const isEnabled = rugPredictor.isEnsembleEnabled();
+      const stats = ensemblePredictor.formatStats();
+
+      await ctx.replyWithHTML(
+        `<b>🎯 Ensemble Status: ${isEnabled ? '✅ ON' : '❌ OFF'}</b>\n\n<pre>${stats}</pre>`,
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: isEnabled ? '❌ Disable' : '✅ Enable', callback_data: isEnabled ? 'ml_ensemble_off' : 'ml_ensemble_on' },
+                { text: '🔄 Refresh', callback_data: 'ml_ensemble_refresh' }
+              ],
+              [
+                { text: '« Back', callback_data: 'ml_back' }
+              ]
+            ]
+          }
+        }
+      );
+      return;
+    }
+
     // Help
     await ctx.replyWithHTML(
       '<b>🤖 ML Commands</b>\n\n' +
@@ -349,6 +389,8 @@ export function registerMLCommands(bot: Telegraf): void {
       '<code>/ml pending</code> - Tokens to label\n' +
       '<code>/ml label &lt;mint&gt; &lt;outcome&gt;</code> - Label token\n' +
       '<code>/ml features</code> - Feature importance\n' +
+      '<code>/ml ensemble</code> - Ensemble stats\n' +
+      '<code>/ml ensemble on/off</code> - Toggle ensemble\n' +
       '<code>/ml compare</code> - A/B test results'
     );
   });
@@ -644,5 +686,72 @@ export function registerMLCommands(bot: Telegraf): void {
         }
       );
     }
+  });
+
+  bot.action('ml_ensemble_on', async (ctx) => {
+    rugPredictor.setUseEnsemble(true);
+    await ctx.answerCbQuery('Ensemble enabled');
+    
+    const stats = ensemblePredictor.formatStats();
+    await ctx.editMessageText(
+      `<b>🎯 Ensemble Status: ✅ ON</b>\n\n<pre>${stats}</pre>`,
+      {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '❌ Disable', callback_data: 'ml_ensemble_off' },
+              { text: '🔄 Refresh', callback_data: 'ml_ensemble_refresh' }
+            ],
+            [{ text: '« Back', callback_data: 'ml_back' }]
+          ]
+        }
+      }
+    );
+  });
+
+  bot.action('ml_ensemble_off', async (ctx) => {
+    rugPredictor.setUseEnsemble(false);
+    await ctx.answerCbQuery('Ensemble disabled');
+    
+    const stats = ensemblePredictor.formatStats();
+    await ctx.editMessageText(
+      `<b>🎯 Ensemble Status: ❌ OFF</b>\n\n<pre>${stats}</pre>`,
+      {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '✅ Enable', callback_data: 'ml_ensemble_on' },
+              { text: '🔄 Refresh', callback_data: 'ml_ensemble_refresh' }
+            ],
+            [{ text: '« Back', callback_data: 'ml_back' }]
+          ]
+        }
+      }
+    );
+  });
+
+  bot.action('ml_ensemble_refresh', async (ctx) => {
+    await ctx.answerCbQuery('Refreshing...');
+    
+    const isEnabled = rugPredictor.isEnsembleEnabled();
+    const stats = ensemblePredictor.formatStats();
+
+    await ctx.editMessageText(
+      `<b>🎯 Ensemble Status: ${isEnabled ? '✅ ON' : '❌ OFF'}</b>\n\n<pre>${stats}</pre>`,
+      {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: isEnabled ? '❌ Disable' : '✅ Enable', callback_data: isEnabled ? 'ml_ensemble_off' : 'ml_ensemble_on' },
+              { text: '🔄 Refresh', callback_data: 'ml_ensemble_refresh' }
+            ],
+            [{ text: '« Back', callback_data: 'ml_back' }]
+          ]
+        }
+      }
+    );
   });
 }
