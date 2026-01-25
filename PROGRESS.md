@@ -247,6 +247,33 @@
   - Statistics tracking (moon count, rug count, win rate, avg profit)
   - Format stats for display
 
+### Completed - Phase 29 (Integration Flow) ✅ 🔄
+- [x] **Unified Analysis Command** - All features in one decision
+  - integrationFlow.ts service (366 lines) - Complete integration engine
+  - **One Command Does Everything:** Token → Security → Sentiment → ML → Risk → Recommendation
+  - **Parallel Analysis:** Runs security, sentiment, price data simultaneously
+  - **Scoring System:** 100-point scale (Security 40pts, ML 30pts, Risk 20pts, Sentiment 10pts)
+  - **Smart Recommendations:** BUY (70+ points), WATCH (50-70), AVOID (<50 or high avoid score)
+  - **Confidence Calculation:** Based on data completeness & score clarity
+  - **Position Sizing Integration:** Auto-calculates size/SL/TP for BUY recommendations
+  - **Reasoning Display:** Shows exactly why each decision was made
+  - **Performance Tracking:** Analysis time, timestamp
+  - Formatted output with emoji indicators
+  - Ready for `/trade <mint>` command
+
+### Completed - Phase 28 (Performance Analytics) ✅ 📈
+- [x] **Deep Insights & Pattern Recognition** - Learn what actually works
+  - performanceAnalytics.ts service (456 lines) - Complete analytics engine
+  - **Moon Patterns:** What makes tokens moon? (High risk + low rug, high liquidity, etc.)
+  - **Rug Patterns:** Warning signs we missed (ML predicted, low risk score, low liquidity)
+  - **Best Trading Times:** Hour-by-hour win rate & avg return analysis
+  - **Feature Correlations:** Which features predict which outcomes (Pearson correlation)
+  - **Scanner Filter ROI:** Moon rate, rug rate, avg return per filter
+  - **Pattern Confidence:** Statistical confidence scores (0-100%)
+  - **Formatted Reports:** Human-readable insights with percentages & counts
+  - Minimum sample sizes for significance
+  - Correlation coefficient calculation (-1 to +1)
+
 ### Completed - Phase 27 (Advanced Risk System) ✅ ⚖️
 - [x] **Intelligent Position Sizing & Risk Management**
   - advancedRiskManager.ts service (410 lines) - Complete risk engine
