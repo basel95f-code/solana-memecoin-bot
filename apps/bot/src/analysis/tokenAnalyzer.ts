@@ -9,7 +9,7 @@ import { analyzeContract } from './contractCheck';
 import { analyzeSocials } from './socialCheck';
 import { analyzeSentiment, getDefaultSentiment } from './sentimentAnalysis';
 import { classifyRisk } from '../risk/classifier';
-import type { TokenAnalysis, PoolInfo, LiquidityAnalysis, HolderAnalysis, ContractAnalysis, SocialAnalysis} from '../types';
+import type { TokenAnalysis, PoolInfo, LiquidityAnalysis, HolderAnalysis, ContractAnalysis, SocialAnalysis, SentimentAnalysis } from '../types';
 import { config } from '../config';
 
 // Track in-flight analysis requests to prevent duplicates
