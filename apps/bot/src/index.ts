@@ -327,46 +327,50 @@ class SolanaMemecoinBot {
     console.log('🛑 Stopping bot...');
     this.isRunning = false;
 
-    // Stop queue processor
-    queueProcessor.stop();
+    try {
+      // Stop queue processor
+      queueProcessor.stop();
 
-    // Stop all monitors
-    await raydiumMonitor.stop();
-    await pumpFunMonitor.stop();
-    await jupiterMonitor.stop();
+      // Stop all monitors
+      await raydiumMonitor.stop();
+      await pumpFunMonitor.stop();
+      await jupiterMonitor.stop();
 
-    // Stop advanced monitoring
-    await advancedMonitor.stop();
+      // Stop advanced monitoring
+      await advancedMonitor.stop();
 
-    // Stop watchlist monitoring
-    watchlistService.stop();
+      // Stop watchlist monitoring
+      watchlistService.stop();
 
-    // Stop wallet monitoring
-    walletMonitorService.stop();
+      // Stop wallet monitoring
+      walletMonitorService.stop();
 
-    // Stop multi-platform sentiment services
-    await telegramMtprotoService.stop();
-    await discordBotService.stop();
+      // Stop multi-platform sentiment services
+      await telegramMtprotoService.stop();
+      await discordBotService.stop();
 
-    // Stop outcome tracker
-    outcomeTracker.stop();
+      // Stop outcome tracker
+      outcomeTracker.stop();
 
-    // Stop signal services
-    signalPriceMonitor.stop();
-    signalService.stop();
-    trainingPipeline.stopAutoTraining();
+      // Stop signal services
+      signalPriceMonitor.stop();
+      signalService.stop();
+      trainingPipeline.stopAutoTraining();
 
-    // Stop Telegram bot
-    telegramService.stop();
+      // Stop Telegram bot
+      telegramService.stop();
 
-    // Stop API server
-    apiServer.stop();
+      // Stop API server
+      apiServer.stop();
 
-    // Close database connection
-    database.close();
-    logger.info('Main', 'Database closed');
+      // Close database connection gracefully (with final backup)
+      await database.close();
 
-    console.log('✅ Bot stopped');
+      console.log('✅ Bot stopped gracefully');
+    } catch (error) {
+      logger.error('Main', 'Error during shutdown', error as Error);
+      throw error;
+    }
   }
 }
 

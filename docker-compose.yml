@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: solana-memecoin-bot
+    restart: unless-stopped
+    
+    # Environment variables
+    environment:
+      - NODE_ENV=production
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - SOLANA_RPC_URL=${SOLANA_RPC_URL:-https://api.mainnet-beta.solana.com}
+      - SOLANA_WS_URL=${SOLANA_WS_URL}
+      - RUGCHECK_API_KEY=${RUGCHECK_API_KEY}
+      - DEXSCREENER_API_KEY=${DEXSCREENER_API_KEY}
+      - GMGN_API_KEY=${GMGN_API_KEY}
+      - DATABASE_PATH=/app/data/bot.db
+      
+      # Optional settings
+      - MIN_LIQUIDITY_USD=${MIN_LIQUIDITY_USD:-1000}
+      - MIN_RISK_SCORE=${MIN_RISK_SCORE:-0}
+      - RAYDIUM_ENABLED=${RAYDIUM_ENABLED:-true}
+      - PUMPFUN_ENABLED=${PUMPFUN_ENABLED:-true}
+      - JUPITER_ENABLED=${JUPITER_ENABLED:-true}
+      - WATCHLIST_ENABLED=${WATCHLIST_ENABLED:-true}
+      - DISCOVERY_ENABLED=${DISCOVERY_ENABLED:-true}
+      - WALLET_MONITOR_ENABLED=${WALLET_MONITOR_ENABLED:-true}
+    
+    # Persistent volume for database
+    volumes:
+      - bot-data:/app/data
+      - ./logs:/app/logs  # Optional: mount logs directory
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    # Network configuration
+    networks:
+      - bot-network
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "node", "-e", "console.log('OK')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  bot-data:
+    driver: local
+
+networks:
+  bot-network:
+    driver: bridge

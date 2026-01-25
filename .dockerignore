@@ -1,0 +1,96 @@
+# Dependencies
+node_modules
+npm-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+dist
+build
+.turbo
+.next
+out
+
+# Development files
+*.md
+!README.md
+!DEPLOYMENT.md
+.vscode
+.idea
+.claude
+*.log
+logs
+
+# Test files
+tests
+__tests__
+*.test.ts
+*.test.js
+*.spec.ts
+*.spec.js
+coverage
+.nyc_output
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.travis.yml
+
+# Documentation and planning
+IMPROVEMENTS.md
+SESSION_SUMMARY.md
+session-log.md
+TODO*.md
+PROGRESS.md
+AGENTS.md
+SOUL.md
+USER.md
+TOOLS.md
+HEARTBEAT.md
+IDENTITY.md
+BUG_AUDIT.md
+*_FEATURE.md
+*_IMPLEMENTATION.md
+*_STATUS.md
+*_VERIFICATION.md
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# Database files (will be in volumes)
+*.db
+*.sqlite
+*.sqlite3
+data/
+
+# PM2
+ecosystem.config.js
+
+# API test files
+api-tests/
+
+# Supabase local
+supabase/.branches
+supabase/.temp
+
+# Dashboard (if not needed in bot container)
+dashboard/
+apps/dashboard/
+
+# Vercel
+.vercel
+vercel.json

@@ -7,8 +7,11 @@ import type { Database as SqlJsDatabase } from 'sql.js';
 import initSqlJs from 'sql.js';
 import path from 'path';
 import fs from 'fs';
-import { SCHEMA, MIGRATIONS } from './schema';
+import { SCHEMA } from './schema';
 import { logger } from '../utils/logger';
+import { migrator } from './migrator';
+import { healthChecker } from './health';
+import { backupService } from './backup';
 import type {
   BacktestStrategy,
   BacktestResults,
@@ -64,45 +67,89 @@ class DatabaseService {
   async initialize(): Promise<void> {
     if (this.initialized) return;
 
-    try {
-      // Ensure data directory exists
-      const dataDir = path.dirname(this.dbPath);
-      if (!fs.existsSync(dataDir)) {
-        fs.mkdirSync(dataDir, { recursive: true });
-      }
+    const maxRetries = 3;
+    let lastError: Error | null = null;
 
-      // Initialize sql.js
-      const SQL = await initSqlJs();
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        logger.info('Database', `Initializing database (attempt ${attempt}/${maxRetries})...`);
 
-      // Load existing database or create new one
-      if (fs.existsSync(this.dbPath)) {
-        const fileBuffer = fs.readFileSync(this.dbPath);
-        this.db = new SQL.Database(fileBuffer);
-        logger.info('Database', `Loaded existing database from ${this.dbPath}`);
-      } else {
-        this.db = new SQL.Database();
-        logger.info('Database', `Created new database at ${this.dbPath}`);
-      }
-
-      // Create tables
-      this.db.run(SCHEMA);
-
-      // Run migrations
-      this.runMigrations();
-
-      // Auto-save every 30 seconds if there are changes
-      this.saveInterval = setInterval(() => {
-        if (this.dirty) {
-          this.saveToDisk();
+        // Ensure data directory exists
+        const dataDir = path.dirname(this.dbPath);
+        if (!fs.existsSync(dataDir)) {
+          fs.mkdirSync(dataDir, { recursive: true });
         }
-      }, 30000);
 
-      this.initialized = true;
-      logger.info('Database', 'Initialized successfully');
-    } catch (error) {
-      logger.error('Database', 'Failed to initialize', error as Error);
-      throw error;
+        // Initialize sql.js
+        const SQL = await initSqlJs();
+
+        // Load existing database or create new one
+        if (fs.existsSync(this.dbPath)) {
+          const fileBuffer = fs.readFileSync(this.dbPath);
+          this.db = new SQL.Database(fileBuffer);
+          logger.info('Database', `Loaded existing database from ${this.dbPath}`);
+        } else {
+          this.db = new SQL.Database();
+          logger.info('Database', `Created new database at ${this.dbPath}`);
+        }
+
+        // Create base tables (required before migrations)
+        this.db.run(SCHEMA);
+
+        // Set database instances for helper services
+        migrator.setDatabase(this.db);
+        healthChecker.setDatabase(this.db);
+        backupService.initialize(this.db, this.dbPath);
+
+        // Run migrations automatically
+        await migrator.runMigrations();
+
+        // Run health check
+        const health = await healthChecker.healthCheck();
+        if (!health.healthy) {
+          logger.warn('Database', `Health check warnings: ${health.details.errors.join(', ')}`);
+        }
+
+        // Start periodic health checks (every 5 minutes)
+        healthChecker.startPeriodicHealthChecks(5 * 60 * 1000);
+
+        // Start automatic backups (daily)
+        backupService.startAutomaticBackups(24);
+
+        // Auto-save every 30 seconds if there are changes
+        this.saveInterval = setInterval(() => {
+          if (this.dirty) {
+            this.saveToDisk();
+          }
+        }, 30000);
+
+        this.initialized = true;
+        
+        const migrationStats = migrator.getStats();
+        const backupStats = backupService.getStats();
+        
+        logger.info(
+          'Database', 
+          `✅ Initialized successfully - Schema v${migrationStats.currentVersion} | ${backupStats.totalBackups} backups`
+        );
+        
+        return;
+      } catch (error) {
+        lastError = error as Error;
+        logger.error('Database', `Initialization attempt ${attempt} failed: ${lastError.message}`);
+
+        if (attempt < maxRetries) {
+          // Wait before retrying (exponential backoff)
+          const delayMs = Math.pow(2, attempt) * 1000;
+          logger.info('Database', `Retrying in ${delayMs / 1000}s...`);
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
+      }
     }
+
+    // All retries failed
+    logger.error('Database', 'Failed to initialize after all retries', lastError!);
+    throw lastError;
   }
 
   /**
@@ -123,42 +170,38 @@ class DatabaseService {
   }
 
   /**
-   * Run any pending migrations
+   * Get database instance (for advanced operations)
    */
-  private runMigrations(): void {
-    if (!this.db) return;
+  getDb(): SqlJsDatabase | null {
+    return this.db;
+  }
 
-    // Create migrations table if not exists
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS migrations (
-        version INTEGER PRIMARY KEY,
-        applied_at INTEGER NOT NULL
-      )
-    `);
+  /**
+   * Run health check
+   */
+  async healthCheck() {
+    return await healthChecker.healthCheck();
+  }
 
-    // Get current version
-    const result = this.db.exec('SELECT MAX(version) as version FROM migrations');
-    const startVersion = result.length > 0 && result[0].values.length > 0
-      ? (result[0].values[0][0] as number) ?? 0
-      : 0;
+  /**
+   * Create manual backup
+   */
+  async createBackup() {
+    return await backupService.createBackup(true);
+  }
 
-    // Apply pending migrations
-    for (const migration of MIGRATIONS) {
-      if (migration.version > startVersion) {
-        try {
-          this.db.run(migration.sql);
-          this.db.run(
-            'INSERT INTO migrations (version, applied_at) VALUES (?, ?)',
-            [migration.version, Math.floor(Date.now() / 1000)]
-          );
-          this.dirty = true;
-          logger.info('Database', `Applied migration v${migration.version}`);
-        } catch (error) {
-          logger.error('Database', `Migration v${migration.version} failed`, error as Error);
-          throw error;
-        }
-      }
-    }
+  /**
+   * Get migration information
+   */
+  getMigrationInfo() {
+    return migrator.getStats();
+  }
+
+  /**
+   * Get backup information
+   */
+  getBackupInfo() {
+    return backupService.getStats();
   }
 
   /**
@@ -1528,21 +1571,48 @@ class DatabaseService {
   }
 
   /**
-   * Close the database connection
+   * Close the database connection gracefully
    */
-  close(): void {
+  async close(): Promise<void> {
+    logger.info('Database', 'Starting graceful shutdown...');
+
+    // Stop periodic health checks
+    healthChecker.stopPeriodicHealthChecks();
+
+    // Stop automatic backups
+    backupService.stopAutomaticBackups();
+
+    // Stop auto-save interval
     if (this.saveInterval) {
       clearInterval(this.saveInterval);
       this.saveInterval = null;
     }
 
     if (this.db) {
-      // Final save before closing
-      this.saveToDisk();
-      this.db.close();
-      this.db = null;
-      this.initialized = false;
-      logger.info('Database', 'Connection closed');
+      try {
+        // Final save before closing
+        if (this.dirty) {
+          logger.info('Database', 'Flushing pending writes...');
+          this.saveToDisk();
+        }
+
+        // Create a final backup
+        logger.info('Database', 'Creating final backup...');
+        const backup = await backupService.createBackup(true);
+        if (backup) {
+          logger.info('Database', `Final backup created: ${backup.filename}`);
+        }
+
+        // Close database
+        this.db.close();
+        this.db = null;
+        this.initialized = false;
+        
+        logger.info('Database', '✅ Database closed gracefully');
+      } catch (error) {
+        logger.error('Database', 'Error during graceful shutdown', error as Error);
+        throw error;
+      }
     }
   }
 

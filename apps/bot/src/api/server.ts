@@ -346,16 +346,35 @@ class ApiServer {
       overallStatus = 'unhealthy';
     }
 
-    // Check Database
+    // Check Database with comprehensive health check
     try {
-      const start = Date.now();
-      const dbStats = database.getStats();
-      const latency = Date.now() - start;
+      const healthResult = await database.healthCheck();
+      const migrationInfo = database.getMigrationInfo();
+      const backupInfo = database.getBackupInfo();
+      
       checks.database = {
-        status: 'healthy',
-        message: `${dbStats.totalAnalyses} analyses stored`,
-        latencyMs: latency,
+        status: healthResult.healthy ? 'healthy' : 'unhealthy',
+        message: healthResult.healthy
+          ? `Schema v${healthResult.details.schemaVersion} | ${healthResult.details.tableCount} tables | ${healthResult.details.recordCount.toLocaleString()} records`
+          : `Health check failed: ${healthResult.details.errors.join(', ')}`,
+        latencyMs: healthResult.details.connectionTime,
       };
+      
+      // Add migration status
+      checks.database_migrations = {
+        status: migrationInfo.pendingMigrations === 0 ? 'healthy' : 'degraded',
+        message: `v${migrationInfo.currentVersion} (${migrationInfo.pendingMigrations} pending)`,
+      };
+      
+      // Add backup status
+      checks.database_backups = {
+        status: backupInfo.totalBackups > 0 ? 'healthy' : 'degraded',
+        message: `${backupInfo.totalBackups} backups | ${(backupInfo.totalSizeBytes / 1024 / 1024).toFixed(2)} MB`,
+      };
+      
+      if (!healthResult.healthy) {
+        overallStatus = 'unhealthy';
+      }
     } catch (error) {
       checks.database = {
         status: 'unhealthy',
