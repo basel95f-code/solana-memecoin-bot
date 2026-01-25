@@ -21,6 +21,7 @@ import { apiServer } from './api/server';
 import { outcomeTracker } from './services/outcomeTracker';
 import { signalService, signalPriceMonitor } from './signals';
 import { trainingPipeline } from './ml/trainingPipeline';
+import { learningOrchestrator } from './services/learningOrchestrator';
 import { queueProcessor, setupEventListeners, setupWalletMonitorListeners } from './core';
 
 class SolanaMemecoinBot {
@@ -114,6 +115,10 @@ class SolanaMemecoinBot {
       // Start signal price monitor (watches active signals for TP/SL)
       signalPriceMonitor.start();
       logger.info('Main', 'Signal price monitor started');
+
+      // Start learning orchestrator (continuous improvement from outcomes)
+      learningOrchestrator.start();
+      logger.info('Main', 'Learning orchestrator started - bot will learn from results');
 
       // Start API server for dashboard
       apiServer.start();

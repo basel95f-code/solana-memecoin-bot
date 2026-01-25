@@ -231,6 +231,22 @@
   - Detailed analysis reports with warnings and recommendations
   - Integration with token analysis pipeline
 
+### Completed - Phase 23 (Learning Orchestrator) ✅ 🧠
+- [x] **Continuous Learning System** - Bot learns from outcomes and improves over time
+  - learningOrchestrator.ts service (641 lines) - meta-learning system
+  - Database table: token_outcomes_v2 (migration v7) for outcome tracking
+  - **Automated outcome tracking:** Checks tokens 24h after discovery, classifies as moon/rug/stable/decline
+  - **Portfolio integration:** Learns from your actual trades (wins/losses)
+  - **ML training data update:** Auto-adds outcomes to training set
+  - **Auto-retrain trigger:** Retrains model when 50+ new samples or 7+ days
+  - **Scanner filter optimization:** Tracks which filters find winning tokens
+  - **Feature performance analysis:** Analyzes which features led to profits
+  - **Closed feedback loop:** Discoveries → Outcomes → Training → Better predictions
+  - Runs learning cycle every hour
+  - Confidence scoring for outcomes (0-1)
+  - Statistics tracking (moon count, rug count, win rate, avg profit)
+  - Format stats for display
+
 ### Low Priority / Future
 14. **Cross-chain Support** - Extend to other chains (Base, etc.)
 15. **Paper Trading Mode** - Simulate trades without real execution

@@ -764,5 +764,53 @@ export const MIGRATIONS: { version: number; sql: string }[] = [
       CREATE INDEX IF NOT EXISTS idx_scan_matches_filter ON scan_matches(filter_id);
       CREATE INDEX IF NOT EXISTS idx_scan_matches_time ON scan_matches(matched_at);
     `
+  },
+  {
+    version: 7,
+    description: 'Add learning orchestrator outcome tracking',
+    sql: `
+      -- ============================================
+      -- Token Outcomes Table (Enhanced)
+      -- Tracks what actually happened to tokens
+      -- Used for continuous learning and improvement
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS token_outcomes_v2 (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        token_mint TEXT NOT NULL UNIQUE,
+        symbol TEXT NOT NULL,
+        
+        -- Initial state when discovered
+        discovered_at INTEGER NOT NULL,
+        initial_price REAL,
+        initial_liquidity REAL,
+        initial_risk_score INTEGER,
+        initial_rug_prob REAL,
+        
+        -- Outcome classification
+        outcome_type TEXT CHECK(outcome_type IN ('moon', 'rug', 'stable', 'decline', 'unknown')),
+        price_change_24h REAL,
+        price_change_7d REAL,
+        final_price REAL,
+        max_price REAL,
+        min_price REAL,
+        
+        -- Trading results
+        was_traded INTEGER DEFAULT 0,
+        trade_profit REAL,
+        trade_profit_percent REAL,
+        
+        -- Learning metadata
+        checked_at INTEGER NOT NULL,
+        confidence REAL DEFAULT 0.5,
+        
+        -- Use this for ML training
+        used_for_training INTEGER DEFAULT 0
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_outcomes_v2_mint ON token_outcomes_v2(token_mint);
+      CREATE INDEX IF NOT EXISTS idx_outcomes_v2_type ON token_outcomes_v2(outcome_type);
+      CREATE INDEX IF NOT EXISTS idx_outcomes_v2_discovered ON token_outcomes_v2(discovered_at);
+      CREATE INDEX IF NOT EXISTS idx_outcomes_v2_traded ON token_outcomes_v2(was_traded);
+    `
   }
 ];
