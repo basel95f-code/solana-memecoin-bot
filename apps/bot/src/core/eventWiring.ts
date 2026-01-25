@@ -13,12 +13,14 @@ import { devWalletTracker } from '../services/devWalletTracker';
 import type { DevBehaviorAlert } from '../services/devWalletTracker';
 import { bundledWalletDetector } from '../services/bundledWalletDetector';
 import type { BundleAlert } from '../services/bundledWalletDetector';
+import { topHolderTracker } from '../services/topHolderTracker';
+import type { HolderChangeAlert } from '../services/topHolderTracker';
 import { raydiumMonitor } from '../monitors/raydium';
 import { pumpFunMonitor } from '../monitors/pumpfun';
 import { jupiterMonitor } from '../monitors/jupiter';
 import { apiServer } from '../api/server';
 import { formatAdvancedAlert } from '../telegram/commands/advanced';
-import { formatLiquidityAlert, formatDevBehaviorAlert, formatBundleAlert } from '../telegram/formatters';
+import { formatLiquidityAlert, formatDevBehaviorAlert, formatBundleAlert, formatHolderChangeAlert } from '../telegram/formatters';
 import type { PoolInfo, WalletActivityAlert } from '../types';
 import { logger } from '../utils/logger';
 import { queueProcessor } from './queueProcessor';
@@ -33,6 +35,7 @@ export function setupEventListeners(): void {
   setupLiquidityMonitorListeners();
   setupDevWalletTrackerListeners();
   setupBundledWalletDetectorListeners();
+  setupTopHolderTrackerListeners();
 }
 
 /**
@@ -214,6 +217,42 @@ function setupBundledWalletDetectorListeners(): void {
       logger.warn('BundledWalletDetector', \Alert sent: \ - \\);
     } catch (error) {
       logger.error('BundledWalletDetector', 'Error sending bundle alert', error as Error);
+    }
+  });
+}
+
+
+
+/**
+ * Set up top holder tracker event listeners
+ */
+function setupTopHolderTrackerListeners(): void {
+  topHolderTracker.on('alert', async (alert: HolderChangeAlert) => {
+    try {
+      // Format and send Telegram alert
+      const message = formatHolderChangeAlert(alert);
+      await telegramService.sendMessage(message, config.telegramChatId);
+
+      // Add to dashboard
+      const emojiMap = {
+        whale_accumulation: '????',
+        whale_dump: '????',
+        new_whale: '??',
+        whale_exit: '??',
+        rank_change: '??',
+      };
+
+      apiServer.addAlert({
+        type: 'holder_' + alert.type,
+        title: alert.type.toUpperCase().replace('_', ' '),
+        description: \\ - \\,
+        emoji: emojiMap[alert.type] || '??',
+        timestamp: Date.now(),
+      });
+
+      logger.info('TopHolderTracker', \Alert sent: \ for \\);
+    } catch (error) {
+      logger.error('TopHolderTracker', 'Error sending holder change alert', error as Error);
     }
   });
 }

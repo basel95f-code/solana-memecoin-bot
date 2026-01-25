@@ -9,6 +9,7 @@ import { walletMonitorService } from './services/walletMonitor';
 import { liquidityMonitor } from './services/liquidityMonitor';
 import { devWalletTracker } from './services/devWalletTracker';
 import { bundledWalletDetector } from './services/bundledWalletDetector';
+import { topHolderTracker } from './services/topHolderTracker';
 import { smartMoneyTracker } from './services/smartMoneyTracker';
 import { whaleActivityTracker } from './services/whaleActivityTracker';
 import { enhancedClusterDetector } from './services/enhancedClusterDetector';
@@ -110,6 +111,10 @@ class SolanaMemecoinBot {
       // Start bundled wallet detector (Sybil attack detection)
       await bundledWalletDetector.start();
       logger.info('Main', 'Bundled wallet detector started');
+
+      // Start top holder tracker (whale movement monitoring)
+      await topHolderTracker.start();
+      logger.info('Main', 'Top holder tracker started');
 
       // Start smart money tracker (performance tracking for wallets)
       await smartMoneyTracker.start();

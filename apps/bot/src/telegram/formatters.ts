@@ -15,6 +15,7 @@ import type {
 import type { LiquidityAlert } from '../services/liquidityMonitor';
 import type { DevBehaviorAlert } from '../services/devWalletTracker';
 import type { BundleAlert } from '../services/bundledWalletDetector';
+import type { HolderChangeAlert } from '../services/topHolderTracker';
 
 // ═══════════════════════════════════════════
 // UTILITY FUNCTIONS
@@ -960,6 +961,60 @@ export function formatBundleAlert(alert: { type: string; severity: string; symbo
   } else {
     lines.push(\\);
     lines.push(\?? Suspicious wallet creation pattern - proceed with caution\);
+  }
+
+  return lines.join('\n');
+}
+
+
+
+// -------------------------------------------
+// TOP HOLDER CHANGE ALERTS
+// -------------------------------------------
+
+export function formatHolderChangeAlert(alert: { type: string; severity: string; symbol: string; walletAddress: string; message: string; details: any }): string {
+  const emojiMap: Record<string, string> = {
+    whale_accumulation: '????',
+    whale_dump: '????',
+    new_whale: '??',
+    whale_exit: '??',
+    rank_change: '??',
+  };
+
+  const emoji = emojiMap[alert.type] || '??';
+  const title = alert.type === 'whale_accumulation' ? 'WHALE ACCUMULATION' :
+                alert.type === 'whale_dump' ? 'WHALE DUMP' :
+                alert.type === 'new_whale' ? 'NEW WHALE' :
+                alert.type === 'whale_exit' ? 'WHALE EXIT' :
+                'RANK CHANGE';
+
+  const lines = [
+    \\ <b>\</b>\,
+    \\,
+    \<b>\</b>\,
+    alert.message,
+    \\,
+    \Wallet: <code>\...\</code>\,
+  ];
+
+  if (alert.details.oldPercent !== undefined && alert.details.newPercent !== undefined) {
+    lines.push(\Position: \% ? \%\);
+  } else if (alert.details.newPercent !== undefined) {
+    lines.push(\Position: \%\);
+  }
+
+  if (alert.details.oldRank !== undefined && alert.details.newRank !== undefined) {
+    lines.push(\Rank: #\ ? #\\);
+  } else if (alert.details.newRank !== undefined) {
+    lines.push(\Rank: #\\);
+  }
+
+  if (alert.severity === 'critical') {
+    lines.push(\\);
+    lines.push(\?? <b>Large dump detected - consider selling</b>\);
+  } else if (alert.type === 'whale_accumulation' && alert.details.percentChange > 3) {
+    lines.push(\\);
+    lines.push(\?? Whale loading up - bullish signal\);
   }
 
   return lines.join('\n');
