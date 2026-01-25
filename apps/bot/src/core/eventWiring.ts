@@ -11,12 +11,14 @@ import { liquidityMonitor } from '../services/liquidityMonitor';
 import type { LiquidityAlert } from '../services/liquidityMonitor';
 import { devWalletTracker } from '../services/devWalletTracker';
 import type { DevBehaviorAlert } from '../services/devWalletTracker';
+import { bundledWalletDetector } from '../services/bundledWalletDetector';
+import type { BundleAlert } from '../services/bundledWalletDetector';
 import { raydiumMonitor } from '../monitors/raydium';
 import { pumpFunMonitor } from '../monitors/pumpfun';
 import { jupiterMonitor } from '../monitors/jupiter';
 import { apiServer } from '../api/server';
 import { formatAdvancedAlert } from '../telegram/commands/advanced';
-import { formatLiquidityAlert, formatDevBehaviorAlert } from '../telegram/formatters';
+import { formatLiquidityAlert, formatDevBehaviorAlert, formatBundleAlert } from '../telegram/formatters';
 import type { PoolInfo, WalletActivityAlert } from '../types';
 import { logger } from '../utils/logger';
 import { queueProcessor } from './queueProcessor';
@@ -30,6 +32,7 @@ export function setupEventListeners(): void {
   setupAdvancedMonitorListeners();
   setupLiquidityMonitorListeners();
   setupDevWalletTrackerListeners();
+  setupBundledWalletDetectorListeners();
 }
 
 /**
@@ -183,6 +186,34 @@ function setupDevWalletTrackerListeners(): void {
       logger.info('DevWalletTracker', \Alert sent: \ for \\);
     } catch (error) {
       logger.error('DevWalletTracker', 'Error sending dev behavior alert', error as Error);
+    }
+  });
+}
+
+
+
+/**
+ * Set up bundled wallet detector event listeners
+ */
+function setupBundledWalletDetectorListeners(): void {
+  bundledWalletDetector.on('alert', async (alert: BundleAlert) => {
+    try {
+      // Format and send Telegram alert
+      const message = formatBundleAlert(alert);
+      await telegramService.sendMessage(message, config.telegramChatId);
+
+      // Add to dashboard
+      apiServer.addAlert({
+        type: 'bundled_wallets',
+        title: 'BUNDLED WALLETS',
+        description: \\ - \\,
+        emoji: alert.severity === 'critical' ? '??' : '??',
+        timestamp: Date.now(),
+      });
+
+      logger.warn('BundledWalletDetector', \Alert sent: \ - \\);
+    } catch (error) {
+      logger.error('BundledWalletDetector', 'Error sending bundle alert', error as Error);
     }
   });
 }

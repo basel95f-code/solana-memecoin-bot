@@ -8,6 +8,7 @@ import { advancedMonitor } from './services/advancedMonitor';
 import { walletMonitorService } from './services/walletMonitor';
 import { liquidityMonitor } from './services/liquidityMonitor';
 import { devWalletTracker } from './services/devWalletTracker';
+import { bundledWalletDetector } from './services/bundledWalletDetector';
 import { smartMoneyTracker } from './services/smartMoneyTracker';
 import { whaleActivityTracker } from './services/whaleActivityTracker';
 import { enhancedClusterDetector } from './services/enhancedClusterDetector';
@@ -105,6 +106,10 @@ class SolanaMemecoinBot {
       // Start dev wallet tracker (rug pull early warning)
       await devWalletTracker.start();
       logger.info('Main', 'Dev wallet tracker started');
+
+      // Start bundled wallet detector (Sybil attack detection)
+      await bundledWalletDetector.start();
+      logger.info('Main', 'Bundled wallet detector started');
 
       // Start smart money tracker (performance tracking for wallets)
       await smartMoneyTracker.start();

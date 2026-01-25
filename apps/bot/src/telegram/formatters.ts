@@ -14,6 +14,7 @@ import type {
 } from '../signals/types';
 import type { LiquidityAlert } from '../services/liquidityMonitor';
 import type { DevBehaviorAlert } from '../services/devWalletTracker';
+import type { BundleAlert } from '../services/bundledWalletDetector';
 
 // ═══════════════════════════════════════════
 // UTILITY FUNCTIONS
@@ -913,6 +914,52 @@ export function formatDevBehaviorAlert(alert: { type: string; severity: string; 
   if (alert.severity === 'critical') {
     lines.push(\\);
     lines.push(\? <b>CRITICAL - High rug risk</b>\);
+  }
+
+  return lines.join('\n');
+}
+
+
+
+// -------------------------------------------
+// BUNDLED WALLET ALERTS
+// -------------------------------------------
+
+export function formatBundleAlert(alert: { type: string; severity: string; symbol: string; message: string; details: any }): string {
+  const emoji = alert.severity === 'critical' ? '??' : '??';
+  const title = 'BUNDLED WALLETS DETECTED';
+
+  const lines = [
+    \\ <b>\</b>\,
+    \\,
+    \<b>\</b>\,
+    alert.message,
+    \\,
+  ];
+
+  if (alert.details.walletsInBundle) {
+    lines.push(\Wallets in bundle: \\);
+  }
+
+  if (alert.details.totalPercent) {
+    lines.push(\Total held: \%\);
+  }
+
+  if (alert.details.creationSlot) {
+    lines.push(\Creation slot: \\);
+  }
+
+  if (alert.details.fundingSource) {
+    lines.push(\\);
+    lines.push(\Funding source: <code>\...</code>\);
+  }
+
+  if (alert.severity === 'critical') {
+    lines.push(\\);
+    lines.push(\? <b>CRITICAL - Possible Sybil attack</b>\);
+  } else {
+    lines.push(\\);
+    lines.push(\?? Suspicious wallet creation pattern - proceed with caution\);
   }
 
   return lines.join('\n');
