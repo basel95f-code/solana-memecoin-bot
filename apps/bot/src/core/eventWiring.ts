@@ -7,11 +7,14 @@ import { telegramService } from '../services/telegram';
 import type { AdvancedAlert } from '../services/advancedMonitor';
 import { advancedMonitor } from '../services/advancedMonitor';
 import { walletMonitorService } from '../services/walletMonitor';
+import { liquidityMonitor } from '../services/liquidityMonitor';
+import type { LiquidityAlert } from '../services/liquidityMonitor';
 import { raydiumMonitor } from '../monitors/raydium';
 import { pumpFunMonitor } from '../monitors/pumpfun';
 import { jupiterMonitor } from '../monitors/jupiter';
 import { apiServer } from '../api/server';
 import { formatAdvancedAlert } from '../telegram/commands/advanced';
+import { formatLiquidityAlert } from '../telegram/formatters';
 import type { PoolInfo, WalletActivityAlert } from '../types';
 import { logger } from '../utils/logger';
 import { queueProcessor } from './queueProcessor';
@@ -23,6 +26,7 @@ import { shouldSendAdvancedAlert } from './alertFilter';
 export function setupEventListeners(): void {
   setupMonitorListeners();
   setupAdvancedMonitorListeners();
+  setupLiquidityMonitorListeners();
 }
 
 /**
@@ -110,3 +114,38 @@ function setupAdvancedMonitorListeners(): void {
     }
   });
 }
+
+
+/**
+ * Set up liquidity monitor event listeners
+ */
+function setupLiquidityMonitorListeners(): void {
+  liquidityMonitor.on('alert', async (alert: LiquidityAlert) => {
+    try {
+      // Format and send Telegram alert
+      const message = formatLiquidityAlert(alert);
+      await telegramService.sendMessage(message, config.telegramChatId);
+
+      // Add to dashboard
+      const emojiMap = {
+        drain: alert.severity === 'critical' ? '??' : '??',
+        unlock: '??',
+        burn_change: '??',
+        locker_expiry: '?',
+      };
+
+      apiServer.addAlert({
+        type: 'liquidity_' + alert.type,
+        title: alert.type.toUpperCase().replace('_', ' '),
+        description: \\ - \\,
+        emoji: emojiMap[alert.type] || '??',
+        timestamp: Date.now(),
+      });
+
+      logger.info('LiquidityMonitor', \Alert sent: \ for \\);
+    } catch (error) {
+      logger.error('LiquidityMonitor', 'Error sending liquidity alert', error as Error);
+    }
+  });
+}
+

@@ -12,6 +12,7 @@ import type {
   SignalPerformanceMetrics,
   WebhookConfig,
 } from '../signals/types';
+import type { LiquidityAlert } from '../services/liquidityMonitor';
 
 // ═══════════════════════════════════════════
 // UTILITY FUNCTIONS
@@ -813,3 +814,57 @@ export function formatTrainingHistory(runs: Array<{
 
   return lines.join('\n');
 }
+
+
+// -------------------------------------------
+// LIQUIDITY ALERTS
+// -------------------------------------------
+
+export function formatLiquidityAlert(alert: LiquidityAlert): string {
+  const emojiMap = {
+    drain: alert.severity === 'critical' ? '??' : '??',
+    unlock: '??',
+    burn_change: '??',
+    locker_expiry: '?',
+  };
+
+  const emoji = emojiMap[alert.type];
+  const title = alert.type === 'drain' ? 'LIQUIDITY DRAIN' :
+                alert.type === 'unlock' ? 'LP UNLOCKED' :
+                alert.type === 'burn_change' ? 'LP BURN CHANGE' :
+                'LOCKER EXPIRY';
+
+  const lines = [
+    \\ <b>\</b>\,
+    \\,
+    \<b>\</b>\,
+    alert.message,
+  ];
+
+  // Add details
+  if (alert.details.percentChange) {
+    const change = alert.details.percentChange;
+    lines.push(\Change: \\%\);
+  }
+
+  if (alert.details.drainedUsd) {
+    lines.push(\Drained: $\\);
+  }
+
+  if (alert.details.before.liquidityUsd && alert.details.after.liquidityUsd) {
+    lines.push(\\);
+    lines.push(\Before: $\\);
+    lines.push(\After: $\\);
+  }
+
+  lines.push(\\);
+  lines.push(\<code>\</code>\);
+
+  if (alert.severity === 'critical') {
+    lines.push(\\);
+    lines.push(\? <b>CRITICAL - Consider selling immediately</b>\);
+  }
+
+  return lines.join('\n');
+}
+

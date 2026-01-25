@@ -6,6 +6,7 @@ import { rateLimitService } from './services/ratelimit';
 import { watchlistService } from './services/watchlist';
 import { advancedMonitor } from './services/advancedMonitor';
 import { walletMonitorService } from './services/walletMonitor';
+import { liquidityMonitor } from './services/liquidityMonitor';
 import { smartMoneyTracker } from './services/smartMoneyTracker';
 import { whaleActivityTracker } from './services/whaleActivityTracker';
 import { enhancedClusterDetector } from './services/enhancedClusterDetector';
@@ -95,6 +96,10 @@ class SolanaMemecoinBot {
         await walletMonitorService.start();
         setupWalletMonitorListeners();
       }
+
+      // Start liquidity monitor (rug pull protection)
+      await liquidityMonitor.start();
+      logger.info('Main', 'Liquidity monitor started');
 
       // Start smart money tracker (performance tracking for wallets)
       await smartMoneyTracker.start();

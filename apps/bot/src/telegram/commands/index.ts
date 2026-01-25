@@ -24,6 +24,7 @@ import { registerWalletProfileCommands } from './walletprofile';
 import { registerClusterCommands } from './clusters';
 import { registerCompareCommands } from './compare';
 import { registerTimeframeCommands } from './timeframe';
+import { registerLiquidityCommands } from './liquidity';
 
 export function registerAllCommands(bot: Telegraf): void {
   // Register all command handlers
@@ -52,6 +53,7 @@ export function registerAllCommands(bot: Telegraf): void {
   registerClusterCommands(bot);
   registerCompareCommands(bot);
   registerTimeframeCommands(bot);
+  registerLiquidityCommands(bot);
 
   // Set up bot commands menu
   bot.telegram.setMyCommands([
