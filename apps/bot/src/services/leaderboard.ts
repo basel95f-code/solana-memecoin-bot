@@ -82,8 +82,10 @@ class LeaderboardService {
 
       logger.info('Leaderboard', `Recorded discovery: ${symbol} by user ${userId} in chat ${chatId}`);
 
+      const result = db.prepare('SELECT last_insert_rowid() as id').get() as { id: number };
+
       return {
-        id: db.prepare('SELECT last_insert_rowid() as id').get() as any,
+        id: result.id,
         chatId,
         userId,
         username,

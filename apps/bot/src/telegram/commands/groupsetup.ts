@@ -125,8 +125,9 @@ export function registerGroupSetupCommand(bot: Telegraf) {
       return ctx.reply('⚠️ Only group admins can change settings.');
     }
 
-    const args = ctx.message?.text?.split(' ');
-    if (!args || args.length < 2) {
+    const text = ctx.message && 'text' in ctx.message ? ctx.message.text : '';
+    const args = text.split(' ');
+    if (args.length < 2) {
       return ctx.reply('Usage: /setminrisk <score>\nExample: /setminrisk 85');
     }
 
@@ -156,8 +157,9 @@ export function registerGroupSetupCommand(bot: Telegraf) {
       return ctx.reply('⚠️ Only group admins can change settings.');
     }
 
-    const args = ctx.message?.text?.split(' ');
-    if (!args || args.length < 2) {
+    const text = ctx.message && 'text' in ctx.message ? ctx.message.text : '';
+    const args = text.split(' ');
+    if (args.length < 2) {
       return ctx.reply('Usage: /setminliq <amount>\nExample: /setminliq 50000');
     }
 
@@ -187,8 +189,9 @@ export function registerGroupSetupCommand(bot: Telegraf) {
       return ctx.reply('⚠️ Only group admins can change settings.');
     }
 
-    const args = ctx.message?.text?.split(' ');
-    if (!args || args.length < 2) {
+    const text = ctx.message && 'text' in ctx.message ? ctx.message.text : '';
+    const args = text.split(' ');
+    if (args.length < 2) {
       return ctx.reply('Usage: /setmaxalerts <count>\nExample: /setmaxalerts 10');
     }
 

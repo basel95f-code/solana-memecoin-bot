@@ -44,8 +44,10 @@ class GroupWatchlistService {
 
       logger.info('GroupWatchlist', `Added ${symbol} to watchlist for chat ${chatId} by user ${userId}`);
 
+      const result = db.prepare('SELECT last_insert_rowid() as id').get() as { id: number };
+
       return {
-        id: db.prepare('SELECT last_insert_rowid() as id').get() as any,
+        id: result.id,
         chatId,
         tokenMint: mint,
         symbol,

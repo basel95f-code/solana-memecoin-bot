@@ -146,7 +146,7 @@ class ChatContextService {
     adminUserId: number
   ): Promise<GroupSettings> {
     try {
-      const now = Date.now();
+      const now = Math.floor(Date.now() / 1000);
       const settings: GroupSettings = {
         chatId,
         chatType,
@@ -205,7 +205,7 @@ class ChatContextService {
         throw new Error('Group settings not found');
       }
 
-      const updated = { ...current, ...updates, updatedAt: Date.now() };
+      const updated = { ...current, ...updates, updatedAt: Math.floor(Date.now() / 1000) };
 
       const db = database.getDb();
       db.prepare(`
@@ -275,7 +275,7 @@ class ChatContextService {
    */
   private async createUserSettings(userId: number, username?: string): Promise<UserSettings> {
     try {
-      const now = Date.now();
+      const now = Math.floor(Date.now() / 1000);
       const settings: UserSettings = {
         userId,
         username,
@@ -324,7 +324,7 @@ class ChatContextService {
   async updateUserSettings(userId: number, updates: Partial<UserSettings>): Promise<void> {
     try {
       const current = await this.getUserSettings(userId);
-      const updated = { ...current, ...updates, updatedAt: Date.now() };
+      const updated = { ...current, ...updates, updatedAt: Math.floor(Date.now() / 1000) };
 
       const db = database.getDb();
       db.prepare(`
