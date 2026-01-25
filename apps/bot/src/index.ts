@@ -8,6 +8,7 @@ import { advancedMonitor } from './services/advancedMonitor';
 import { walletMonitorService } from './services/walletMonitor';
 import { smartMoneyTracker } from './services/smartMoneyTracker';
 import { whaleActivityTracker } from './services/whaleActivityTracker';
+import { enhancedClusterDetector } from './services/enhancedClusterDetector';
 import { telegramMtprotoService } from './services/telegramMtproto';
 import { discordBotService } from './services/discordBot';
 import { raydiumMonitor } from './monitors/raydium';
@@ -27,8 +28,10 @@ import { learningOrchestrator } from './services/learningOrchestrator';
 import { queueProcessor, setupEventListeners, setupWalletMonitorListeners } from './core';
 import { formatSmartMoneyAlertMessage } from './telegram/commands/smartmoney';
 import { formatAccumulationAlert, formatDistributionAlert, formatCoordinatedMovement } from './telegram/commands/whaleactivity';
+import { formatClusterAlert, formatSybilAttackAlert } from './telegram/commands/clusters';
 import type { SmartMoneyAlert } from './services/smartMoneyTracker';
 import type { AccumulationAlert, DistributionAlert, CoordinatedMovement } from './services/whaleActivityTracker';
+import type { WalletCluster, SybilAttack } from './services/enhancedClusterDetector';
 
 class SolanaMemecoinBot {
   private isRunning: boolean = false;
@@ -148,6 +151,30 @@ class SolanaMemecoinBot {
       // Periodic cleanup for whale activity tracker
       setInterval(() => {
         whaleActivityTracker.cleanup();
+      }, 24 * 60 * 60 * 1000); // Daily cleanup
+
+      // Set up cluster detection alert listeners
+      enhancedClusterDetector.on('clusterDetected', async (cluster: WalletCluster) => {
+        try {
+          const message = formatClusterAlert(cluster);
+          await telegramService.sendMessage(config.telegramChatId, message);
+        } catch (error) {
+          logger.error('Main', 'Failed to send cluster alert', error as Error);
+        }
+      });
+
+      enhancedClusterDetector.on('sybilAttack', async (attack: SybilAttack) => {
+        try {
+          const message = formatSybilAttackAlert(attack);
+          await telegramService.sendMessage(config.telegramChatId, message);
+        } catch (error) {
+          logger.error('Main', 'Failed to send Sybil attack alert', error as Error);
+        }
+      });
+
+      // Periodic cleanup for cluster detector
+      setInterval(() => {
+        enhancedClusterDetector.cleanup();
       }, 24 * 60 * 60 * 1000); // Daily cleanup
 
       // Start advanced monitoring (volume spikes, whale alerts, etc.)
