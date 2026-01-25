@@ -30,6 +30,7 @@ import { registerLiquidityCommands } from './liquidity';
 import { registerGroupSetupCommand } from './groupsetup';
 import { registerTopicSetupCommands } from './topicsetup';
 import { registerMLManagerCommands } from './mlmanager';
+import { registerDexStatsCommands } from './dexstats';
 
 export function registerAllCommands(bot: Telegraf): void {
   // Register all command handlers
@@ -64,6 +65,7 @@ export function registerAllCommands(bot: Telegraf): void {
   registerCompareCommands(bot);
   registerTimeframeCommands(bot);
   registerLiquidityCommands(bot);
+  registerDexStatsCommands(bot);
 
   // Set up bot commands menu
   bot.telegram.setMyCommands([
@@ -192,6 +194,10 @@ export function registerAllCommands(bot: Telegraf): void {
     { command: 'honeypot', description: 'Quick honeypot check' },
     // Health
     { command: 'health', description: 'Service health status' },
+    // DEX Stats
+    { command: 'meteora', description: 'Meteora DLMM monitor stats' },
+    { command: 'orca', description: 'Orca Whirlpool monitor stats' },
+    { command: 'dex_stats', description: 'Compare all DEX sources' },
   ]).catch(err => console.error('Failed to set bot commands:', err));
 
   console.log('All Telegram commands registered');

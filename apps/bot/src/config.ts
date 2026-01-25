@@ -53,6 +53,14 @@ export function loadConfig(): ExtendedBotConfig {
         enabled: getEnvBoolean('JUPITER_ENABLED', true),
         pollInterval: getEnvNumber('JUPITER_POLL_INTERVAL', 30000),
       },
+      meteora: {
+        enabled: getEnvBoolean('METEORA_ENABLED', true),
+        pollInterval: getEnvNumber('METEORA_POLL_INTERVAL', 15000),
+      },
+      orca: {
+        enabled: getEnvBoolean('ORCA_ENABLED', true),
+        pollInterval: getEnvNumber('ORCA_POLL_INTERVAL', 15000),
+      },
     },
     maxRequestsPerMinute: getEnvNumber('MAX_REQUESTS_PER_MINUTE', 60),
 

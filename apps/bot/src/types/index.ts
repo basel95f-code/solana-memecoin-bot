@@ -26,7 +26,7 @@ export interface PoolInfo {
   baseReserve: number;
   quoteReserve: number;
   lpMint: string;
-  source: 'raydium' | 'pumpfun' | 'pumpswap' | 'jupiter';
+  source: 'raydium' | 'pumpfun' | 'pumpswap' | 'jupiter' | 'meteora' | 'orca';
   createdAt: Date;
 }
 

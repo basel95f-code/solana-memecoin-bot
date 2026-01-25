@@ -22,6 +22,8 @@ import { discordBotService } from './services/discordBot';
 import { raydiumMonitor } from './monitors/raydium';
 import { pumpFunMonitor } from './monitors/pumpfun';
 import { jupiterMonitor } from './monitors/jupiter';
+import { meteoraMonitor } from './monitors/meteora';
+import { orcaMonitor } from './monitors/orca';
 import { logger } from './utils/logger';
 import { CLEANUP } from './constants';
 import { database } from './database';
@@ -93,6 +95,14 @@ class SolanaMemecoinBot {
 
       if (config.monitors.jupiter.enabled) {
         await jupiterMonitor.start();
+      }
+
+      if (config.monitors.meteora?.enabled) {
+        await meteoraMonitor.start();
+      }
+
+      if (config.monitors.orca?.enabled) {
+        await orcaMonitor.start();
       }
 
       // Start watchlist monitoring
@@ -358,6 +368,8 @@ class SolanaMemecoinBot {
       await raydiumMonitor.stop();
       await pumpFunMonitor.stop();
       await jupiterMonitor.stop();
+      await meteoraMonitor.stop();
+      await orcaMonitor.stop();
 
       // Stop advanced monitoring
       await advancedMonitor.stop();

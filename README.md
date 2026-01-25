@@ -8,6 +8,8 @@ A comprehensive bot that monitors Solana DEXs for new memecoin launches, perform
 - **Raydium**: Real-time WebSocket monitoring for new liquidity pools
 - **Pump.fun**: Polling for new token launches and graduations
 - **Jupiter**: Monitoring for newly listed tokens (287,000+ tokens indexed)
+- **Meteora**: DLMM (concentrated liquidity) pool monitoring
+- **Orca**: Whirlpool (CLMM) pool monitoring
 
 ### Safety Analysis
 - **Liquidity Analysis**: LP lock/burn status, liquidity depth, locker detection
@@ -91,6 +93,8 @@ MIN_RISK_SCORE=0
 RAYDIUM_ENABLED=true
 PUMPFUN_ENABLED=true
 JUPITER_ENABLED=true
+METEORA_ENABLED=true
+ORCA_ENABLED=true
 ```
 
 ### 6. Start the Bot

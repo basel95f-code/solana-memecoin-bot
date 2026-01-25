@@ -18,6 +18,8 @@ import type { HolderChangeAlert } from '../services/topHolderTracker';
 import { raydiumMonitor } from '../monitors/raydium';
 import { pumpFunMonitor } from '../monitors/pumpfun';
 import { jupiterMonitor } from '../monitors/jupiter';
+import { meteoraMonitor } from '../monitors/meteora';
+import { orcaMonitor } from '../monitors/orca';
 import { apiServer } from '../api/server';
 import { formatAdvancedAlert } from '../telegram/commands/advanced';
 import { formatLiquidityAlert, formatDevBehaviorAlert, formatBundleAlert, formatHolderChangeAlert } from '../telegram/formatters';
@@ -83,6 +85,16 @@ function setupMonitorListeners(): void {
 
   // Jupiter new token events
   jupiterMonitor.on('newPool', (pool: PoolInfo) => {
+    void queueProcessor.queueAnalysis(pool);
+  });
+
+  // Meteora new pool events
+  meteoraMonitor.on('newPool', (pool: PoolInfo) => {
+    void queueProcessor.queueAnalysis(pool);
+  });
+
+  // Orca new pool events
+  orcaMonitor.on('newPool', (pool: PoolInfo) => {
     void queueProcessor.queueAnalysis(pool);
   });
 }

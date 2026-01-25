@@ -76,6 +76,8 @@ export function registerBasicCommands(bot: Telegraf): void {
     if (config.monitors.raydium.enabled) monitors.push('Raydium');
     if (config.monitors.pumpfun.enabled) monitors.push('Pump.fun');
     if (config.monitors.jupiter.enabled) monitors.push('Jupiter');
+    if (config.monitors.meteora?.enabled) monitors.push('Meteora');
+    if (config.monitors.orca?.enabled) monitors.push('Orca');
 
     const stats = formatStats({
       tokensAnalyzed,
@@ -146,6 +148,8 @@ export function registerBasicCommands(bot: Telegraf): void {
     if (config.monitors.raydium.enabled) monitors.push('Raydium');
     if (config.monitors.pumpfun.enabled) monitors.push('Pump.fun');
     if (config.monitors.jupiter.enabled) monitors.push('Jupiter');
+    if (config.monitors.meteora?.enabled) monitors.push('Meteora');
+    if (config.monitors.orca?.enabled) monitors.push('Orca');
 
     const message = [
       `✅ <b>STATUS: ONLINE</b>`,
@@ -163,6 +167,8 @@ export function registerBasicCommands(bot: Telegraf): void {
     if (config.monitors.raydium.enabled) monitors.push('Raydium');
     if (config.monitors.pumpfun.enabled) monitors.push('Pump.fun');
     if (config.monitors.jupiter.enabled) monitors.push('Jupiter');
+    if (config.monitors.meteora?.enabled) monitors.push('Meteora');
+    if (config.monitors.orca?.enabled) monitors.push('Orca');
 
     const stats = formatStats({
       tokensAnalyzed,
