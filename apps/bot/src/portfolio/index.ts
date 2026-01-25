@@ -7,3 +7,5 @@ export * from './positionTracker';
 export * from './pnlCalculator';
 export * from './performanceAnalytics';
 export * from './taxReporting';
+export * from './priceTracker';
+export * from './scheduler';

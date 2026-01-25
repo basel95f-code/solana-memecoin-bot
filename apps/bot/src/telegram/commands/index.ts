@@ -32,8 +32,12 @@ import { registerTopicSetupCommands } from './topicsetup';
 import { registerMLManagerCommands } from './mlmanager';
 import { registerDexStatsCommands } from './dexstats';
 import { registerCopyTradingCommands } from './copytrading';
+import { registerTwitterCommand } from './twitter';
+import { registerInfluencersCommand } from './influencers';
+import { registerSocialStatsCommand } from './social_stats';
+import type { SupabaseDB } from '../../database/supabase-db';
 
-export function registerAllCommands(bot: Telegraf): void {
+export function registerAllCommands(bot: Telegraf, db?: SupabaseDB): void {
   // Register all command handlers
   registerGroupSetupCommand(bot);
   registerTopicSetupCommands(bot);
@@ -68,6 +72,13 @@ export function registerAllCommands(bot: Telegraf): void {
   registerTimeframeCommands(bot);
   registerLiquidityCommands(bot);
   registerDexStatsCommands(bot);
+
+  // Social Media Integration (if db provided)
+  if (db) {
+    registerTwitterCommand(bot, db);
+    registerInfluencersCommand(bot, db);
+    registerSocialStatsCommand(bot, db);
+  }
 
   // Set up bot commands menu
   bot.telegram.setMyCommands([
