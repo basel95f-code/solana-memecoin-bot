@@ -10,7 +10,6 @@ import { solanaService } from './solana';
 import { dexScreenerService } from './dexscreener';
 import { logger } from '../utils/logger';
 import { storageService } from './storage';
-import { walletProfiler } from './walletProfiler';
 
 export interface WalletTrade {
   walletAddress: string;
@@ -366,13 +365,9 @@ export class SmartMoneyTracker extends EventEmitter {
     // Store metrics
     this.metrics.set(walletAddress, metrics);
 
-    // Auto-generate profile if enough data (3+ closed trades)
+    // Emit event for profile generation (avoids circular dependency)
     if (metrics.closedTrades >= 3) {
-      try {
-        await walletProfiler.generateProfile(walletAddress);
-      } catch (error) {
-        logger.silentError('SmartMoneyTracker', 'Failed to generate wallet profile', error as Error);
-      }
+      this.emit('metricsUpdated', walletAddress, metrics);
     }
 
     return metrics;

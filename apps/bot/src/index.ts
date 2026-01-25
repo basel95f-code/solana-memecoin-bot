@@ -9,6 +9,7 @@ import { walletMonitorService } from './services/walletMonitor';
 import { smartMoneyTracker } from './services/smartMoneyTracker';
 import { whaleActivityTracker } from './services/whaleActivityTracker';
 import { enhancedClusterDetector } from './services/enhancedClusterDetector';
+import { walletProfiler } from './services/walletProfiler';
 import { telegramMtprotoService } from './services/telegramMtproto';
 import { discordBotService } from './services/discordBot';
 import { raydiumMonitor } from './monitors/raydium';
@@ -117,6 +118,15 @@ class SolanaMemecoinBot {
           await telegramService.sendMessage(config.telegramChatId, message);
         } catch (error) {
           logger.error('Main', 'Failed to send smart money alert', error as Error);
+        }
+      });
+
+      // Auto-generate profiles when metrics are updated
+      smartMoneyTracker.on('metricsUpdated', async (walletAddress: string) => {
+        try {
+          await walletProfiler.generateProfile(walletAddress);
+        } catch (error) {
+          logger.silentError('Main', 'Failed to generate wallet profile', error as Error);
         }
       });
 
