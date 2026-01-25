@@ -8,3 +8,6 @@ export type { MLModel, EnsemblePrediction, TokenFeatures, FeatureImportance } fr
 
 export { AdvancedRiskManager } from './AdvancedRiskManager';
 export type { RiskAssessment, PortfolioRisk, RiskConfig } from './AdvancedRiskManager';
+
+export { mlRetrainer } from './mlRetrainer';
+export type { ModelVersion, TrainingSample, PerformanceMetrics, ModelComparison, TrainingReport } from './mlRetrainer';

@@ -29,11 +29,13 @@ import { registerTimeframeCommands } from './timeframe';
 import { registerLiquidityCommands } from './liquidity';
 import { registerGroupSetupCommand } from './groupsetup';
 import { registerTopicSetupCommands } from './topicsetup';
+import { registerMLManagerCommands } from './mlmanager';
 
 export function registerAllCommands(bot: Telegraf): void {
   // Register all command handlers
   registerGroupSetupCommand(bot);
   registerTopicSetupCommands(bot);
+  registerMLManagerCommands(bot);
   registerBasicCommands(bot);
   registerAlertCommands(bot);
   registerFilterCommands(bot);
@@ -164,6 +166,14 @@ export function registerAllCommands(bot: Telegraf): void {
     { command: 'rules', description: 'Custom alert rules' },
     // ML Training
     { command: 'ml', description: 'ML model status' },
+    // ML Management
+    { command: 'mlstatus', description: 'ML system status & performance' },
+    { command: 'mlhistory', description: 'Model version history' },
+    { command: 'mltrain', description: 'Manual model retraining (admin)' },
+    { command: 'mlcompare', description: 'Compare model versions' },
+    { command: 'mlrollback', description: 'Rollback to previous model (admin)' },
+    { command: 'mlfeatures', description: 'Feature importance rankings' },
+    { command: 'mlreport', description: 'Detailed performance report' },
     // Sentiment
     { command: 'sentiment', description: 'Multi-platform sentiment settings' },
     // Scanner
@@ -171,6 +181,12 @@ export function registerAllCommands(bot: Telegraf): void {
     // Learning
     { command: 'learn', description: 'Learning system stats' },
     { command: 'outcomes', description: 'Token outcomes' },
+    // Pattern Detection
+    { command: 'patterns', description: 'View success/rug patterns' },
+    { command: 'pattern', description: 'Pattern details' },
+    { command: 'matchpatterns', description: 'Match token to patterns' },
+    { command: 'similartokens', description: 'Find similar successful tokens' },
+    { command: 'refreshpatterns', description: 'Rediscover patterns (admin)' },
     // Security
     { command: 'contract', description: 'Contract security analysis' },
     { command: 'honeypot', description: 'Quick honeypot check' },

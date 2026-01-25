@@ -11,6 +11,8 @@ import { devWalletTracker } from './services/devWalletTracker';
 import { bundledWalletDetector } from './services/bundledWalletDetector';
 import { topHolderTracker } from './services/topHolderTracker';
 import { smartMoneyTracker } from './services/smartMoneyTracker';
+import { smartMoneyLearner } from './services/smartMoneyLearner';
+import { smartMoneyMonitor } from './jobs/smartMoneyMonitor';
 import { whaleActivityTracker } from './services/whaleActivityTracker';
 import { enhancedClusterDetector } from './services/enhancedClusterDetector';
 import { walletProfiler } from './services/walletProfiler';
@@ -32,6 +34,9 @@ import { signalService, signalPriceMonitor } from './signals';
 import { trainingPipeline } from './ml/trainingPipeline';
 import { learningOrchestrator } from './services/learningOrchestrator';
 import { initLeaderboardJob } from './jobs/updateLeaderboard';
+import { startAutoRetrainScheduler } from './jobs/mlAutoRetrain';
+import { startPatternUpdateScheduler } from './jobs/patternUpdater';
+import { patternDetector } from './services/patternDetector';
 import { queueProcessor, setupEventListeners, setupWalletMonitorListeners } from './core';
 import { formatSmartMoneyAlertMessage } from './telegram/commands/smartmoney';
 import { formatAccumulationAlert, formatDistributionAlert, formatCoordinatedMovement } from './telegram/commands/whaleactivity';
@@ -120,6 +125,11 @@ class SolanaMemecoinBot {
       // Start smart money tracker (performance tracking for wallets)
       await smartMoneyTracker.start();
       logger.info('Main', 'Smart money tracker started - wallet performance monitoring active');
+
+      // Start smart money learning system (database-backed)
+      smartMoneyLearner.initialize();
+      await smartMoneyMonitor.start();
+      logger.info('Main', 'Smart money learning system started - tracking wallet patterns');
 
       // Set up smart money alert listener
       smartMoneyTracker.on('smartMoneyAlert', async (alert: SmartMoneyAlert) => {
@@ -247,6 +257,10 @@ class SolanaMemecoinBot {
 
       // Start learning orchestrator (continuous improvement from outcomes)
       learningOrchestrator.start();
+
+      // Start ML auto-retrain scheduler (weekly model retraining)
+      startAutoRetrainScheduler();
+      logger.info('Main', 'ML auto-retrain scheduler started');
       logger.info('Main', 'Learning orchestrator started - bot will learn from results');
 
       // Initialize leaderboard update job (runs every 6 hours)
@@ -344,6 +358,9 @@ class SolanaMemecoinBot {
 
       // Stop wallet monitoring
       walletMonitorService.stop();
+
+      // Stop smart money monitor
+      smartMoneyMonitor.stop();
 
       // Stop multi-platform sentiment services
       await telegramMtprotoService.stop();

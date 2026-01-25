@@ -15,6 +15,7 @@ import { featureSelection } from '../ml/featureSelection';
 import { tokenScanner } from './tokenScanner';
 import { dexScreenerService } from './dexscreener';
 import { logger } from '../utils/logger';
+import { mlRetrainer } from './ml/mlRetrainer';
 
 export interface TokenOutcome {
   tokenMint: string;
@@ -165,7 +166,7 @@ class LearningOrchestrator {
     for (const token of tokens) {
       try {
         const outcome = await this.determineTokenOutcome(token);
-        this.recordOutcome(outcome);
+        await this.recordOutcome(outcome);
       } catch (error) {
         logger.silentError('LearningOrchestrator', `Failed to check outcome for ${token.symbol}`, error as Error);
       }
@@ -243,7 +244,7 @@ class LearningOrchestrator {
   /**
    * Record token outcome
    */
-  private recordOutcome(outcome: TokenOutcome): void {
+  private async recordOutcome(outcome: TokenOutcome): Promise<void> {
     database.run(
       `INSERT OR IGNORE INTO token_outcomes_v2_v2 (
         token_mint, symbol, discovered_at,
@@ -273,6 +274,12 @@ class LearningOrchestrator {
     );
 
     logger.debug('LearningOrchestrator', `Recorded outcome: ${outcome.symbol} = ${outcome.outcomeType}`);
+
+    // Update prediction performance for ML retraining
+    await mlRetrainer.updatePredictionOutcome(outcome.tokenMint, {
+      actual_outcome: outcome.outcomeType,
+      outcome_recorded_at: Math.floor(outcome.checkedAt / 1000)
+    });
   }
 
   /**

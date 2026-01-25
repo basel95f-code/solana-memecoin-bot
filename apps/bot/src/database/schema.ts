@@ -1087,5 +1087,294 @@ export const MIGRATIONS: { version: number; sql: string }[] = [
       CREATE INDEX IF NOT EXISTS idx_topic_configs_topic ON topic_configs(chat_id, topic_id);
       CREATE INDEX IF NOT EXISTS idx_topic_configs_mode ON topic_configs(mode);
     `
+  },
+  {
+    version: 14,
+    description: 'Add smart money learning system tables',
+    sql: `
+      -- ============================================
+      -- Smart Money Wallets Table
+      -- Tracks wallets with consistent profits and their patterns
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS smart_money_wallets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        wallet_address TEXT UNIQUE NOT NULL,
+        
+        -- Performance metrics
+        total_trades INTEGER DEFAULT 0,
+        winning_trades INTEGER DEFAULT 0,
+        losing_trades INTEGER DEFAULT 0,
+        win_rate REAL DEFAULT 0,
+        
+        -- Financial metrics
+        total_profit_sol REAL DEFAULT 0,
+        average_profit_percent REAL DEFAULT 0,
+        largest_win_percent REAL DEFAULT 0,
+        largest_loss_percent REAL DEFAULT 0,
+        
+        -- Trading style
+        average_hold_time_hours REAL DEFAULT 0,
+        average_entry_liquidity REAL DEFAULT 0,
+        preferred_risk_range TEXT, -- "low", "medium", "high"
+        
+        -- Pattern data
+        trading_style TEXT, -- "scalper", "swing", "holder"
+        common_entry_patterns TEXT, -- JSON
+        common_exit_patterns TEXT, -- JSON
+        
+        -- Tracking metadata
+        first_tracked_at INTEGER NOT NULL,
+        last_trade_at INTEGER,
+        last_updated_at INTEGER NOT NULL,
+        
+        -- Reputation
+        reputation_score INTEGER DEFAULT 50, -- 0-100
+        is_verified INTEGER DEFAULT 0, -- Manually verified as good
+        is_suspicious INTEGER DEFAULT 0 -- Flagged as potential bot
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_smart_money_reputation ON smart_money_wallets(reputation_score DESC);
+      CREATE INDEX IF NOT EXISTS idx_smart_money_winrate ON smart_money_wallets(win_rate DESC);
+
+      -- ============================================
+      -- Smart Money Trades Table
+      -- Tracks individual trades made by smart money wallets
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS smart_money_trades (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        wallet_address TEXT NOT NULL,
+        token_mint TEXT NOT NULL,
+        token_symbol TEXT,
+        
+        -- Trade details
+        entry_price REAL NOT NULL,
+        entry_time INTEGER NOT NULL,
+        entry_liquidity REAL,
+        entry_risk_score INTEGER,
+        
+        exit_price REAL,
+        exit_time INTEGER,
+        exit_reason TEXT, -- "profit", "stop_loss", "time_based", "unknown"
+        
+        -- Performance
+        profit_percent REAL,
+        hold_time_hours REAL,
+        
+        -- Status
+        status TEXT DEFAULT 'open', -- "open", "closed"
+        
+        created_at INTEGER NOT NULL,
+        
+        FOREIGN KEY(wallet_address) REFERENCES smart_money_wallets(wallet_address)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_sm_trades_wallet ON smart_money_trades(wallet_address);
+      CREATE INDEX IF NOT EXISTS idx_sm_trades_token ON smart_money_trades(token_mint);
+      CREATE INDEX IF NOT EXISTS idx_sm_trades_status ON smart_money_trades(status);
+
+      -- ============================================
+      -- Smart Money Alerts Table
+      -- Tracks alerts sent for smart money activity
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS smart_money_alerts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        wallet_address TEXT NOT NULL,
+        token_mint TEXT NOT NULL,
+        token_symbol TEXT,
+        
+        alert_type TEXT NOT NULL, -- "entry", "exit", "large_buy", "large_sell"
+        amount_sol REAL,
+        price REAL,
+        
+        wallet_reputation INTEGER,
+        wallet_win_rate REAL,
+        
+        alerted_at INTEGER NOT NULL,
+        chat_id TEXT, -- Which chat was alerted
+        
+        FOREIGN KEY(wallet_address) REFERENCES smart_money_wallets(wallet_address)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_sm_alerts_time ON smart_money_alerts(alerted_at DESC);
+    `
+  },
+  {
+    version: 15,
+    description: 'Add token success pattern detection and prediction system',
+    sql: `
+      -- ============================================
+      -- Success Patterns Table
+      -- Stores discovered patterns from historical token outcomes
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS success_patterns (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        pattern_name TEXT UNIQUE NOT NULL,
+        pattern_type TEXT NOT NULL CHECK(pattern_type IN ('success', 'rug', 'neutral')),
+        
+        -- Pattern criteria (JSON)
+        criteria TEXT NOT NULL, -- Conditions that define this pattern
+        
+        -- Performance metrics
+        occurrence_count INTEGER DEFAULT 0,
+        success_count INTEGER DEFAULT 0,
+        success_rate REAL DEFAULT 0,
+        
+        -- Impact
+        average_peak_multiplier REAL DEFAULT 0,
+        average_time_to_peak_hours REAL DEFAULT 0,
+        
+        -- Metadata
+        discovered_at INTEGER NOT NULL,
+        last_seen_at INTEGER,
+        confidence_score REAL DEFAULT 0.5, -- 0-1
+        
+        is_active INTEGER DEFAULT 1
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_patterns_type ON success_patterns(pattern_type);
+      CREATE INDEX IF NOT EXISTS idx_patterns_success_rate ON success_patterns(success_rate DESC);
+      CREATE INDEX IF NOT EXISTS idx_patterns_active ON success_patterns(is_active);
+
+      -- ============================================
+      -- Token Pattern Matches Table
+      -- Stores pattern matches for analyzed tokens
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS token_pattern_matches (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        token_mint TEXT NOT NULL,
+        token_symbol TEXT,
+        pattern_id INTEGER NOT NULL,
+        pattern_name TEXT NOT NULL,
+        
+        -- Match details
+        match_score REAL NOT NULL, -- 0-1
+        matched_criteria TEXT, -- JSON of which criteria matched
+        
+        -- Outcome tracking
+        actual_outcome TEXT, -- "success", "rug", "neutral", "pending"
+        peak_multiplier REAL,
+        
+        matched_at INTEGER NOT NULL,
+        
+        FOREIGN KEY(pattern_id) REFERENCES success_patterns(id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_pattern_matches_token ON token_pattern_matches(token_mint);
+      CREATE INDEX IF NOT EXISTS idx_pattern_matches_pattern ON token_pattern_matches(pattern_id);
+      CREATE INDEX IF NOT EXISTS idx_pattern_matches_score ON token_pattern_matches(match_score DESC);
+      CREATE INDEX IF NOT EXISTS idx_pattern_matches_outcome ON token_pattern_matches(actual_outcome);
+    `
+  },
+  {
+    version: 16,
+    description: 'Add ML auto-retraining and performance tracking system',
+    sql: `
+      -- ============================================
+      -- ML Model Versions Table (Enhanced)
+      -- Tracks model training history with detailed metrics
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS ml_model_versions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        version TEXT UNIQUE NOT NULL,
+        
+        -- Training metadata
+        trained_at INTEGER NOT NULL,
+        training_samples INTEGER NOT NULL,
+        validation_samples INTEGER NOT NULL,
+        test_samples INTEGER NOT NULL,
+        
+        -- Performance metrics
+        accuracy REAL NOT NULL,
+        precision_score REAL NOT NULL,
+        recall_score REAL NOT NULL,
+        f1_score REAL NOT NULL,
+        auc_score REAL,
+        
+        -- Loss metrics
+        training_loss REAL,
+        validation_loss REAL,
+        
+        -- Feature importance (JSON)
+        feature_importance TEXT,
+        
+        -- Confusion matrix (JSON)
+        confusion_matrix TEXT,
+        
+        -- Deployment status
+        is_active INTEGER DEFAULT 0,
+        is_production INTEGER DEFAULT 0,
+        activated_at INTEGER,
+        deactivated_at INTEGER,
+        
+        -- Improvement over previous
+        accuracy_delta REAL,
+        notes TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ml_versions_active ON ml_model_versions(is_active);
+      CREATE INDEX IF NOT EXISTS idx_ml_versions_accuracy ON ml_model_versions(accuracy DESC);
+
+      -- ============================================
+      -- Prediction Performance Table
+      -- Tracks prediction accuracy over time
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS prediction_performance (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        model_version TEXT NOT NULL,
+        token_mint TEXT NOT NULL,
+        token_symbol TEXT,
+        
+        -- Prediction
+        predicted_outcome TEXT NOT NULL,
+        predicted_confidence REAL NOT NULL,
+        rug_probability REAL NOT NULL,
+        
+        -- Actual outcome
+        actual_outcome TEXT,
+        actual_peak_multiplier REAL,
+        
+        -- Accuracy
+        was_correct INTEGER,
+        confidence_calibration REAL,
+        
+        -- Timestamps
+        predicted_at INTEGER NOT NULL,
+        outcome_recorded_at INTEGER,
+        
+        FOREIGN KEY(model_version) REFERENCES ml_model_versions(version)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_pred_perf_model ON prediction_performance(model_version);
+      CREATE INDEX IF NOT EXISTS idx_pred_perf_correct ON prediction_performance(was_correct);
+      CREATE INDEX IF NOT EXISTS idx_pred_perf_token ON prediction_performance(token_mint);
+
+      -- ============================================
+      -- Training Schedule Table
+      -- Manages automated retraining schedule
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS training_schedule (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        
+        -- Schedule config
+        frequency_days INTEGER DEFAULT 7,
+        min_new_samples INTEGER DEFAULT 50,
+        
+        -- Last run
+        last_run_at INTEGER,
+        last_version_trained TEXT,
+        
+        -- Next run
+        next_run_at INTEGER,
+        
+        -- Status
+        is_enabled INTEGER DEFAULT 1,
+        
+        updated_at INTEGER NOT NULL
+      );
+
+      -- Insert default schedule
+      INSERT OR IGNORE INTO training_schedule (frequency_days, min_new_samples, next_run_at, updated_at)
+      VALUES (7, 50, strftime('%s', 'now') + 604800, strftime('%s', 'now'));
+    `
   }
 ];

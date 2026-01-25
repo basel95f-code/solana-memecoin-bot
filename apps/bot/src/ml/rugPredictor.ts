@@ -12,6 +12,7 @@ import { logger } from '../utils/logger';
 import { FEATURE_COUNT } from './featureEngineering';
 import { modelVersionManager } from './modelVersioning';
 import { ensemblePredictor } from './ensemblePredictor';
+import { mlRetrainer } from '../services/ml/mlRetrainer';
 
 // Legacy 9-feature input (v1 compatibility)
 export interface PredictionInput {
@@ -602,6 +603,25 @@ class RugPredictor {
    */
   getTrainingHistory(): { loss: number; accuracy: number }[] {
     return [...this.trainingHistory];
+  }
+
+  /**
+   * Record prediction for performance tracking
+   */
+  async recordPrediction(tokenMint: string, result: PredictionResult): Promise<void> {
+    try {
+      const currentVersion = await modelVersionManager.getCurrentVersion();
+      const predictedOutcome = result.rugProbability > 0.5 ? 'rug' : 'pump';
+
+      await mlRetrainer.recordPrediction(tokenMint, {
+        model_version: currentVersion || 'v1.0.0',
+        predicted_outcome: predictedOutcome,
+        predicted_confidence: result.confidence,
+        rug_probability: result.rugProbability
+      });
+    } catch (error) {
+      logger.error('RugPredictor', 'Error recording prediction', error as Error);
+    }
   }
 
   /**
