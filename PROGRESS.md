@@ -185,6 +185,24 @@
   - Integrated into rugPredictor.predictEnhanced()
   - Graceful fallback to single model if ensemble unavailable
 
+### Completed - Phase 20 (Portfolio Tracker) ✅
+- [x] **Portfolio Tracking & PnL** - Track positions and calculate profit/loss
+  - portfolioTracker.ts service (548 lines) for position management
+  - Database tables: positions, trades, portfolio_snapshots (migration v5)
+  - Open/close positions with partial close support
+  - Real-time price updates from DexScreener
+  - Unrealized PnL tracking for open positions
+  - Realized PnL from closed trades
+  - Portfolio summary with best/worst positions
+  - PnL reports by period (today, 7d, 30d, all-time)
+  - Win rate, profit factor, avg win/loss calculation
+  - `/portfolio` - Portfolio summary with buttons
+  - `/positions` - List all open positions
+  - `/pnl [period]` - Detailed PnL report
+  - `/open <mint> <symbol> <side> <price> <qty>` - Open position
+  - `/close <id> <price> [qty] [fees]` - Close position
+  - Telegram inline keyboard navigation
+
 ### Low Priority / Future
 14. **Cross-chain Support** - Extend to other chains (Base, etc.)
 15. **Paper Trading Mode** - Simulate trades without real execution

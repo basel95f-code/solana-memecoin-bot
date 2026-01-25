@@ -584,5 +584,99 @@ export const MIGRATIONS: { version: number; sql: string }[] = [
 
       CREATE INDEX IF NOT EXISTS idx_feature_importance_time ON feature_importance_analysis(timestamp);
     `
+  },
+  {
+    version: 5,
+    description: 'Add portfolio tracking tables',
+    sql: `
+      -- ============================================
+      -- Positions Table
+      -- Tracks all trading positions (open and closed)
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS positions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        token_mint TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        name TEXT,
+        side TEXT NOT NULL CHECK(side IN ('long', 'short')),
+        
+        -- Entry details
+        entry_price REAL NOT NULL,
+        current_price REAL NOT NULL,
+        quantity REAL NOT NULL,
+        entry_value REAL NOT NULL,
+        current_value REAL NOT NULL,
+        
+        -- PnL
+        unrealized_pnl REAL DEFAULT 0,
+        unrealized_pnl_percent REAL DEFAULT 0,
+        
+        -- Timestamps
+        entry_time INTEGER NOT NULL,
+        last_updated INTEGER NOT NULL,
+        
+        -- Status
+        status TEXT DEFAULT 'open' CHECK(status IN ('open', 'closed'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status);
+      CREATE INDEX IF NOT EXISTS idx_positions_mint ON positions(token_mint);
+      CREATE INDEX IF NOT EXISTS idx_positions_entry_time ON positions(entry_time);
+
+      -- ============================================
+      -- Trades Table
+      -- Tracks all trade actions (open, close, partial close)
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS trades (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        token_mint TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        side TEXT NOT NULL CHECK(side IN ('long', 'short')),
+        action TEXT NOT NULL CHECK(action IN ('open', 'close', 'partial_close')),
+        
+        -- Price details
+        entry_price REAL NOT NULL,
+        exit_price REAL,
+        quantity REAL NOT NULL,
+        
+        -- Value
+        entry_value REAL NOT NULL,
+        exit_value REAL,
+        
+        -- PnL (for close/partial_close)
+        realized_pnl REAL,
+        realized_pnl_percent REAL,
+        fees REAL DEFAULT 0,
+        
+        -- Metadata
+        timestamp INTEGER NOT NULL,
+        notes TEXT,
+        position_id INTEGER,
+        
+        FOREIGN KEY(position_id) REFERENCES positions(id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_trades_mint ON trades(token_mint);
+      CREATE INDEX IF NOT EXISTS idx_trades_action ON trades(action);
+      CREATE INDEX IF NOT EXISTS idx_trades_timestamp ON trades(timestamp);
+      CREATE INDEX IF NOT EXISTS idx_trades_position ON trades(position_id);
+
+      -- ============================================
+      -- Portfolio Snapshots Table
+      -- Periodic snapshots of portfolio value for charts
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp INTEGER NOT NULL,
+        total_value REAL NOT NULL,
+        total_invested REAL NOT NULL,
+        unrealized_pnl REAL NOT NULL,
+        realized_pnl REAL NOT NULL,
+        total_pnl REAL NOT NULL,
+        open_positions INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_snapshots_timestamp ON portfolio_snapshots(timestamp);
+    `
   }
 ];

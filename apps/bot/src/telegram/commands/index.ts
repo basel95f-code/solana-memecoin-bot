@@ -14,6 +14,7 @@ import { registerSignalCommands } from './signals';
 import { registerMLCommands } from './ml';
 import { registerSentimentCommands } from './sentiment';
 import { registerRulesCommands } from './rules';
+import { registerPortfolioCommands } from './portfolio';
 
 export function registerAllCommands(bot: Telegraf): void {
   // Register all command handlers
@@ -32,6 +33,7 @@ export function registerAllCommands(bot: Telegraf): void {
   registerMLCommands(bot);
   registerSentimentCommands(bot);
   registerRulesCommands(bot);
+  registerPortfolioCommands(bot);
 
   // Set up bot commands menu
   bot.telegram.setMyCommands([
