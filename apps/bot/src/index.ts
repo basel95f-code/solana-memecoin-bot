@@ -31,6 +31,7 @@ import { outcomeTracker } from './services/outcomeTracker';
 import { signalService, signalPriceMonitor } from './signals';
 import { trainingPipeline } from './ml/trainingPipeline';
 import { learningOrchestrator } from './services/learningOrchestrator';
+import { initLeaderboardJob } from './jobs/updateLeaderboard';
 import { queueProcessor, setupEventListeners, setupWalletMonitorListeners } from './core';
 import { formatSmartMoneyAlertMessage } from './telegram/commands/smartmoney';
 import { formatAccumulationAlert, formatDistributionAlert, formatCoordinatedMovement } from './telegram/commands/whaleactivity';
@@ -247,6 +248,10 @@ class SolanaMemecoinBot {
       // Start learning orchestrator (continuous improvement from outcomes)
       learningOrchestrator.start();
       logger.info('Main', 'Learning orchestrator started - bot will learn from results');
+
+      // Initialize leaderboard update job (runs every 6 hours)
+      initLeaderboardJob();
+      logger.info('Main', 'Leaderboard update job initialized');
 
       // Start API server for dashboard
       apiServer.start();

@@ -1014,5 +1014,53 @@ export const MIGRATIONS: { version: number; sql: string }[] = [
       CREATE INDEX IF NOT EXISTS idx_group_watchlist_added_at ON group_watchlist(added_at);
       CREATE INDEX IF NOT EXISTS idx_group_watchlist_alert_count ON group_watchlist(alert_count DESC);
     `
+  },
+  {
+    version: 12,
+    description: 'Add leaderboard for tracking user token discoveries',
+    sql: `
+      -- ============================================
+      -- Leaderboard Entries Table
+      -- Tracks which users find the best token opportunities
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS leaderboard_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chat_id TEXT NOT NULL,
+        user_id INTEGER NOT NULL,
+        username TEXT,
+        
+        -- Token details
+        token_mint TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        name TEXT,
+        
+        -- Discovery details
+        discovered_at INTEGER NOT NULL,
+        initial_price REAL NOT NULL,
+        
+        -- Performance tracking
+        peak_price REAL NOT NULL,
+        current_price REAL NOT NULL,
+        peak_multiplier REAL NOT NULL,
+        
+        -- Scoring
+        score REAL DEFAULT 0,
+        outcome TEXT DEFAULT 'pending' CHECK(outcome IN ('moon', 'profit', 'stable', 'loss', 'pending')),
+        
+        -- Tracking window
+        tracked_until INTEGER NOT NULL,
+        last_updated_at INTEGER NOT NULL,
+        
+        -- Unique constraint: one entry per user per token per group
+        UNIQUE(chat_id, user_id, token_mint)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_leaderboard_chat ON leaderboard_entries(chat_id);
+      CREATE INDEX IF NOT EXISTS idx_leaderboard_user ON leaderboard_entries(user_id);
+      CREATE INDEX IF NOT EXISTS idx_leaderboard_discovered ON leaderboard_entries(discovered_at);
+      CREATE INDEX IF NOT EXISTS idx_leaderboard_score ON leaderboard_entries(score DESC);
+      CREATE INDEX IF NOT EXISTS idx_leaderboard_outcome ON leaderboard_entries(outcome);
+      CREATE INDEX IF NOT EXISTS idx_leaderboard_tracked_until ON leaderboard_entries(tracked_until);
+    `
   }
 ];

@@ -3,6 +3,7 @@ import { PublicKey } from '@solana/web3.js';
 import { groupWatchlistService } from '../../services/groupWatchlist';
 import { chatContextService } from '../../services/chatContext';
 import { dexScreenerService } from '../../services/dexscreener';
+import { leaderboardService } from '../../services/leaderboard';
 import { Markup } from 'telegraf';
 
 function isValidSolanaAddress(address: string): boolean {
@@ -155,15 +156,44 @@ export function registerGroupWatchlistCommands(bot: Telegraf): void {
       // Get current price
       const dexData = await dexScreenerService.getTokenData(address);
       const price = dexData?.priceUsd || '0';
+      const priceNum = parseFloat(price);
+
+      // Record discovery in leaderboard (if enabled and user opted in)
+      let leaderboardMsg = '';
+      const isLeaderboardEnabled = await leaderboardService.isEnabledInGroup(chatContext.chatId);
+      const hasOptedIn = await leaderboardService.hasOptedIn(chatContext.userId);
+
+      if (isLeaderboardEnabled && hasOptedIn && priceNum > 0) {
+        try {
+          await leaderboardService.recordDiscovery(
+            chatContext.chatId,
+            chatContext.userId,
+            chatContext.username,
+            address,
+            token.symbol,
+            token.name,
+            priceNum
+          );
+          leaderboardMsg = `\n🏆 <b>Leaderboard:</b> Discovery recorded! Your performance will be tracked for 7 days.\n`;
+        } catch (error) {
+          console.error('Failed to record leaderboard discovery:', error);
+        }
+      } else if (isLeaderboardEnabled && !hasOptedIn) {
+        // Show opt-in prompt for users who haven't opted in
+        leaderboardMsg = `\n📊 <b>Join the Leaderboard!</b>\n` +
+          `Track your discoveries and compete with others.\n` +
+          `Send <code>/leaderboard optin</code> to participate!\n`;
+      }
 
       await ctx.telegram.editMessageText(
         ctx.chat!.id,
         loadingMsg.message_id,
         undefined,
         `✅ <b>${token.symbol}</b>${token.name ? ` - ${token.name}` : ''} added to group watchlist!\n\n` +
-        `Current price: $${parseFloat(price).toFixed(8)}\n` +
-        `Added by: ${chatContext.username ? `@${chatContext.username}` : `User ${chatContext.userId}`}\n\n` +
-        `📌 This token will get <b>priority alerts</b> in this group.\n\n` +
+        `Current price: $${priceNum.toFixed(8)}\n` +
+        `Added by: ${chatContext.username ? `@${chatContext.username}` : `User ${chatContext.userId}`}\n` +
+        leaderboardMsg +
+        `\n📌 This token will get <b>priority alerts</b> in this group.\n\n` +
         `View all: <code>/groupwatchlist</code>`,
         { parse_mode: 'HTML' }
       );

@@ -5,6 +5,7 @@ import { registerFilterCommands } from './filters';
 import { registerAnalysisCommands } from './analysis';
 import { registerWatchlistCommands } from './watchlist';
 import { registerGroupWatchlistCommands } from './groupwatchlist';
+import { registerLeaderboardCommands } from './leaderboard';
 import { registerDiscoveryCommands } from './discovery';
 import { registerSettingsCommands } from './settings';
 import { registerAdvancedCommands } from './advanced';
@@ -37,6 +38,7 @@ export function registerAllCommands(bot: Telegraf): void {
   registerAnalysisCommands(bot);
   registerWatchlistCommands(bot);
   registerGroupWatchlistCommands(bot);
+  registerLeaderboardCommands(bot);
   registerDiscoveryCommands(bot);
   registerSettingsCommands(bot);
   registerAdvancedCommands(bot);
@@ -94,6 +96,9 @@ export function registerAllCommands(bot: Telegraf): void {
     { command: 'groupunwatch', description: 'Remove from group watchlist' },
     { command: 'groupwatchlist', description: 'Show group watchlist' },
     { command: 'hotlist', description: 'Most active watched tokens' },
+    // Leaderboard
+    { command: 'leaderboard', description: 'Group leaderboard rankings' },
+    { command: 'mystats', description: 'Your leaderboard stats' },
     // Discovery
     { command: 'trending', description: 'Trending tokens' },
     { command: 'new', description: 'New tokens' },
