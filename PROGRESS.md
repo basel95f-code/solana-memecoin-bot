@@ -247,6 +247,23 @@
   - Statistics tracking (moon count, rug count, win rate, avg profit)
   - Format stats for display
 
+### Completed - Phase 25 (Live Dashboard) ✅ 📊
+- [x] **Real-Time Visualization Dashboard** - See everything in one place
+  - dashboard-v2.html (685 lines) - Live dashboard with charts & feeds
+  - **Learning System Stats:** Outcomes tracked, moons/rugs count, ML accuracy
+  - **Portfolio Stats:** Total trades, win rate, avg profit, total PnL
+  - **Scanner Stats:** Active filters, total matches, tokens scanned, last scan time
+  - **Outcome Trends Chart:** Line chart showing moons/rugs/stable over time
+  - **Scanner Match Feed:** Real-time list of recent matches with details
+  - **Outcomes Feed:** Recent token outcomes with classifications
+  - **Feature Importance Heatmap:** Visual representation of which features matter
+  - **Portfolio Performance Chart:** Bar chart of wins vs losses
+  - **Win Rate Trend Chart:** Line chart showing win rate over time
+  - Auto-refresh every 30 seconds
+  - Responsive design, dark theme
+  - Smooth animations and transitions
+  - Color-coded outcome badges
+
 ### Completed - Phase 24 (Telegram Command Suite) ✅ 📱
 - [x] **Full Command Interface** - Telegram commands for all new features
   - scanner.ts (395 lines) - Token scanner commands

@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solana Memecoin Bot - Live Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0e27;
+      color: #e0e6ed;
+      overflow-x: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 2rem;
+      text-align: center;
+      box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 0.5rem;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .subtitle {
+      font-size: 1.1rem;
+      opacity: 0.9;
+    }
+
+    .container {
+      max-width: 1600px;
+      margin: 2rem auto;
+      padding: 0 2rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 2rem;
+      margin-bottom: 2rem;
+    }
+
+    .card {
+      background: #1a1f3a;
+      border-radius: 12px;
+      padding: 1.5rem;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(102, 126, 234, 0.1);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 12px 40px rgba(102, 126, 234, 0.2);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid rgba(102, 126, 234, 0.2);
+    }
+
+    .card-title {
+      font-size: 1.3rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .status-indicator {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    .status-active {
+      background: #10b981;
+      box-shadow: 0 0 10px #10b981;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .stat {
+      text-align: center;
+      padding: 1rem;
+      background: rgba(102, 126, 234, 0.1);
+      border-radius: 8px;
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #667eea;
+      margin-bottom: 0.3rem;
+    }
+
+    .stat-label {
+      font-size: 0.9rem;
+      opacity: 0.7;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .feed {
+      max-height: 400px;
+      overflow-y: auto;
+      padding-right: 0.5rem;
+    }
+
+    .feed::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .feed::-webkit-scrollbar-track {
+      background: rgba(102, 126, 234, 0.1);
+      border-radius: 3px;
+    }
+
+    .feed::-webkit-scrollbar-thumb {
+      background: #667eea;
+      border-radius: 3px;
+    }
+
+    .feed-item {
+      padding: 1rem;
+      margin-bottom: 0.8rem;
+      background: rgba(102, 126, 234, 0.05);
+      border-radius: 8px;
+      border-left: 3px solid #667eea;
+      transition: all 0.3s ease;
+    }
+
+    .feed-item:hover {
+      background: rgba(102, 126, 234, 0.15);
+      transform: translateX(5px);
+    }
+
+    .feed-item-new {
+      animation: slideIn 0.5s ease;
+      border-left-color: #10b981;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateX(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .feed-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+
+    .feed-title {
+      font-weight: 600;
+      color: #667eea;
+    }
+
+    .feed-time {
+      font-size: 0.85rem;
+      opacity: 0.6;
+    }
+
+    .feed-content {
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+
+    .outcome-badge {
+      display: inline-block;
+      padding: 0.3rem 0.8rem;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-right: 0.5rem;
+    }
+
+    .outcome-moon {
+      background: rgba(16, 185, 129, 0.2);
+      color: #10b981;
+    }
+
+    .outcome-rug {
+      background: rgba(239, 68, 68, 0.2);
+      color: #ef4444;
+    }
+
+    .outcome-stable {
+      background: rgba(59, 130, 246, 0.2);
+      color: #3b82f6;
+    }
+
+    .outcome-decline {
+      background: rgba(251, 191, 36, 0.2);
+      color: #fbbf24;
+    }
+
+    .chart-container {
+      position: relative;
+      height: 300px;
+      margin-top: 1rem;
+    }
+
+    .heatmap {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+
+    .heatmap-cell {
+      padding: 1rem;
+      text-align: center;
+      border-radius: 6px;
+      transition: all 0.3s ease;
+    }
+
+    .heatmap-cell:hover {
+      transform: scale(1.05);
+    }
+
+    .heatmap-label {
+      font-size: 0.8rem;
+      opacity: 0.8;
+      margin-bottom: 0.3rem;
+    }
+
+    .heatmap-value {
+      font-size: 1.2rem;
+      font-weight: 700;
+    }
+
+    .refresh-btn {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: all 0.3s ease;
+    }
+
+    .refresh-btn:hover {
+      background: #764ba2;
+      transform: scale(1.05);
+    }
+
+    .full-width {
+      grid-column: 1 / -1;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 2rem;
+      opacity: 0.6;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🤖 Solana Memecoin Bot</h1>
+    <p class="subtitle">Live Dashboard - Self-Improving Trading Assistant</p>
+  </div>
+
+  <div class="container">
+    <!-- Stats Overview -->
+    <div class="grid">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">
+            <span class="status-indicator status-active"></span>
+            Learning System
+          </h2>
+          <button class="refresh-btn" onclick="refreshData()">🔄</button>
+        </div>
+        <div class="stat-grid">
+          <div class="stat">
+            <div class="stat-value" id="total-outcomes">0</div>
+            <div class="stat-label">Outcomes Tracked</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="moon-count">0</div>
+            <div class="stat-label">Moons 🚀</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="rug-count">0</div>
+            <div class="stat-label">Rugs 💀</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="ml-accuracy">0%</div>
+            <div class="stat-label">ML Accuracy</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">
+            <span class="status-indicator status-active"></span>
+            Portfolio
+          </h2>
+        </div>
+        <div class="stat-grid">
+          <div class="stat">
+            <div class="stat-value" id="total-trades">0</div>
+            <div class="stat-label">Total Trades</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="win-rate">0%</div>
+            <div class="stat-label">Win Rate</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="avg-profit">$0</div>
+            <div class="stat-label">Avg Profit</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="total-pnl">$0</div>
+            <div class="stat-label">Total PnL</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">
+            <span class="status-indicator status-active"></span>
+            Scanner
+          </h2>
+        </div>
+        <div class="stat-grid">
+          <div class="stat">
+            <div class="stat-value" id="active-filters">0</div>
+            <div class="stat-label">Active Filters</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="total-matches">0</div>
+            <div class="stat-label">Total Matches</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="tokens-scanned">0</div>
+            <div class="stat-label">Tokens Scanned</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="last-scan">-</div>
+            <div class="stat-label">Last Scan</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="grid">
+      <div class="card full-width">
+        <div class="card-header">
+          <h2 class="card-title">📊 Outcome Trends (Last 30 Days)</h2>
+        </div>
+        <div class="chart-container">
+          <canvas id="outcome-chart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">🎯 Recent Scanner Matches</h2>
+        </div>
+        <div class="feed" id="scanner-feed">
+          <div class="loading">Loading matches...</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">🧠 Recent Outcomes</h2>
+        </div>
+        <div class="feed" id="outcomes-feed">
+          <div class="loading">Loading outcomes...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card full-width">
+        <div class="card-header">
+          <h2 class="card-title">🔥 Feature Importance Heatmap</h2>
+        </div>
+        <div class="heatmap" id="feature-heatmap">
+          <div class="loading">Loading feature analysis...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">💼 Portfolio Performance</h2>
+        </div>
+        <div class="chart-container">
+          <canvas id="portfolio-chart"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">📈 Win Rate Trend</h2>
+        </div>
+        <div class="chart-container">
+          <canvas id="winrate-chart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let outcomeChart, portfolioChart, winrateChart;
+
+    // Initialize charts
+    function initCharts() {
+      // Outcome trend chart
+      const outcomeCtx = document.getElementById('outcome-chart').getContext('2d');
+      outcomeChart = new Chart(outcomeCtx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: 'Moons 🚀',
+              data: [],
+              borderColor: '#10b981',
+              backgroundColor: 'rgba(16, 185, 129, 0.1)',
+              tension: 0.4
+            },
+            {
+              label: 'Rugs 💀',
+              data: [],
+              borderColor: '#ef4444',
+              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+              tension: 0.4
+            },
+            {
+              label: 'Stable ➖',
+              data: [],
+              borderColor: '#3b82f6',
+              backgroundColor: 'rgba(59, 130, 246, 0.1)',
+              tension: 0.4
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              labels: { color: '#e0e6ed' }
+            }
+          },
+          scales: {
+            y: {
+              ticks: { color: '#e0e6ed' },
+              grid: { color: 'rgba(102, 126, 234, 0.1)' }
+            },
+            x: {
+              ticks: { color: '#e0e6ed' },
+              grid: { color: 'rgba(102, 126, 234, 0.1)' }
+            }
+          }
+        }
+      });
+
+      // Portfolio chart
+      const portfolioCtx = document.getElementById('portfolio-chart').getContext('2d');
+      portfolioChart = new Chart(portfolioCtx, {
+        type: 'bar',
+        data: {
+          labels: ['Wins', 'Losses'],
+          datasets: [{
+            label: 'Trades',
+            data: [0, 0],
+            backgroundColor: ['rgba(16, 185, 129, 0.8)', 'rgba(239, 68, 68, 0.8)']
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            y: {
+              ticks: { color: '#e0e6ed' },
+              grid: { color: 'rgba(102, 126, 234, 0.1)' }
+            },
+            x: {
+              ticks: { color: '#e0e6ed' },
+              grid: { display: false }
+            }
+          }
+        }
+      });
+
+      // Win rate chart
+      const winrateCtx = document.getElementById('winrate-chart').getContext('2d');
+      winrateChart = new Chart(winrateCtx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'Win Rate %',
+            data: [],
+            borderColor: '#667eea',
+            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+            tension: 0.4,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              labels: { color: '#e0e6ed' }
+            }
+          },
+          scales: {
+            y: {
+              min: 0,
+              max: 100,
+              ticks: { color: '#e0e6ed' },
+              grid: { color: 'rgba(102, 126, 234, 0.1)' }
+            },
+            x: {
+              ticks: { color: '#e0e6ed' },
+              grid: { color: 'rgba(102, 126, 234, 0.1)' }
+            }
+          }
+        }
+      });
+    }
+
+    // Fetch and update data
+    async function refreshData() {
+      try {
+        // In a real implementation, these would fetch from your API
+        // For now, we'll use mock data
+        updateStats();
+        updateFeeds();
+        updateCharts();
+        updateHeatmap();
+      } catch (error) {
+        console.error('Error refreshing data:', error);
+      }
+    }
+
+    function updateStats() {
+      // Mock data - replace with actual API calls
+      document.getElementById('total-outcomes').textContent = '157';
+      document.getElementById('moon-count').textContent = '42';
+      document.getElementById('rug-count').textContent = '28';
+      document.getElementById('ml-accuracy').textContent = '76.3%';
+
+      document.getElementById('total-trades').textContent = '89';
+      document.getElementById('win-rate').textContent = '64.2%';
+      document.getElementById('avg-profit').textContent = '$127.50';
+      document.getElementById('total-pnl').textContent = '+$11,347';
+
+      document.getElementById('active-filters').textContent = '3';
+      document.getElementById('total-matches').textContent = '234';
+      document.getElementById('tokens-scanned').textContent = '12.4k';
+      document.getElementById('last-scan').textContent = '2m ago';
+    }
+
+    function updateFeeds() {
+      // Scanner feed
+      const scannerFeed = document.getElementById('scanner-feed');
+      scannerFeed.innerHTML = `
+        <div class="feed-item feed-item-new">
+          <div class="feed-header">
+            <span class="feed-title">🎯 BONK</span>
+            <span class="feed-time">2m ago</span>
+          </div>
+          <div class="feed-content">
+            <span class="outcome-badge outcome-moon">Gem Finder</span>
+            Risk: 68/100 | Liq: $87k | Holders: 342
+          </div>
+        </div>
+        <div class="feed-item">
+          <div class="feed-header">
+            <span class="feed-title">🎯 PEPE2</span>
+            <span class="feed-time">15m ago</span>
+          </div>
+          <div class="feed-content">
+            <span class="outcome-badge outcome-stable">Safe Haven</span>
+            Risk: 82/100 | Liq: $156k | Holders: 891
+          </div>
+        </div>
+      `;
+
+      // Outcomes feed
+      const outcomesFeed = document.getElementById('outcomes-feed');
+      outcomesFeed.innerHTML = `
+        <div class="feed-item feed-item-new">
+          <div class="feed-header">
+            <span class="feed-title">🚀 WIF</span>
+            <span class="feed-time">3h ago</span>
+          </div>
+          <div class="feed-content">
+            <span class="outcome-badge outcome-moon">Moon +127%</span>
+            Predicted: Safe | Traded: +$432
+          </div>
+        </div>
+        <div class="feed-item">
+          <div class="feed-header">
+            <span class="feed-title">💀 SCAM</span>
+            <span class="feed-time">6h ago</span>
+          </div>
+          <div class="feed-content">
+            <span class="outcome-badge outcome-rug">Rug -89%</span>
+            Predicted: High Risk | Avoided
+          </div>
+        </div>
+      `;
+    }
+
+    function updateCharts() {
+      // Update outcome chart with mock data
+      outcomeChart.data.labels = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
+      outcomeChart.data.datasets[0].data = [8, 12, 15, 7];
+      outcomeChart.data.datasets[1].data = [5, 3, 7, 13];
+      outcomeChart.data.datasets[2].data = [10, 15, 12, 8];
+      outcomeChart.update();
+
+      // Update portfolio chart
+      portfolioChart.data.datasets[0].data = [57, 32];
+      portfolioChart.update();
+
+      // Update win rate chart
+      winrateChart.data.labels = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
+      winrateChart.data.datasets[0].data = [58, 62, 67, 64];
+      winrateChart.update();
+    }
+
+    function updateHeatmap() {
+      const heatmap = document.getElementById('feature-heatmap');
+      const features = [
+        { name: 'Sentiment', importance: 0.85 },
+        { name: 'Risk Score', importance: 0.78 },
+        { name: 'Liquidity', importance: 0.72 },
+        { name: 'Holders', importance: 0.68 },
+        { name: 'ML Prediction', importance: 0.65 },
+        { name: 'Price Velocity', importance: 0.58 },
+        { name: 'Smart Money', importance: 0.52 },
+        { name: 'Buy Pressure', importance: 0.47 }
+      ];
+
+      heatmap.innerHTML = features.map(f => {
+        const color = `rgba(102, 126, 234, ${f.importance})`;
+        return `
+          <div class="heatmap-cell" style="background: ${color};">
+            <div class="heatmap-label">${f.name}</div>
+            <div class="heatmap-value">${(f.importance * 100).toFixed(0)}%</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Initialize on load
+    window.addEventListener('load', () => {
+      initCharts();
+      refreshData();
+      // Auto-refresh every 30 seconds
+      setInterval(refreshData, 30000);
+    });
+  </script>
+</body>
+</html>
