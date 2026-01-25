@@ -896,5 +896,89 @@ export const MIGRATIONS: { version: number; sql: string }[] = [
         max_correlated_positions, updated_at
       ) VALUES (1, 10000, 5, 10, 1, 2, 5, 2, strftime('%s', 'now'));
     `
+  },
+  {
+    version: 10,
+    description: 'Add group chat and user settings for multi-context support',
+    sql: `
+      -- ============================================
+      -- Group Settings Table
+      -- Stores configuration for each group chat
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS group_settings (
+        chat_id TEXT PRIMARY KEY,
+        chat_type TEXT NOT NULL,
+        chat_title TEXT,
+        
+        -- Alert Preferences (Opt-in)
+        enable_token_alerts INTEGER DEFAULT 1,
+        enable_smart_money_alerts INTEGER DEFAULT 1,
+        enable_rug_warnings INTEGER DEFAULT 1,
+        enable_signals INTEGER DEFAULT 1,
+        enable_volume_spikes INTEGER DEFAULT 0,
+        
+        -- Quality Thresholds (Anti-spam)
+        min_risk_score INTEGER DEFAULT 80,
+        min_liquidity_usd REAL DEFAULT 50000,
+        max_alerts_per_hour INTEGER DEFAULT 5,
+        
+        -- Features
+        enable_group_watchlist INTEGER DEFAULT 1,
+        enable_leaderboard INTEGER DEFAULT 0,
+        enable_morning_briefing INTEGER DEFAULT 1,
+        
+        -- Admin
+        admin_user_ids TEXT NOT NULL,  -- JSON array
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_group_settings_type ON group_settings(chat_type);
+
+      -- ============================================
+      -- User Settings Table
+      -- Stores configuration for each user (DM preferences)
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS user_settings (
+        user_id INTEGER PRIMARY KEY,
+        username TEXT,
+        
+        -- DM Alert Preferences
+        enable_token_alerts INTEGER DEFAULT 1,
+        enable_smart_money_alerts INTEGER DEFAULT 1,
+        enable_rug_warnings INTEGER DEFAULT 1,
+        enable_signals INTEGER DEFAULT 1,
+        enable_volume_spikes INTEGER DEFAULT 1,
+        enable_watchlist_alerts INTEGER DEFAULT 1,
+        
+        -- DM Quality Thresholds (More permissive)
+        min_risk_score INTEGER DEFAULT 60,
+        min_liquidity_usd REAL DEFAULT 10000,
+        
+        -- Group Participation
+        participate_in_leaderboard INTEGER DEFAULT 0,
+        
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_user_settings_username ON user_settings(username);
+
+      -- ============================================
+      -- Group Alert Throttle Table
+      -- Tracks recent alerts sent to groups for deduplication
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS group_alert_throttle (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chat_id TEXT NOT NULL,
+        token_mint TEXT NOT NULL,
+        alert_type TEXT NOT NULL,
+        sent_at INTEGER NOT NULL,
+        UNIQUE(chat_id, token_mint, alert_type)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_alert_throttle_chat ON group_alert_throttle(chat_id);
+      CREATE INDEX IF NOT EXISTS idx_alert_throttle_time ON group_alert_throttle(sent_at);
+    `
   }
 ];

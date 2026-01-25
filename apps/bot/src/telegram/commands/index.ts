@@ -25,9 +25,11 @@ import { registerClusterCommands } from './clusters';
 import { registerCompareCommands } from './compare';
 import { registerTimeframeCommands } from './timeframe';
 import { registerLiquidityCommands } from './liquidity';
+import { registerGroupSetupCommand } from './groupsetup';
 
 export function registerAllCommands(bot: Telegraf): void {
   // Register all command handlers
+  registerGroupSetupCommand(bot);
   registerBasicCommands(bot);
   registerAlertCommands(bot);
   registerFilterCommands(bot);
