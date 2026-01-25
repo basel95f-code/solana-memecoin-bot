@@ -15,3 +15,7 @@ export * from './interfaces/DiscoveryTypes';
 export { BirdeyeSource } from './sources/BirdeyeSource';
 export { DextoolsSource } from './sources/DextoolsSource';
 export { CoinGeckoSource } from './sources/CoinGeckoSource';
+export { RaydiumWebSocketSource } from './sources/RaydiumWebSocketSource';
+
+// Speed optimization
+export { FastAnalysisPipeline } from './FastAnalysisPipeline';
