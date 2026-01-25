@@ -10,6 +10,7 @@ import { smartMoneyTracker } from './services/smartMoneyTracker';
 import { whaleActivityTracker } from './services/whaleActivityTracker';
 import { enhancedClusterDetector } from './services/enhancedClusterDetector';
 import { walletProfiler } from './services/walletProfiler';
+import { multiTimeframeAnalyzer } from './analysis/multiTimeframeAnalyzer';
 import { telegramMtprotoService } from './services/telegramMtproto';
 import { discordBotService } from './services/discordBot';
 import { raydiumMonitor } from './monitors/raydium';
@@ -185,6 +186,11 @@ class SolanaMemecoinBot {
       // Periodic cleanup for cluster detector
       setInterval(() => {
         enhancedClusterDetector.cleanup();
+      }, 24 * 60 * 60 * 1000); // Daily cleanup
+
+      // Periodic cleanup for multi-timeframe analyzer
+      setInterval(() => {
+        multiTimeframeAnalyzer.cleanup();
       }, 24 * 60 * 60 * 1000); // Daily cleanup
 
       // Start advanced monitoring (volume spikes, whale alerts, etc.)

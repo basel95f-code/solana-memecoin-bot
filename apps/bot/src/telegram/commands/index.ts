@@ -23,6 +23,7 @@ import { registerWhaleActivityCommands } from './whaleactivity';
 import { registerWalletProfileCommands } from './walletprofile';
 import { registerClusterCommands } from './clusters';
 import { registerCompareCommands } from './compare';
+import { registerTimeframeCommands } from './timeframe';
 
 export function registerAllCommands(bot: Telegraf): void {
   // Register all command handlers
@@ -50,6 +51,7 @@ export function registerAllCommands(bot: Telegraf): void {
   registerWalletProfileCommands(bot);
   registerClusterCommands(bot);
   registerCompareCommands(bot);
+  registerTimeframeCommands(bot);
 
   // Set up bot commands menu
   bot.telegram.setMyCommands([
@@ -123,6 +125,9 @@ export function registerAllCommands(bot: Telegraf): void {
     // Wallet Comparison
     { command: 'compare', description: 'Compare two wallets' },
     { command: 'vsleader', description: 'Compare vs leaderboard #1' },
+    // Multi-Timeframe Analysis
+    { command: 'timeframe', description: 'Multi-timeframe token analysis' },
+    { command: 'anomalies', description: 'Show detected anomalies' },
     // Backtesting
     { command: 'strategies', description: 'List backtest strategies' },
     { command: 'backtest', description: 'Run a backtest' },
