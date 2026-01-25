@@ -980,5 +980,39 @@ export const MIGRATIONS: { version: number; sql: string }[] = [
       CREATE INDEX IF NOT EXISTS idx_alert_throttle_chat ON group_alert_throttle(chat_id);
       CREATE INDEX IF NOT EXISTS idx_alert_throttle_time ON group_alert_throttle(sent_at);
     `
+  },
+  {
+    version: 11,
+    description: 'Add group watchlist for shared token tracking',
+    sql: `
+      -- ============================================
+      -- Group Watchlist Table
+      -- Shared watchlist for group chats
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS group_watchlist (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chat_id TEXT NOT NULL,
+        token_mint TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        name TEXT,
+        
+        -- Added by
+        added_by_user_id INTEGER NOT NULL,
+        added_by_username TEXT,
+        added_at INTEGER NOT NULL,
+        
+        -- Usage tracking
+        alert_count INTEGER DEFAULT 0,
+        last_alerted_at INTEGER,
+        
+        -- Unique constraint: one token per group
+        UNIQUE(chat_id, token_mint)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_group_watchlist_chat ON group_watchlist(chat_id);
+      CREATE INDEX IF NOT EXISTS idx_group_watchlist_mint ON group_watchlist(token_mint);
+      CREATE INDEX IF NOT EXISTS idx_group_watchlist_added_at ON group_watchlist(added_at);
+      CREATE INDEX IF NOT EXISTS idx_group_watchlist_alert_count ON group_watchlist(alert_count DESC);
+    `
   }
 ];

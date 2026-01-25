@@ -1,5 +1,6 @@
 import { database } from '../database';
 import { chatContextService } from './chatContext';
+import { groupWatchlistService } from './groupWatchlist';
 import type { GroupSettings, UserSettings } from './chatContext';
 import { logger } from '../utils/logger';
 
@@ -12,6 +13,7 @@ export interface AlertMetadata {
   riskScore: number;
   liquidityUsd: number;
   rugProbability?: number;
+  isGroupWatched?: boolean;  // Tag if token is in group watchlist
 }
 
 export interface AlertTarget {
@@ -33,11 +35,24 @@ class AlertRouterService {
       
       // Check each group
       for (const group of groups) {
-        if (await this.shouldSendToGroup(group, metadata)) {
+        // Check if token is in group watchlist
+        const isWatched = await groupWatchlistService.isWatchedByGroup(group.chatId, metadata.tokenMint);
+        
+        // Tag the metadata
+        if (isWatched) {
+          metadata.isGroupWatched = true;
+        }
+
+        if (await this.shouldSendToGroup(group, metadata, isWatched)) {
           targets.push({
             chatId: group.chatId,
             chatType: group.chatType === 'supergroup' ? 'supergroup' : 'group',
           });
+
+          // Record alert for watchlist token
+          if (isWatched) {
+            await groupWatchlistService.recordGroupAlert(group.chatId, metadata.tokenMint);
+          }
         }
       }
 
@@ -66,7 +81,31 @@ class AlertRouterService {
   /**
    * Check if alert should be sent to a specific group
    */
-  private async shouldSendToGroup(group: GroupSettings, metadata: AlertMetadata): Promise<boolean> {
+  private async shouldSendToGroup(
+    group: GroupSettings,
+    metadata: AlertMetadata,
+    isWatched: boolean = false
+  ): Promise<boolean> {
+    // Priority boost for group-watched tokens
+    // Watched tokens skip some quality filters
+    if (isWatched) {
+      // Still check if alert type is enabled
+      if (!this.isAlertTypeEnabled(group, metadata.type, 'group')) {
+        return false;
+      }
+
+      // Skip quality thresholds for watched tokens (group wants to see them)
+      
+      // Still check for duplicates
+      if (await this.isDuplicate(group.chatId, metadata.tokenMint, metadata.type)) {
+        return false;
+      }
+
+      // Watched tokens bypass throttling
+      return true;
+    }
+
+    // Normal flow for non-watched tokens
     // Check if alert type is enabled
     if (!this.isAlertTypeEnabled(group, metadata.type, 'group')) {
       return false;
