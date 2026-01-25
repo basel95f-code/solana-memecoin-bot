@@ -11,6 +11,7 @@ import { manualLabelingService, type OutcomeLabel } from '../../ml/manualLabelin
 import { modelVersionManager } from '../../ml/modelVersioning';
 import { rugPredictor } from '../../ml/rugPredictor';
 import { featureEngineering } from '../../ml/featureEngineering';
+import { featureSelection } from '../../ml/featureSelection';
 import {
   formatMLStatus,
   formatPendingLabels,
@@ -309,6 +310,35 @@ export function registerMLCommands(bot: Telegraf): void {
       return;
     }
 
+    if (subcommand === 'features') {
+      // Feature importance analysis
+      await ctx.replyWithHTML('<i>🔍 Analyzing feature importance...</i>');
+
+      try {
+        const result = await featureSelection.analyzeFeatureImportance();
+        const formatted = featureSelection.formatForDisplay(result);
+
+        await ctx.replyWithHTML(`<pre>${formatted}</pre>`, {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: '🔄 Refresh', callback_data: 'ml_features_refresh' },
+                { text: '« Back', callback_data: 'ml_back' }
+              ]
+            ]
+          }
+        });
+      } catch (error) {
+        const err = error as Error;
+        await ctx.replyWithHTML(
+          '<b>❌ Feature Analysis Failed</b>\n\n' +
+          `<i>${err.message}</i>\n\n` +
+          'Make sure you have at least 100 labeled samples.'
+        );
+      }
+      return;
+    }
+
     // Help
     await ctx.replyWithHTML(
       '<b>🤖 ML Commands</b>\n\n' +
@@ -318,6 +348,7 @@ export function registerMLCommands(bot: Telegraf): void {
       '<code>/ml history</code> - Training history\n' +
       '<code>/ml pending</code> - Tokens to label\n' +
       '<code>/ml label &lt;mint&gt; &lt;outcome&gt;</code> - Label token\n' +
+      '<code>/ml features</code> - Feature importance\n' +
       '<code>/ml compare</code> - A/B test results'
     );
   });
@@ -575,6 +606,41 @@ export function registerMLCommands(bot: Telegraf): void {
         {
           parse_mode: 'HTML',
           ...Markup.inlineKeyboard([[Markup.button.callback('« Back', 'ml_back')]]),
+        }
+      );
+    }
+  });
+
+  bot.action('ml_features_refresh', async (ctx) => {
+    await ctx.answerCbQuery('Refreshing...');
+    await ctx.editMessageText('<i>🔍 Analyzing feature importance...</i>', { parse_mode: 'HTML' });
+
+    try {
+      const result = await featureSelection.analyzeFeatureImportance();
+      const formatted = featureSelection.formatForDisplay(result);
+
+      await ctx.editMessageText(`<pre>${formatted}</pre>`, {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '🔄 Refresh', callback_data: 'ml_features_refresh' },
+              { text: '« Back', callback_data: 'ml_back' }
+            ]
+          ]
+        }
+      });
+    } catch (error) {
+      const err = error as Error;
+      await ctx.editMessageText(
+        '<b>❌ Feature Analysis Failed</b>\n\n' +
+        `<i>${err.message}</i>\n\n` +
+        'Make sure you have at least 100 labeled samples.',
+        {
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [[{ text: '« Back', callback_data: 'ml_back' }]]
+          }
         }
       );
     }

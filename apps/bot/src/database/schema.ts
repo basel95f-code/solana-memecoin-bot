@@ -562,5 +562,27 @@ export const MIGRATIONS: { version: number; sql: string }[] = [
       CREATE INDEX IF NOT EXISTS idx_ml_pending_status ON ml_pending_labels(status);
       CREATE INDEX IF NOT EXISTS idx_ml_pending_time ON ml_pending_labels(discovered_at);
     `
+  },
+  {
+    version: 4,
+    description: 'Add feature importance analysis table',
+    sql: `
+      -- ============================================
+      -- Feature Importance Analysis
+      -- Stores feature importance rankings over time
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS feature_importance_analysis (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp INTEGER NOT NULL,
+        total_features INTEGER NOT NULL,
+        analyzed_samples INTEGER NOT NULL,
+        improvement_estimate REAL,
+        -- Feature importance scores (JSON array)
+        importance_scores TEXT NOT NULL,
+        created_at INTEGER DEFAULT (strftime('%s', 'now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_feature_importance_time ON feature_importance_analysis(timestamp);
+    `
   }
 ];

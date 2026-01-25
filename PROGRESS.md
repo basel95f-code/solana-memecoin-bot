@@ -161,9 +161,19 @@
   - Queue processor now calls sentiment analysis before ML prediction
   - Leverages existing multi-platform sentiment (Twitter, Telegram, Discord)
 
+### Completed - Phase 18 (Feature Selection) ✅
+- [x] **Feature Importance Analysis** - Automated feature selection and importance ranking
+  - featureSelection.ts service with correlation, variance, and information gain metrics
+  - `/ml features` command to view feature importance rankings
+  - Database table: feature_importance_analysis for tracking over time
+  - Visual bar charts showing importance scores (0-100%)
+  - Identifies low-impact features (<5% importance)
+  - Estimates accuracy improvement from removing low-impact features
+  - Top 10 features displayed with ranks
+  - Callback handler for refreshing analysis
+
 ### Low Priority / Future
 11. **Multi-model Ensemble** - Combine multiple ML models for predictions
-12. **Feature Selection** - Automated feature importance and selection
 14. **Cross-chain Support** - Extend to other chains (Base, etc.)
 15. **Paper Trading Mode** - Simulate trades without real execution
 
