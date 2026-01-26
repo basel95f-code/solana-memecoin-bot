@@ -51,4 +51,30 @@ temp/
 # TypeScript cache
 *.tsbuildinfo
 
+# Compiled TypeScript (source is in src/)
+apps/bot/src/**/*.js
+apps/bot/src/**/*.d.ts
+apps/bot/src/**/*.d.ts.map
+apps/bot/src/**/*.js.map
+!apps/bot/src/**/*.test.js
+
+# Progress/temp docs
+**/IMPLEMENTATION_*.md
+**/TASK_COMPLETE*.md
+**/TEST_REPORT*.md
+**/FIXES_*.md
+**/WORK_SESSION*.md
+**/BUG_REPORT.md
+**/FILTER_*.md
+**/INTEGRATION_*.md
+**/PRESET_*.md
+**/PROFILE_*.md
+**/SMART_MONEY*.md
+**/STACKING_*.txt
+**/TEST_SUMMARY.txt
+**/TOMORROW_PLAN.md
+**/*.txt
+!package.json
+!tsconfig.json
+
 .vercel
