@@ -60,9 +60,7 @@ class LeaderboardService {
       const now = Math.floor(Date.now() / 1000);
       const trackedUntil = now + (7 * 24 * 60 * 60); // 7 days from now
 
-      const db = database.getDb();
-
-      db.prepare(`
+      const result = database.run(`
         INSERT INTO leaderboard_entries (
           chat_id, user_id, username,
           token_mint, symbol, name,
@@ -71,21 +69,19 @@ class LeaderboardService {
           score, outcome,
           tracked_until, last_updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
+      `, [
         chatId, userId, username,
         mint, symbol, name,
         now, initialPrice,
         initialPrice, initialPrice, 1.0, // Initial values
         0, 'pending', // Initial score and outcome
         trackedUntil, now
-      );
+      ]);
 
       logger.info('Leaderboard', `Recorded discovery: ${symbol} by user ${userId} in chat ${chatId}`);
 
-      const result = db.prepare('SELECT last_insert_rowid() as id').get() as { id: number };
-
       return {
-        id: result.id,
+        id: result.lastInsertRowid,
         chatId,
         userId,
         username,
@@ -114,13 +110,11 @@ class LeaderboardService {
    */
   async updateTokenPerformance(mint: string): Promise<void> {
     try {
-      const db = database.getDb();
-      
       // Get all active entries for this token
-      const entries = db.prepare(`
+      const entries = database.all<any>(`
         SELECT * FROM leaderboard_entries
         WHERE token_mint = ? AND outcome = 'pending'
-      `).all(mint) as any[];
+      `, [mint]);
 
       if (entries.length === 0) {
         return;
@@ -170,7 +164,7 @@ class LeaderboardService {
         }
 
         // Update entry
-        db.prepare(`
+        database.run(`
           UPDATE leaderboard_entries
           SET current_price = ?,
               peak_price = ?,
@@ -179,7 +173,7 @@ class LeaderboardService {
               outcome = ?,
               last_updated_at = ?
           WHERE id = ?
-        `).run(currentPrice, peakPrice, peakMultiplier, score, outcome, now, entry.id);
+        `, [currentPrice, peakPrice, peakMultiplier, score, outcome, now, entry.id]);
       }
 
       logger.debug('Leaderboard', `Updated ${entries.length} entries for ${mint}`);
@@ -246,7 +240,6 @@ class LeaderboardService {
     period: 'week' | 'month' | 'alltime' = 'week'
   ): Promise<LeaderboardRanking[]> {
     try {
-      const db = database.getDb();
       const now = Math.floor(Date.now() / 1000);
 
       let timeFilter = '';
@@ -256,8 +249,8 @@ class LeaderboardService {
         timeFilter = `AND discovered_at >= ${now - 30 * 24 * 60 * 60}`;
       }
 
-      const rows = db.prepare(`
-        SELECT 
+      const rows = database.all<any>(`
+        SELECT
           le.user_id,
           le.username,
           COUNT(*) as gems_found,
@@ -271,7 +264,7 @@ class LeaderboardService {
         GROUP BY le.user_id
         ORDER BY total_score DESC
         LIMIT 10
-      `).all(chatId) as any[];
+      `, [chatId]);
 
       return rows.map(row => ({
         userId: row.user_id,
@@ -292,10 +285,8 @@ class LeaderboardService {
    */
   async getUserStats(chatId: string, userId: number): Promise<UserStats | null> {
     try {
-      const db = database.getDb();
-
-      const stats = db.prepare(`
-        SELECT 
+      const stats = database.get<any>(`
+        SELECT
           user_id,
           username,
           COUNT(*) as total_tokens,
@@ -306,22 +297,22 @@ class LeaderboardService {
         FROM leaderboard_entries
         WHERE chat_id = ? AND user_id = ?
         GROUP BY user_id
-      `).get(chatId, userId) as any;
+      `, [chatId, userId]);
 
       if (!stats) {
         return null;
       }
 
       // Get best performing token
-      const bestToken = db.prepare(`
+      const bestToken = database.get<any>(`
         SELECT symbol FROM leaderboard_entries
         WHERE chat_id = ? AND user_id = ?
         ORDER BY peak_multiplier DESC
         LIMIT 1
-      `).get(chatId, userId) as any;
+      `, [chatId, userId]);
 
       // Get user's rank
-      const rankResult = db.prepare(`
+      const rankResult = database.get<any>(`
         SELECT COUNT(*) + 1 as rank
         FROM (
           SELECT user_id, SUM(score) as total_score
@@ -334,7 +325,7 @@ class LeaderboardService {
             WHERE chat_id = ? AND user_id = ?
           )
         )
-      `).get(chatId, chatId, userId) as any;
+      `, [chatId, chatId, userId]);
 
       return {
         userId: stats.user_id,
@@ -359,14 +350,13 @@ class LeaderboardService {
    */
   async pruneOldEntries(): Promise<number> {
     try {
-      const db = database.getDb();
       const now = Math.floor(Date.now() / 1000);
       const cutoff = now - 30 * 24 * 60 * 60; // Keep for 30 days after tracking ends
 
-      const result = db.prepare(`
+      const result = database.run(`
         DELETE FROM leaderboard_entries
         WHERE tracked_until < ? AND outcome != 'pending'
-      `).run(cutoff);
+      `, [cutoff]);
 
       const deleted = result.changes || 0;
       if (deleted > 0) {
@@ -385,14 +375,13 @@ class LeaderboardService {
    */
   async getActiveEntries(): Promise<LeaderboardEntry[]> {
     try {
-      const db = database.getDb();
       const now = Math.floor(Date.now() / 1000);
 
-      const rows = db.prepare(`
+      const rows = database.all<any>(`
         SELECT DISTINCT token_mint
         FROM leaderboard_entries
         WHERE outcome = 'pending' AND tracked_until > ?
-      `).all(now) as any[];
+      `, [now]);
 
       return rows;
     } catch (error) {
@@ -406,12 +395,11 @@ class LeaderboardService {
    */
   async hasOptedIn(userId: number): Promise<boolean> {
     try {
-      const db = database.getDb();
-      const result = db.prepare(`
+      const result = database.get<any>(`
         SELECT participate_in_leaderboard
         FROM user_settings
         WHERE user_id = ?
-      `).get(userId) as any;
+      `, [userId]);
 
       return result?.participate_in_leaderboard === 1;
     } catch (error) {
@@ -425,12 +413,11 @@ class LeaderboardService {
    */
   async isEnabledInGroup(chatId: string): Promise<boolean> {
     try {
-      const db = database.getDb();
-      const result = db.prepare(`
+      const result = database.get<any>(`
         SELECT enable_leaderboard
         FROM group_settings
         WHERE chat_id = ?
-      `).get(chatId) as any;
+      `, [chatId]);
 
       return result?.enable_leaderboard === 1;
     } catch (error) {

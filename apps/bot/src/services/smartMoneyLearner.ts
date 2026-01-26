@@ -3,7 +3,7 @@
  * Tracks wallets with consistent profits, learns their patterns, and generates alerts
  */
 
-import { databaseService } from '../database';
+import { database as databaseService } from '../database';
 import { solanaService } from './solana';
 import { dexScreenerService } from './dexscreener';
 import { logger } from '../utils/logger';

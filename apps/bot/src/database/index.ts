@@ -203,6 +203,89 @@ class DatabaseService {
     }
   }
 
+
+  /**
+   * Helper method to execute SELECT query and get first row
+   * Mimics better-sqlite3 .get() API but uses sql.js
+   */
+  get<T = any>(sql: string, params?: any[]): T | null {
+    if (!this.db) return null;
+
+    try {
+      const result = this.db.exec(sql, params);
+      
+      if (result.length === 0 || result[0].values.length === 0) {
+        return null;
+      }
+
+      const columns = result[0].columns;
+      const values = result[0].values[0];
+      const row: any = {};
+      columns.forEach((col, i) => {
+        row[col] = values[i];
+      });
+
+      return row as T;
+    } catch (error) {
+      logger.error('Database', `Failed to execute get query: ${sql}`, error as Error);
+      return null;
+    }
+  }
+
+  /**
+   * Helper method to execute SELECT query and get all rows
+   * Mimics better-sqlite3 .all() API but uses sql.js
+   */
+  all<T = any>(sql: string, params?: any[]): T[] {
+    if (!this.db) return [];
+
+    try {
+      const result = this.db.exec(sql, params);
+      
+      if (result.length === 0 || result[0].values.length === 0) {
+        return [];
+      }
+
+      const columns = result[0].columns;
+      return result[0].values.map(values => {
+        const row: any = {};
+        columns.forEach((col, i) => {
+          row[col] = values[i];
+        });
+        return row as T;
+      });
+    } catch (error) {
+      logger.error('Database', `Failed to execute all query: ${sql}`, error as Error);
+      return [];
+    }
+  }
+
+  /**
+   * Helper method to execute INSERT/UPDATE/DELETE query
+   * Mimics better-sqlite3 .run() API but uses sql.js
+   */
+  run(sql: string, params?: any[]): { changes: number; lastInsertRowid: number } {
+    if (!this.db) {
+      return { changes: 0, lastInsertRowid: 0 };
+    }
+
+    try {
+      this.executeInTransaction(() => {
+        this.db!.run(sql, params);
+      });
+      
+      const changes = this.db.getRowsModified?.() || 0;
+      const lastIdResult = this.db.exec('SELECT last_insert_rowid() as id');
+      const lastInsertRowid = lastIdResult.length > 0 && lastIdResult[0].values.length > 0 
+        ? (lastIdResult[0].values[0][0] as number) 
+        : 0;
+      
+      return { changes, lastInsertRowid };
+    } catch (error) {
+      logger.error('Database', `Failed to execute run query: ${sql}`, error as Error);
+      return { changes: 0, lastInsertRowid: 0 };
+    }
+  }
   /**
    * Get database instance (for advanced operations)
    */
