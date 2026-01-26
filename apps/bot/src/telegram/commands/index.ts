@@ -3,6 +3,7 @@ import { registerBasicCommands } from './basic';
 import { registerAlertCommands } from './alerts';
 import { registerFilterCommands } from './filters';
 import { registerPresetCommands } from './presets';
+import { registerPerformanceCommands } from './performance';
 import { registerAnalysisCommands } from './analysis';
 import { registerWatchlistCommands } from './watchlist';
 import { registerGroupWatchlistCommands } from './groupwatchlist';
@@ -48,6 +49,7 @@ export function registerAllCommands(bot: Telegraf, db?: SupabaseDB): void {
   registerAlertCommands(bot);
   registerFilterCommands(bot);
   registerPresetCommands(bot);
+  registerPerformanceCommands(bot);
   registerAnalysisCommands(bot);
   registerWatchlistCommands(bot);
   registerGroupWatchlistCommands(bot);
@@ -104,6 +106,10 @@ export function registerAllCommands(bot: Telegraf, db?: SupabaseDB): void {
     { command: 'load', description: 'Load a preset' },
     { command: 'share', description: 'Share preset code' },
     { command: 'import', description: 'Import preset from code' },
+    // Performance
+    { command: 'performance', description: 'Performance dashboard' },
+    { command: 'winrate', description: 'Profile win rate details' },
+    { command: 'compare_profiles', description: 'Compare all profiles' },
     // Analysis
     { command: 'check', description: 'Full token analysis' },
     { command: 'scan', description: 'Quick safety scan' },

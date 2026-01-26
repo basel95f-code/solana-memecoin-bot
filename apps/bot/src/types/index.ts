@@ -696,6 +696,7 @@ export const FILTER_PRESETS: Record<Exclude<FilterProfile, 'custom'>, FilterPres
     minRiskScore: 0,
     minTokenAge: 0,
     maxTokenAge: 60, // Max 1 minute old
+    minSmartBuys: 1,            // At least 1 smart money buy for validation
     requireMintRevoked: false,
     requireFreezeRevoked: false,
     requireLPBurned: false,
@@ -711,6 +712,7 @@ export const FILTER_PRESETS: Record<Exclude<FilterProfile, 'custom'>, FilterPres
     minRiskScore: 20,
     minTokenAge: 0,
     maxTokenAge: 600, // Max 10 minutes old
+    minSmartBuys: 1,            // Want at least 1 smart money buy
     requireMintRevoked: true,
     requireFreezeRevoked: false,
     requireLPBurned: false,
@@ -757,6 +759,8 @@ export const FILTER_PRESETS: Record<Exclude<FilterProfile, 'custom'>, FilterPres
     minTokenAge: 0,
     minBondingCurve: 70,
     maxBondingCurve: 95,
+    minSmartBuys: 2,            // Want smart money interest at graduation
+    minSmartFlow: 1,            // Positive smart flow
     requireMintRevoked: false,
     requireFreezeRevoked: false,
     requireLPBurned: false,
@@ -930,6 +934,7 @@ export const FILTER_PRESETS: Record<Exclude<FilterProfile, 'custom'>, FilterPres
     minRiskScore: 0,
     minTokenAge: 0,
     maxTokenAge: 300, // Max 5 minutes old
+    minSmartBuys: 1,            // At least 1 smart money buy
     requireMintRevoked: false,
     requireFreezeRevoked: false,
     requireLPBurned: false,
