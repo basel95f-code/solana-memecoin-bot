@@ -337,6 +337,10 @@ export interface FilterSettings {
   minPriceChange1h?: number;
   maxPriceChange1h?: number;
   minVolume24h?: number;
+  // Smart money filters
+  minSmartBuys?: number;           // Minimum smart money buys in 24h
+  minSmartFlow?: number;            // Minimum net smart money flow (buys - sells)
+  requireSmartMoney?: boolean;      // Only alert if smart money is active
   // Mode settings
   fastMode?: boolean;
   alertsEnabled: boolean;
@@ -402,12 +406,31 @@ export interface WalletActivityAlert {
   chatId: string;
 }
 
+// ============================================
+// Preset Types
+// ============================================
+
+export interface FilterPresetSettings {
+  name: string;
+  filters: FilterSettings;
+  createdAt: number;
+  description?: string;
+}
+
+export interface SharedPreset {
+  name: string;
+  filters: Omit<FilterSettings, 'alertsEnabled' | 'alertCategories' | 'alertPriority' | 'quietHoursStart' | 'quietHoursEnd' | 'timezone'>;
+  description?: string;
+  version: number; // For future compatibility
+}
+
 export interface UserSettings {
   chatId: string;
   filters: FilterSettings;
   watchlist: WatchedToken[];
   blacklist: BlacklistEntry[];
   trackedWallets: TrackedWallet[];
+  presets: FilterPresetSettings[]; // User-saved presets
   sentimentChannels?: SentimentChannelConfig;
   muteUntil?: number; // timestamp
   createdAt: number;
@@ -716,6 +739,8 @@ export const FILTER_PRESETS: Record<Exclude<FilterProfile, 'custom'>, FilterPres
     minHolders: 100,
     minRiskScore: 70,
     minTokenAge: 3600, // 1 hour
+    minSmartBuys: 2,            // Want some smart money validation
+    minSmartFlow: 1,            // Positive smart money flow
     requireMintRevoked: true,
     requireFreezeRevoked: true,
     requireLPBurned: true,
@@ -746,6 +771,9 @@ export const FILTER_PRESETS: Record<Exclude<FilterProfile, 'custom'>, FilterPres
     minRiskScore: 30,
     minTokenAge: 0,
     minVolume24h: 50000,
+    minSmartBuys: 3,           // At least 3 smart money buys
+    minSmartFlow: 2,            // Net positive smart money flow
+    requireSmartMoney: true,    // Must have smart money activity
     requireMintRevoked: false,
     requireFreezeRevoked: false,
     requireLPBurned: false,
@@ -871,6 +899,8 @@ export const FILTER_PRESETS: Record<Exclude<FilterProfile, 'custom'>, FilterPres
     minRiskScore: 30,
     minTokenAge: 0,
     volumeSpikeMultiplier: 3, // 3x volume spike
+    minSmartBuys: 2,            // Smart money confirmation
+    minSmartFlow: 1,            // Positive flow
     requireMintRevoked: false,
     requireFreezeRevoked: false,
     requireLPBurned: false,

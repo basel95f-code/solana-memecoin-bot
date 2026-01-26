@@ -350,7 +350,7 @@ export function formatSettings(settings: FilterSettings): string {
     micro: '💎', small: '🥉', mid: '🥈', large: '🥇', custom: '⚙️',
   };
 
-  return [
+  const lines = [
     `⚙️ <b>SETTINGS</b>`,
     ``,
     `Profile: ${icons[settings.profile] || ''} ${settings.profile}`,
@@ -361,13 +361,25 @@ export function formatSettings(settings: FilterSettings): string {
     `Top10 max: ${settings.maxTop10Percent}%`,
     `Min holders: ${settings.minHolders}`,
     `Min score: ${settings.minRiskScore}`,
-    ``,
-    `<b>◆ Requirements</b>`,
-    `${settings.requireMintRevoked ? '✓' : '✗'} Mint revoked`,
-    `${settings.requireFreezeRevoked ? '✓' : '✗'} Freeze revoked`,
-    `${settings.requireLPBurned ? '✓' : '✗'} LP burned`,
-    `${settings.requireSocials ? '✓' : '✗'} Has socials`,
-  ].join('\n');
+  ];
+
+  // Add smart money filters if set
+  if (settings.minSmartBuys || settings.minSmartFlow || settings.requireSmartMoney) {
+    lines.push(``);
+    lines.push(`<b>◆ Smart Money 🐋</b>`);
+    if (settings.minSmartBuys) lines.push(`Min buys: ${settings.minSmartBuys}`);
+    if (settings.minSmartFlow) lines.push(`Min flow: ${settings.minSmartFlow > 0 ? '+' : ''}${settings.minSmartFlow}`);
+    if (settings.requireSmartMoney) lines.push(`Required: ✓`);
+  }
+
+  lines.push(``);
+  lines.push(`<b>◆ Requirements</b>`);
+  lines.push(`${settings.requireMintRevoked ? '✓' : '✗'} Mint revoked`);
+  lines.push(`${settings.requireFreezeRevoked ? '✓' : '✗'} Freeze revoked`);
+  lines.push(`${settings.requireLPBurned ? '✓' : '✗'} LP burned`);
+  lines.push(`${settings.requireSocials ? '✓' : '✗'} Has socials`);
+
+  return lines.join('\n');
 }
 
 export function formatFilterProfile(profile: string): string {
@@ -375,10 +387,10 @@ export function formatFilterProfile(profile: string): string {
     sniper: `🎯 <b>SNIPER</b>\nMax risk, instant alerts\nLiq $100+ • No safety checks`,
     early: `⚡ <b>EARLY</b>\nEarly entry, basic safety\nLiq $500+ • Mint revoked`,
     balanced: `⚖️ <b>BALANCED</b>\nBalanced risk/reward\nLiq $2K+ • Score 50+ • 25 holders`,
-    conservative: `🛡️ <b>CONSERVATIVE</b>\nSafe plays only\nLiq $10K+ • All safety checks`,
+    conservative: `🛡️ <b>CONSERVATIVE</b>\nSafe plays only\nLiq $10K+ • Smart money • All safety checks`,
     degen: `🎰 <b>DEGEN</b>\nEverything. DYOR.\nLiq $50+ • No limits`,
-    whale: `🐋 <b>WHALE</b>\nSmart money focus\nLiq $5K+ • Vol $50K+`,
-    trending: `🔥 <b>TRENDING</b>\nVolume spikes\nLiq $2K+ • 3x volume`,
+    whale: `🐋 <b>WHALE</b>\nSmart money focus\nLiq $5K+ • Vol $50K+ • 3+ smart buys`,
+    trending: `🔥 <b>TRENDING</b>\nVolume spikes + smart money\nLiq $2K+ • 3x volume • 2+ smart buys`,
     fresh: `🆕 <b>FRESH</b>\nNew tokens only\nMax age 5min • Fast mode`,
     micro: `💎 <b>MICRO</b>\n$1K-$50K mcap gems`,
     small: `🥉 <b>SMALL</b>\n$50K-$500K mcap`,

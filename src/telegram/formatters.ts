@@ -518,13 +518,28 @@ export function formatSettings(settings: FilterSettings): string {
   const lines = [
     `⚙️ <b>SETTINGS</b>`,
     ``,
-    `<b>Profile:</b> ${profileEmoji[settings.profile] || ''} ${settings.profile.toUpperCase()}`,
-    `<b>Alerts:</b> ${settings.alertsEnabled ? '✅ Enabled' : '❌ Disabled'}`,
-    settings.fastMode ? `<b>Fast Mode:</b> ✅ Enabled` : null,
-    ``,
-    `━━━ <b>LIQUIDITY</b> ━━━`,
-    `Min: $${formatNumber(settings.minLiquidity)}`,
-    settings.maxLiquidity ? `Max: $${formatNumber(settings.maxLiquidity)}` : null,
+  ];
+  
+  // Show profile or stack
+  if (settings.profileStack && settings.profileStack.length > 0) {
+    lines.push(`<b>Profile:</b> 📚 STACKED`);
+    lines.push(`<b>Stack:</b> ${settings.profileStack.map(p => profileEmoji[p] + ' ' + p).join(' + ')}`);
+  } else {
+    lines.push(`<b>Profile:</b> ${profileEmoji[settings.profile] || ''} ${settings.profile.toUpperCase()}`);
+  }
+  
+  lines.push(`<b>Alerts:</b> ${settings.alertsEnabled ? '✅ Enabled' : '❌ Disabled'}`);
+  if (settings.fastMode) {
+    lines.push(`<b>Fast Mode:</b> ✅ Enabled`);
+  }
+  lines.push(``);
+  
+  lines.push(`━━━ <b>LIQUIDITY</b> ━━━`);
+  lines.push(`Min: $${formatNumber(settings.minLiquidity)}`);
+  if (settings.maxLiquidity) {
+    lines.push(`Max: $${formatNumber(settings.maxLiquidity)}`);
+  }
+  lines.push(
     ``,
     `━━━ <b>HOLDERS</b> ━━━`,
     `Max Top 10: ${settings.maxTop10Percent}%`,
@@ -568,6 +583,15 @@ export function formatSettings(settings: FilterSettings): string {
     if (settings.minVolume24h) lines.push(`Min 24h Volume: $${formatNumber(settings.minVolume24h)}`);
   }
 
+  // Add smart money filters if set
+  if (settings.minSmartBuys || settings.minSmartFlow || settings.requireSmartMoney) {
+    lines.push(``);
+    lines.push(`━━━ <b>SMART MONEY</b> 🐋 ━━━`);
+    if (settings.minSmartBuys) lines.push(`Min Smart Buys: ${settings.minSmartBuys}`);
+    if (settings.minSmartFlow) lines.push(`Min Net Flow: ${settings.minSmartFlow > 0 ? '+' : ''}${settings.minSmartFlow}`);
+    if (settings.requireSmartMoney) lines.push(`Require Activity: ✅`);
+  }
+
   lines.push(``);
   lines.push(`━━━ <b>OTHER</b> ━━━`);
   lines.push(`Timezone: ${settings.timezone}`);
@@ -580,7 +604,17 @@ export function formatSettings(settings: FilterSettings): string {
   return lines.filter(l => l !== null).join('\n');
 }
 
-export function formatFilterProfile(profile: string): string {
+export function formatFilterProfile(profile: string, profileStack?: string[]): string {
+  // Handle stacked profiles
+  if (profileStack && profileStack.length > 0) {
+    const { formatStackSummary } = require('./commands/filter-stack');
+    const { mergeFilterProfiles } = require('./commands/filter-stack');
+    const { merged } = mergeFilterProfiles(profileStack);
+    
+    return formatStackSummary(profileStack as any[], merged);
+  }
+
+  // Single profile display
   const profiles: Record<string, string> = {
     // Risk-based profiles
     sniper: [
@@ -625,6 +659,8 @@ export function formatFilterProfile(profile: string): string {
       `• Max Top 10: 25%`,
       `• Min Holders: 100`,
       `• Min Score: 70`,
+      `• Min Smart Buys: 2`,
+      `• Min Net Smart Flow: +1`,
       `• Requires: Mint + Freeze revoked, LP 50%+ burned, socials`,
     ].join('\n'),
     graduation: [
@@ -640,11 +676,13 @@ export function formatFilterProfile(profile: string): string {
     whale: [
       `🐋 <b>WHALE</b>`,
       ``,
-      `Alert on whale activity only.`,
+      `Alert on whale and smart money activity only.`,
       ``,
       `• Min Liquidity: $5,000`,
       `• Min 24h Volume: $50,000`,
-      `• Focus on whale buys/sells`,
+      `• Min Smart Buys: 3`,
+      `• Min Net Smart Flow: +2`,
+      `• Requires smart money activity`,
     ].join('\n'),
     degen: [
       `🎰 <b>DEGEN</b>`,
@@ -718,10 +756,12 @@ export function formatFilterProfile(profile: string): string {
     trending: [
       `🔥 <b>TRENDING</b>`,
       ``,
-      `Tokens with volume spikes.`,
+      `Tokens with volume spikes + smart money.`,
       ``,
       `• Volume Spike: 3x+`,
       `• Min Liquidity: $2,000`,
+      `• Min Smart Buys: 2`,
+      `• Min Net Smart Flow: +1`,
       `• Catch the momentum`,
     ].join('\n'),
     momentum: [
@@ -850,4 +890,111 @@ export function formatStats(stats: {
     `<b>Active Monitors:</b>`,
     stats.monitorsActive.map(m => `• ${m}`).join('\n'),
   ].join('\n');
+}
+
+// ============================================
+// Filter Performance Formatters
+// ============================================
+
+export function formatFilterStats(perfData: import('../types').FilterPerformanceData): string {
+  if (!perfData) {
+    return [
+      `📊 <b>FILTER PERFORMANCE</b>`,
+      ``,
+      `No performance data yet.`,
+      ``,
+      `<i>Start detecting tokens to build stats!</i>`,
+    ].join('\n');
+  }
+
+  const lines = [
+    `📊 <b>FILTER PERFORMANCE</b>`,
+    ``,
+    `━━━ <b>OVERALL</b> ━━━`,
+    `🔍 Tokens Detected: ${perfData.totalTokensDetected}`,
+    `🏆 Winners (+50%): ${perfData.totalWinners}`,
+    `💀 Losers/Rugs: ${perfData.totalLosers}`,
+  ];
+
+  if (perfData.totalTokensDetected > 0) {
+    const totalDecided = perfData.totalWinners + perfData.totalLosers;
+    if (totalDecided > 0) {
+      const overallWinRate = (perfData.totalWinners / totalDecided) * 100;
+      lines.push(`📈 Overall Win Rate: ${overallWinRate.toFixed(1)}%`);
+    }
+  }
+
+  lines.push(``);
+  lines.push(`━━━ <b>TOP PROFILES</b> ━━━`);
+
+  // Sort profiles by win rate (with minimum 3 detections)
+  const profilesWithData = Object.values(perfData.profileStats)
+    .filter(p => (p.winners + p.losers) >= 3)
+    .sort((a, b) => b.winRate - a.winRate)
+    .slice(0, 5);
+
+  if (profilesWithData.length === 0) {
+    lines.push(`<i>Not enough data yet (min 3 outcomes per profile)</i>`);
+  } else {
+    const profileEmoji: Record<string, string> = {
+      sniper: '🎯', early: '⚡', balanced: '⚖️', conservative: '🛡️',
+      graduation: '🎓', whale: '🐋', degen: '🎰', cto: '🔍',
+      micro: '💎', small: '🥉', mid: '🥈', large: '🥇', mega: '👑',
+      trending: '🔥', momentum: '📈', fresh: '🆕', revival: '💀', runner: '🏃',
+      custom: '⚙️',
+    };
+
+    profilesWithData.forEach((p, i) => {
+      const emoji = profileEmoji[p.profile] || '•';
+      const decided = p.winners + p.losers;
+      lines.push(
+        `${i + 1}. ${emoji} <b>${p.profile.toUpperCase()}</b>: ${p.winRate.toFixed(0)}% win (${p.winners}W/${p.losers}L)`
+      );
+      if (p.avgPriceChange24h !== 0) {
+        lines.push(`   Avg 24h: ${formatPercent(p.avgPriceChange24h)}`);
+      }
+    });
+  }
+
+  if (perfData.lastOptimized) {
+    lines.push(``);
+    lines.push(`🔧 Last optimized: ${timeAgo(perfData.lastOptimized)}`);
+  }
+
+  lines.push(``);
+  lines.push(`<i>💡 Use /filter optimize to switch to best performer</i>`);
+
+  return lines.join('\n');
+}
+
+export function formatFilterAdjustment(type: 'tighten' | 'loosen', changes: { param: string; old: any; new: any }[]): string {
+  const emoji = type === 'tighten' ? '🔒' : '🔓';
+  const action = type === 'tighten' ? 'TIGHTENED' : 'LOOSENED';
+  const desc = type === 'tighten' 
+    ? 'Made stricter (75% harder to pass)'
+    : 'Made looser (150% easier to pass)';
+
+  const lines = [
+    `${emoji} <b>FILTERS ${action}</b>`,
+    ``,
+    `<i>${desc}</i>`,
+    ``,
+    `━━━ <b>KEY CHANGES</b> ━━━`,
+  ];
+
+  // Show top 5 most significant changes
+  changes.slice(0, 5).forEach(change => {
+    lines.push(`${change.param}: ${change.old} → ${change.new}`);
+  });
+
+  if (changes.length > 5) {
+    lines.push(`<i>...and ${changes.length - 5} more</i>`);
+  }
+
+  lines.push(``);
+  lines.push(`✅ Profile switched to <b>CUSTOM</b>`);
+  lines.push(``);
+  lines.push(`Use /settings to see all current filters`);
+
+  return lines.join('\n');
 }

@@ -12,7 +12,9 @@ import type {
   BlacklistType,
   AlertPriority,
   AlertPrioritySettings,
-  TrackedWallet} from '../types';
+  TrackedWallet,
+  FilterPresetSettings,
+  SharedPreset} from '../types';
 import {
   FILTER_PRESETS,
   DEFAULT_ALERT_CATEGORIES,
@@ -230,6 +232,7 @@ class StorageService {
         watchlist: [],
         blacklist: [],
         trackedWallets: [],
+        presets: [],
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
@@ -243,6 +246,10 @@ class StorageService {
     // Ensure trackedWallets exists (migrate old settings)
     if (!settings.trackedWallets) {
       settings.trackedWallets = [];
+    }
+    // Ensure presets exists (migrate old settings)
+    if (!settings.presets) {
+      settings.presets = [];
     }
     // Ensure alertPriority exists (migrate old settings)
     if (!settings.filters.alertPriority) {
@@ -271,14 +278,30 @@ class StorageService {
       newFilters = {
         ...current.filters,
         profile: 'custom',
+        profileStack: undefined, // Clear stack when switching to custom
       };
     } else {
       newFilters = {
         ...current.filters,
         profile,
+        profileStack: undefined, // Clear stack when using single profile
         ...FILTER_PRESETS[profile],
       };
     }
+
+    this.updateUserSettings(chatId, { filters: newFilters });
+    return newFilters;
+  }
+
+  setFilterProfileStack(chatId: string, profiles: FilterProfile[], mergedConfig: Partial<FilterSettings>): FilterSettings {
+    const current = this.getUserSettings(chatId);
+    
+    const newFilters: FilterSettings = {
+      ...current.filters,
+      profile: 'custom', // Stack always uses custom profile
+      profileStack: profiles, // Store the stack
+      ...mergedConfig, // Apply merged configuration
+    };
 
     this.updateUserSettings(chatId, { filters: newFilters });
     return newFilters;
@@ -617,6 +640,431 @@ class StorageService {
   // Get wallet tracking config
   getMaxWalletsPerUser(): number {
     return MAX_WALLETS_PER_USER;
+  }
+
+  // ============================================
+  // Preset Management Methods
+  // ============================================
+
+  // Save current filters as a preset
+  savePreset(chatId: string, name: string, description?: string): FilterPresetSettings {
+    const current = this.getUserSettings(chatId);
+    
+    // Check if preset name already exists
+    const existingIndex = current.presets.findIndex(p => p.name === name);
+    
+    const preset: FilterPresetSettings = {
+      name,
+      filters: { ...current.filters },
+      createdAt: Date.now(),
+      description,
+    };
+
+    let newPresets: FilterPresetSettings[];
+    if (existingIndex >= 0) {
+      // Update existing preset
+      newPresets = [...current.presets];
+      newPresets[existingIndex] = preset;
+    } else {
+      // Add new preset
+      newPresets = [...current.presets, preset];
+    }
+
+    this.updateUserSettings(chatId, { presets: newPresets });
+    return preset;
+  }
+
+  // Load a preset by name
+  loadPreset(chatId: string, name: string): FilterSettings | null {
+    const current = this.getUserSettings(chatId);
+    const preset = current.presets.find(p => p.name === name);
+    
+    if (!preset) {
+      return null;
+    }
+
+    // Apply the preset filters
+    this.updateUserSettings(chatId, { filters: preset.filters });
+    return preset.filters;
+  }
+
+  // Delete a preset
+  deletePreset(chatId: string, name: string): boolean {
+    const current = this.getUserSettings(chatId);
+    const newPresets = current.presets.filter(p => p.name !== name);
+    
+    if (newPresets.length === current.presets.length) {
+      return false; // Preset not found
+    }
+
+    this.updateUserSettings(chatId, { presets: newPresets });
+    return true;
+  }
+
+  // Get all presets for a user
+  getPresets(chatId: string): FilterPresetSettings[] {
+    return this.getUserSettings(chatId).presets;
+  }
+
+  // Get a specific preset
+  getPreset(chatId: string, name: string): FilterPresetSettings | null {
+    const current = this.getUserSettings(chatId);
+    return current.presets.find(p => p.name === name) || null;
+  }
+
+  // Export preset as shareable base64 code
+  exportPreset(chatId: string, name: string): string | null {
+    const preset = this.getPreset(chatId, name);
+    if (!preset) {
+      return null;
+    }
+
+    // Create a shareable version (without user-specific settings)
+    const shareable: SharedPreset = {
+      name: preset.name,
+      filters: {
+        profile: preset.filters.profile,
+        minLiquidity: preset.filters.minLiquidity,
+        maxLiquidity: preset.filters.maxLiquidity,
+        maxTop10Percent: preset.filters.maxTop10Percent,
+        maxSingleHolderPercent: preset.filters.maxSingleHolderPercent,
+        minHolders: preset.filters.minHolders,
+        minRiskScore: preset.filters.minRiskScore,
+        minOpportunityScore: preset.filters.minOpportunityScore,
+        minTokenAge: preset.filters.minTokenAge,
+        maxTokenAge: preset.filters.maxTokenAge,
+        minMcap: preset.filters.minMcap,
+        maxMcap: preset.filters.maxMcap,
+        requireMintRevoked: preset.filters.requireMintRevoked,
+        requireFreezeRevoked: preset.filters.requireFreezeRevoked,
+        requireLPBurned: preset.filters.requireLPBurned,
+        lpBurnedMinPercent: preset.filters.lpBurnedMinPercent,
+        requireSocials: preset.filters.requireSocials,
+        minBondingCurve: preset.filters.minBondingCurve,
+        maxBondingCurve: preset.filters.maxBondingCurve,
+        volumeSpikeMultiplier: preset.filters.volumeSpikeMultiplier,
+        minPriceChange1h: preset.filters.minPriceChange1h,
+        maxPriceChange1h: preset.filters.maxPriceChange1h,
+        minVolume24h: preset.filters.minVolume24h,
+        fastMode: preset.filters.fastMode,
+        walletAlertMinSol: preset.filters.walletAlertMinSol,
+      },
+      description: preset.description,
+      version: 1,
+    };
+
+    // Encode as base64
+    const json = JSON.stringify(shareable);
+    return Buffer.from(json).toString('base64');
+  }
+
+  // Import preset from base64 code
+  importPreset(chatId: string, code: string): FilterPresetSettings | null {
+    try {
+      // Decode base64
+      const json = Buffer.from(code, 'base64').toString('utf-8');
+      const shareable: SharedPreset = JSON.parse(json);
+
+      // Validate version (for future compatibility)
+      if (shareable.version !== 1) {
+        throw new Error('Unsupported preset version');
+      }
+
+      // Get current user settings to merge alert settings
+      const current = this.getUserSettings(chatId);
+
+      // Create full filter settings by merging with current alert settings
+      const filters: FilterSettings = {
+        ...shareable.filters,
+        alertsEnabled: current.filters.alertsEnabled,
+        alertCategories: current.filters.alertCategories,
+        alertPriority: current.filters.alertPriority,
+        quietHoursStart: current.filters.quietHoursStart,
+        quietHoursEnd: current.filters.quietHoursEnd,
+        timezone: current.filters.timezone,
+      };
+
+      // Check if name already exists and append number if needed
+      let finalName = shareable.name;
+      let counter = 1;
+      while (current.presets.some(p => p.name === finalName)) {
+        finalName = `${shareable.name} (${counter})`;
+        counter++;
+      }
+
+      // Save as a new preset
+      return this.savePreset(chatId, finalName, shareable.description);
+    } catch (error) {
+      console.error('Failed to import preset:', error);
+      return null;
+    }
+  }
+
+  // ============================================
+  // Filter Performance Tracking
+  // ============================================
+
+  // Initialize performance data if not exists
+  private ensurePerformanceData(chatId: string): void {
+    const settings = this.getUserSettings(chatId);
+    if (!settings.filterPerformance) {
+      settings.filterPerformance = {
+        profileStats: {} as any,
+        totalTokensDetected: 0,
+        totalWinners: 0,
+        totalLosers: 0,
+      };
+      // Initialize all profile stats
+      const allProfiles: FilterProfile[] = [
+        'sniper', 'early', 'balanced', 'conservative', 'graduation', 'whale', 'degen', 'cto',
+        'micro', 'small', 'mid', 'large', 'mega',
+        'trending', 'momentum', 'fresh', 'revival', 'runner', 'custom'
+      ];
+      allProfiles.forEach(profile => {
+        settings.filterPerformance!.profileStats[profile] = {
+          profile,
+          tokensDetected: 0,
+          winners: 0,
+          losers: 0,
+          avgPriceChange24h: 0,
+          winRate: 0,
+        };
+      });
+      this.save();
+    }
+  }
+
+  // Record a token detection
+  recordTokenDetection(chatId: string, profile: FilterProfile, mint: string, symbol: string, price: number): void {
+    this.ensurePerformanceData(chatId);
+    const settings = this.getUserSettings(chatId);
+    const perf = settings.filterPerformance!;
+    
+    // Update profile stats
+    const profileStats = perf.profileStats[profile];
+    profileStats.tokensDetected++;
+    profileStats.lastUsed = Date.now();
+    
+    // Update totals
+    perf.totalTokensDetected++;
+    
+    this.save();
+  }
+
+  // Update token outcome after 24h
+  updateTokenOutcome(
+    chatId: string, 
+    profile: FilterProfile, 
+    outcome: 'winner' | 'loser' | 'neutral' | 'rugged',
+    priceChangePercent: number
+  ): void {
+    this.ensurePerformanceData(chatId);
+    const settings = this.getUserSettings(chatId);
+    const perf = settings.filterPerformance!;
+    const profileStats = perf.profileStats[profile];
+
+    // Update profile stats
+    if (outcome === 'winner') {
+      profileStats.winners++;
+      perf.totalWinners++;
+    } else if (outcome === 'loser' || outcome === 'rugged') {
+      profileStats.losers++;
+      perf.totalLosers++;
+    }
+
+    // Update average price change (running average)
+    const total = profileStats.tokensDetected;
+    const oldAvg = profileStats.avgPriceChange24h;
+    profileStats.avgPriceChange24h = ((oldAvg * (total - 1)) + priceChangePercent) / total;
+
+    // Update win rate
+    const decided = profileStats.winners + profileStats.losers;
+    profileStats.winRate = decided > 0 ? (profileStats.winners / decided) * 100 : 0;
+
+    this.save();
+  }
+
+  // Get performance data
+  getFilterPerformance(chatId: string): import('../types').FilterPerformanceData | undefined {
+    this.ensurePerformanceData(chatId);
+    return this.getUserSettings(chatId).filterPerformance;
+  }
+
+  // Get best performing profile
+  getBestProfile(chatId: string): FilterProfile | null {
+    this.ensurePerformanceData(chatId);
+    const perf = this.getFilterPerformance(chatId);
+    if (!perf) return null;
+
+    let bestProfile: FilterProfile | null = null;
+    let bestWinRate = 0;
+    const minDetections = 5; // Need at least 5 detections to be considered
+
+    Object.values(perf.profileStats).forEach(stats => {
+      const decided = stats.winners + stats.losers;
+      if (decided >= minDetections && stats.winRate > bestWinRate) {
+        bestWinRate = stats.winRate;
+        bestProfile = stats.profile;
+      }
+    });
+
+    return bestProfile;
+  }
+
+  // Reset performance data
+  resetPerformanceData(chatId: string): void {
+    const settings = this.getUserSettings(chatId);
+    delete settings.filterPerformance;
+    this.save();
+    this.ensurePerformanceData(chatId);
+  }
+
+  // Mark last optimization time
+  markOptimized(chatId: string): void {
+    this.ensurePerformanceData(chatId);
+    const settings = this.getUserSettings(chatId);
+    if (settings.filterPerformance) {
+      settings.filterPerformance.lastOptimized = Date.now();
+      this.save();
+    }
+  }
+
+  // ============================================
+  // Filter Adjustment Helpers
+  // ============================================
+
+  // Tighten filters (make stricter) - multiply numeric params by 0.75
+  tightenFilters(chatId: string): FilterSettings {
+    const current = this.getUserSettings(chatId);
+    const filters = current.filters;
+
+    const tightened: FilterSettings = {
+      ...filters,
+      profile: 'custom',
+      // Increase mins (higher threshold) - 75% harder means divide by 0.75 (multiply by 1.33)
+      minLiquidity: Math.floor(filters.minLiquidity * 1.33),
+      minHolders: Math.floor(filters.minHolders * 1.33),
+      minRiskScore: Math.min(100, Math.floor(filters.minRiskScore * 1.33)),
+      minTokenAge: Math.floor(filters.minTokenAge * 1.33),
+      // Decrease maxes (stricter) - multiply by 0.75
+      maxTop10Percent: Math.max(10, Math.floor(filters.maxTop10Percent * 0.75)),
+      maxSingleHolderPercent: filters.maxSingleHolderPercent 
+        ? Math.max(1, Math.floor(filters.maxSingleHolderPercent * 0.75)) 
+        : undefined,
+      maxTokenAge: filters.maxTokenAge 
+        ? Math.floor(filters.maxTokenAge * 0.75)
+        : undefined,
+      maxLiquidity: filters.maxLiquidity 
+        ? Math.floor(filters.maxLiquidity * 0.75)
+        : undefined,
+      maxMcap: filters.maxMcap 
+        ? Math.floor(filters.maxMcap * 0.75)
+        : undefined,
+      // Optional filters
+      minMcap: filters.minMcap 
+        ? Math.floor(filters.minMcap * 1.33)
+        : undefined,
+      minOpportunityScore: filters.minOpportunityScore
+        ? Math.min(100, Math.floor(filters.minOpportunityScore * 1.33))
+        : undefined,
+      minBondingCurve: filters.minBondingCurve
+        ? Math.min(100, Math.floor(filters.minBondingCurve * 1.33))
+        : undefined,
+      maxBondingCurve: filters.maxBondingCurve
+        ? Math.max(0, Math.floor(filters.maxBondingCurve * 0.75))
+        : undefined,
+      minVolume24h: filters.minVolume24h
+        ? Math.floor(filters.minVolume24h * 1.33)
+        : undefined,
+      volumeSpikeMultiplier: filters.volumeSpikeMultiplier
+        ? parseFloat((filters.volumeSpikeMultiplier * 1.33).toFixed(1))
+        : undefined,
+      minPriceChange1h: filters.minPriceChange1h
+        ? Math.floor(filters.minPriceChange1h * 1.33)
+        : undefined,
+      maxPriceChange1h: filters.maxPriceChange1h
+        ? Math.floor(filters.maxPriceChange1h * 0.75)
+        : undefined,
+      lpBurnedMinPercent: filters.lpBurnedMinPercent
+        ? Math.min(100, Math.floor(filters.lpBurnedMinPercent * 1.33))
+        : undefined,
+      minSmartBuys: filters.minSmartBuys
+        ? Math.floor(filters.minSmartBuys * 1.33)
+        : undefined,
+      minSmartFlow: filters.minSmartFlow
+        ? Math.floor(filters.minSmartFlow * 1.33)
+        : undefined,
+    };
+
+    this.updateUserSettings(chatId, { filters: tightened });
+    return tightened;
+  }
+
+  // Loosen filters (make less strict) - multiply numeric params by 1.5
+  loosenFilters(chatId: string): FilterSettings {
+    const current = this.getUserSettings(chatId);
+    const filters = current.filters;
+
+    const loosened: FilterSettings = {
+      ...filters,
+      profile: 'custom',
+      // Decrease mins (lower threshold) - 150% easier means divide by 1.5 (multiply by 0.67)
+      minLiquidity: Math.max(50, Math.floor(filters.minLiquidity * 0.67)),
+      minHolders: Math.max(1, Math.floor(filters.minHolders * 0.67)),
+      minRiskScore: Math.max(0, Math.floor(filters.minRiskScore * 0.67)),
+      minTokenAge: Math.max(0, Math.floor(filters.minTokenAge * 0.67)),
+      // Increase maxes (looser) - multiply by 1.5
+      maxTop10Percent: Math.min(100, Math.floor(filters.maxTop10Percent * 1.5)),
+      maxSingleHolderPercent: filters.maxSingleHolderPercent 
+        ? Math.min(100, Math.floor(filters.maxSingleHolderPercent * 1.5)) 
+        : undefined,
+      maxTokenAge: filters.maxTokenAge 
+        ? Math.floor(filters.maxTokenAge * 1.5)
+        : undefined,
+      maxLiquidity: filters.maxLiquidity 
+        ? Math.floor(filters.maxLiquidity * 1.5)
+        : undefined,
+      maxMcap: filters.maxMcap 
+        ? Math.floor(filters.maxMcap * 1.5)
+        : undefined,
+      // Optional filters
+      minMcap: filters.minMcap 
+        ? Math.max(0, Math.floor(filters.minMcap * 0.67))
+        : undefined,
+      minOpportunityScore: filters.minOpportunityScore
+        ? Math.max(0, Math.floor(filters.minOpportunityScore * 0.67))
+        : undefined,
+      minBondingCurve: filters.minBondingCurve
+        ? Math.max(0, Math.floor(filters.minBondingCurve * 0.67))
+        : undefined,
+      maxBondingCurve: filters.maxBondingCurve
+        ? Math.min(100, Math.floor(filters.maxBondingCurve * 1.5))
+        : undefined,
+      minVolume24h: filters.minVolume24h
+        ? Math.max(0, Math.floor(filters.minVolume24h * 0.67))
+        : undefined,
+      volumeSpikeMultiplier: filters.volumeSpikeMultiplier
+        ? Math.max(1, parseFloat((filters.volumeSpikeMultiplier * 0.67).toFixed(1)))
+        : undefined,
+      minPriceChange1h: filters.minPriceChange1h
+        ? Math.floor(filters.minPriceChange1h * 0.67)
+        : undefined,
+      maxPriceChange1h: filters.maxPriceChange1h
+        ? Math.floor(filters.maxPriceChange1h * 1.5)
+        : undefined,
+      lpBurnedMinPercent: filters.lpBurnedMinPercent
+        ? Math.max(0, Math.floor(filters.lpBurnedMinPercent * 0.67))
+        : undefined,
+      minSmartBuys: filters.minSmartBuys
+        ? Math.max(1, Math.floor(filters.minSmartBuys * 0.67))
+        : undefined,
+      minSmartFlow: filters.minSmartFlow
+        ? Math.max(0, Math.floor(filters.minSmartFlow * 0.67))
+        : undefined,
+    };
+
+    this.updateUserSettings(chatId, { filters: loosened });
+    return loosened;
   }
 }
 

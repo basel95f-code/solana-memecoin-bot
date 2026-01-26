@@ -92,6 +92,29 @@ export function shouldAlert(analysis: TokenAnalysis, chatId: string): boolean {
     }
   }
 
+  // Smart money filters
+  if (filters.requireSmartMoney && !analysis.smartMoney) {
+    // Require smart money data but none available
+    return false;
+  }
+
+  if (analysis.smartMoney) {
+    // Check minimum smart money buys
+    if (filters.minSmartBuys !== undefined && analysis.smartMoney.smartBuys24h < filters.minSmartBuys) {
+      return false;
+    }
+
+    // Check minimum smart money flow (net buys - sells)
+    if (filters.minSmartFlow !== undefined && analysis.smartMoney.netSmartMoney < filters.minSmartFlow) {
+      return false;
+    }
+
+    // If requireSmartMoney is true, ensure it's actually bullish
+    if (filters.requireSmartMoney && !analysis.smartMoney.isSmartMoneyBullish) {
+      return false;
+    }
+  }
+
   return true;
 }
 

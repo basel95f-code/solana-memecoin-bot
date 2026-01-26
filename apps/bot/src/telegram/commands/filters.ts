@@ -1,7 +1,7 @@
 import type { Context, Telegraf } from 'telegraf';
 import { storageService } from '../../services/storage';
 import { filterProfileKeyboard, settingsKeyboard } from '../keyboards';
-import { formatSettings, formatFilterProfile } from '../formatters';
+import { formatSettings, formatFilterProfile, formatFilterStats, formatFilterAdjustment, formatPercent } from '../formatters';
 import type { FilterProfile, FilterSettings } from '../../types';
 
 // All available profiles organized by category
@@ -61,7 +61,7 @@ const SETTABLE_PARAMS: Record<string, { key: keyof FilterSettings; parse: (v: st
 };
 
 export function registerFilterCommands(bot: Telegraf): void {
-  // /filter command
+  // /filter command with subcommands
   bot.command('filter', async (ctx: Context) => {
     const chatId = ctx.chat?.id.toString();
     if (!chatId) return;
@@ -81,11 +81,122 @@ export function registerFilterCommands(bot: Telegraf): void {
       return;
     }
 
-    const profile = args[0].toLowerCase() as FilterProfile;
+    const subcommand = args[0].toLowerCase();
+
+    // Handle subcommands
+    if (subcommand === 'tighten') {
+      const oldFilters = storageService.getUserSettings(chatId).filters;
+      const newFilters = storageService.tightenFilters(chatId);
+
+      // Track significant changes
+      const changes: { param: string; old: any; new: any }[] = [];
+      if (oldFilters.minLiquidity !== newFilters.minLiquidity) {
+        changes.push({ param: 'Min Liquidity', old: `$${oldFilters.minLiquidity}`, new: `$${newFilters.minLiquidity}` });
+      }
+      if (oldFilters.maxTop10Percent !== newFilters.maxTop10Percent) {
+        changes.push({ param: 'Max Top 10%', old: `${oldFilters.maxTop10Percent}%`, new: `${newFilters.maxTop10Percent}%` });
+      }
+      if (oldFilters.minRiskScore !== newFilters.minRiskScore) {
+        changes.push({ param: 'Min Risk Score', old: oldFilters.minRiskScore, new: newFilters.minRiskScore });
+      }
+      if (oldFilters.minHolders !== newFilters.minHolders) {
+        changes.push({ param: 'Min Holders', old: oldFilters.minHolders, new: newFilters.minHolders });
+      }
+      if (oldFilters.minTokenAge !== newFilters.minTokenAge) {
+        changes.push({ param: 'Min Token Age', old: `${Math.floor(oldFilters.minTokenAge / 60)}m`, new: `${Math.floor(newFilters.minTokenAge / 60)}m` });
+      }
+
+      const formatted = formatFilterAdjustment('tighten', changes);
+      await ctx.replyWithHTML(formatted);
+      return;
+    }
+
+    if (subcommand === 'loosen') {
+      const oldFilters = storageService.getUserSettings(chatId).filters;
+      const newFilters = storageService.loosenFilters(chatId);
+
+      // Track significant changes
+      const changes: { param: string; old: any; new: any }[] = [];
+      if (oldFilters.minLiquidity !== newFilters.minLiquidity) {
+        changes.push({ param: 'Min Liquidity', old: `$${oldFilters.minLiquidity}`, new: `$${newFilters.minLiquidity}` });
+      }
+      if (oldFilters.maxTop10Percent !== newFilters.maxTop10Percent) {
+        changes.push({ param: 'Max Top 10%', old: `${oldFilters.maxTop10Percent}%`, new: `${newFilters.maxTop10Percent}%` });
+      }
+      if (oldFilters.minRiskScore !== newFilters.minRiskScore) {
+        changes.push({ param: 'Min Risk Score', old: oldFilters.minRiskScore, new: newFilters.minRiskScore });
+      }
+      if (oldFilters.minHolders !== newFilters.minHolders) {
+        changes.push({ param: 'Min Holders', old: oldFilters.minHolders, new: newFilters.minHolders });
+      }
+      if (oldFilters.minTokenAge !== newFilters.minTokenAge) {
+        changes.push({ param: 'Min Token Age', old: `${Math.floor(oldFilters.minTokenAge / 60)}m`, new: `${Math.floor(newFilters.minTokenAge / 60)}m` });
+      }
+
+      const formatted = formatFilterAdjustment('loosen', changes);
+      await ctx.replyWithHTML(formatted);
+      return;
+    }
+
+    if (subcommand === 'stats') {
+      const perfData = storageService.getFilterPerformance(chatId);
+      const formatted = formatFilterStats(perfData);
+      await ctx.replyWithHTML(formatted);
+      return;
+    }
+
+    if (subcommand === 'optimize') {
+      const bestProfile = storageService.getBestProfile(chatId);
+
+      if (!bestProfile) {
+        await ctx.replyWithHTML(
+          `❌ <b>OPTIMIZATION NOT AVAILABLE</b>\n\n` +
+          `Not enough performance data yet.\n\n` +
+          `Each profile needs at least 5 outcomes (winners/losers) to be considered.\n\n` +
+          `Keep using the bot to build stats, then try again!`
+        );
+        return;
+      }
+
+      const perfData = storageService.getFilterPerformance(chatId);
+      const profileStats = perfData?.profileStats[bestProfile];
+
+      if (!profileStats) {
+        await ctx.replyWithHTML(`❌ Error loading profile stats`);
+        return;
+      }
+
+      // Switch to best profile
+      storageService.setFilterProfile(chatId, bestProfile);
+      storageService.markOptimized(chatId);
+
+      const emoji = PROFILE_INFO[bestProfile]?.emoji || '🏆';
+
+      await ctx.replyWithHTML(
+        `${emoji} <b>OPTIMIZED!</b>\n\n` +
+        `Switched to <b>${bestProfile.toUpperCase()}</b> profile\n\n` +
+        `━━━ <b>PERFORMANCE</b> ━━━\n` +
+        `🏆 Win Rate: ${profileStats.winRate.toFixed(0)}%\n` +
+        `✅ Winners: ${profileStats.winners}\n` +
+        `❌ Losers: ${profileStats.losers}\n` +
+        `📊 Avg 24h Change: ${formatPercent(profileStats.avgPriceChange24h)}\n\n` +
+        `<i>This profile has the best track record!</i>`
+      );
+      return;
+    }
+
+    // Otherwise, treat as profile name
+    const profile = subcommand as FilterProfile;
 
     if (!ALL_PROFILES.includes(profile)) {
       // Build help message with all profiles by category
-      let helpMsg = `Unknown profile: <code>${args[0]}</code>\n\n`;
+      let helpMsg = `Unknown command or profile: <code>${subcommand}</code>\n\n`;
+
+      helpMsg += `<b>📂 Filter Commands:</b>\n`;
+      helpMsg += `• <code>/filter tighten</code> - Make filters 75% stricter\n`;
+      helpMsg += `• <code>/filter loosen</code> - Make filters 150% looser\n`;
+      helpMsg += `• <code>/filter stats</code> - Show performance tracking\n`;
+      helpMsg += `• <code>/filter optimize</code> - Switch to best performer\n\n`;
 
       helpMsg += `<b>🎯 Risk Profiles:</b>\n`;
       RISK_PROFILES.forEach(p => {
@@ -105,7 +216,7 @@ export function registerFilterCommands(bot: Telegraf): void {
         helpMsg += `${info.emoji} <code>${p}</code> - ${info.desc}\n`;
       });
 
-      helpMsg += `\nUsage: <code>/filter [profile]</code>`;
+      helpMsg += `\nUsage: <code>/filter [profile|command]</code>`;
 
       await ctx.replyWithHTML(helpMsg);
       return;

@@ -14,7 +14,9 @@ import type {
   AlertPrioritySettings,
   TrackedWallet,
   MonitoredChannel,
-  SentimentChannelConfig} from '../types';
+  SentimentChannelConfig,
+  FilterPresetSettings,
+  SharedPreset} from '../types';
 import {
   FILTER_PRESETS,
   DEFAULT_ALERT_CATEGORIES,
@@ -232,6 +234,7 @@ class StorageService {
         watchlist: [],
         blacklist: [],
         trackedWallets: [],
+        presets: [],
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
@@ -245,6 +248,10 @@ class StorageService {
     // Ensure trackedWallets exists (migrate old settings)
     if (!settings.trackedWallets) {
       settings.trackedWallets = [];
+    }
+    // Ensure presets exists (migrate old settings)
+    if (!settings.presets) {
+      settings.presets = [];
     }
     // Ensure alertPriority exists (migrate old settings)
     if (!settings.filters.alertPriority) {
@@ -705,6 +712,164 @@ class StorageService {
 
     this.updateUserSettings(chatId, { sentimentChannels: channels });
     return channels;
+  }
+
+  // ============================================
+  // Preset Management Methods
+  // ============================================
+
+  // Save current filters as a preset
+  savePreset(chatId: string, name: string, description?: string): FilterPresetSettings {
+    const current = this.getUserSettings(chatId);
+    
+    // Check if preset name already exists
+    const existingIndex = current.presets.findIndex(p => p.name === name);
+    
+    const preset: FilterPresetSettings = {
+      name,
+      filters: { ...current.filters },
+      createdAt: Date.now(),
+      description,
+    };
+
+    let newPresets: FilterPresetSettings[];
+    if (existingIndex >= 0) {
+      // Update existing preset
+      newPresets = [...current.presets];
+      newPresets[existingIndex] = preset;
+    } else {
+      // Add new preset
+      newPresets = [...current.presets, preset];
+    }
+
+    this.updateUserSettings(chatId, { presets: newPresets });
+    return preset;
+  }
+
+  // Load a preset by name
+  loadPreset(chatId: string, name: string): FilterSettings | null {
+    const current = this.getUserSettings(chatId);
+    const preset = current.presets.find(p => p.name === name);
+    
+    if (!preset) {
+      return null;
+    }
+
+    // Apply the preset filters
+    this.updateUserSettings(chatId, { filters: preset.filters });
+    return preset.filters;
+  }
+
+  // Delete a preset
+  deletePreset(chatId: string, name: string): boolean {
+    const current = this.getUserSettings(chatId);
+    const newPresets = current.presets.filter(p => p.name !== name);
+    
+    if (newPresets.length === current.presets.length) {
+      return false; // Preset not found
+    }
+
+    this.updateUserSettings(chatId, { presets: newPresets });
+    return true;
+  }
+
+  // Get all presets for a user
+  getPresets(chatId: string): FilterPresetSettings[] {
+    return this.getUserSettings(chatId).presets;
+  }
+
+  // Get a specific preset
+  getPreset(chatId: string, name: string): FilterPresetSettings | null {
+    const current = this.getUserSettings(chatId);
+    return current.presets.find(p => p.name === name) || null;
+  }
+
+  // Export preset as shareable base64 code
+  exportPreset(chatId: string, name: string): string | null {
+    const preset = this.getPreset(chatId, name);
+    if (!preset) {
+      return null;
+    }
+
+    // Create a shareable version (without user-specific settings)
+    const shareable: SharedPreset = {
+      name: preset.name,
+      filters: {
+        profile: preset.filters.profile,
+        minLiquidity: preset.filters.minLiquidity,
+        maxLiquidity: preset.filters.maxLiquidity,
+        maxTop10Percent: preset.filters.maxTop10Percent,
+        maxSingleHolderPercent: preset.filters.maxSingleHolderPercent,
+        minHolders: preset.filters.minHolders,
+        minRiskScore: preset.filters.minRiskScore,
+        minOpportunityScore: preset.filters.minOpportunityScore,
+        minTokenAge: preset.filters.minTokenAge,
+        maxTokenAge: preset.filters.maxTokenAge,
+        minMcap: preset.filters.minMcap,
+        maxMcap: preset.filters.maxMcap,
+        requireMintRevoked: preset.filters.requireMintRevoked,
+        requireFreezeRevoked: preset.filters.requireFreezeRevoked,
+        requireLPBurned: preset.filters.requireLPBurned,
+        lpBurnedMinPercent: preset.filters.lpBurnedMinPercent,
+        requireSocials: preset.filters.requireSocials,
+        minBondingCurve: preset.filters.minBondingCurve,
+        maxBondingCurve: preset.filters.maxBondingCurve,
+        volumeSpikeMultiplier: preset.filters.volumeSpikeMultiplier,
+        minPriceChange1h: preset.filters.minPriceChange1h,
+        maxPriceChange1h: preset.filters.maxPriceChange1h,
+        minVolume24h: preset.filters.minVolume24h,
+        fastMode: preset.filters.fastMode,
+        walletAlertMinSol: preset.filters.walletAlertMinSol,
+      },
+      description: preset.description,
+      version: 1,
+    };
+
+    // Encode as base64
+    const json = JSON.stringify(shareable);
+    return Buffer.from(json).toString('base64');
+  }
+
+  // Import preset from base64 code
+  importPreset(chatId: string, code: string): FilterPresetSettings | null {
+    try {
+      // Decode base64
+      const json = Buffer.from(code, 'base64').toString('utf-8');
+      const shareable: SharedPreset = JSON.parse(json);
+
+      // Validate version (for future compatibility)
+      if (shareable.version !== 1) {
+        throw new Error('Unsupported preset version');
+      }
+
+      // Get current user settings to merge alert settings
+      const current = this.getUserSettings(chatId);
+
+      // Create full filter settings by merging with current alert settings
+      const filters: FilterSettings = {
+        ...shareable.filters,
+        alertsEnabled: current.filters.alertsEnabled,
+        alertCategories: current.filters.alertCategories,
+        alertPriority: current.filters.alertPriority,
+        quietHoursStart: current.filters.quietHoursStart,
+        quietHoursEnd: current.filters.quietHoursEnd,
+        timezone: current.filters.timezone,
+      };
+
+      // Check if name already exists and append number if needed
+      let finalName = shareable.name;
+      let counter = 1;
+      while (current.presets.some(p => p.name === finalName)) {
+        finalName = `${shareable.name} (${counter})`;
+        counter++;
+      }
+
+      // Save as a new preset
+      return this.savePreset(chatId, finalName, shareable.description);
+    } catch (error) {
+      console.error('Failed to import preset:', error);
+      return null;
+    }
   }
 }
 
