@@ -230,7 +230,7 @@ class WhaleBehaviorModel {
 
     try {
       // Extract features from wallet profile
-      const features = this.extractWhaleFea tures(input);
+      const features = this.extractWhaleFeatures(input);
 
       // Predict action probabilities
       const inputTensor = tf.tensor2d([features]);

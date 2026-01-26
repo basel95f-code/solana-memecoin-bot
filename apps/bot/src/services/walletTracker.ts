@@ -426,7 +426,7 @@ export class WalletTracker {
 
     // Profit calculations
     const profitableSells = sells.filter(t => (t.profit_percent || 0) > 0);
-    const losingS sells = sells.filter(t => (t.profit_percent || 0) <= 0);
+    const losingSells = sells.filter(t => (t.profit_percent || 0) <= 0);
     const winning_trades = profitableSells.length;
     const losing_trades = losingSells.length;
     const win_rate = sells.length > 0 ? (winning_trades / sells.length) * 100 : 0;

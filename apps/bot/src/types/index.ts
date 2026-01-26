@@ -198,6 +198,8 @@ export interface BotConfig {
     raydium: MonitorConfig;
     pumpfun: MonitorConfig;
     jupiter: MonitorConfig;
+    meteora?: MonitorConfig;
+    orca?: MonitorConfig;
   };
   maxRequestsPerMinute: number;
 }

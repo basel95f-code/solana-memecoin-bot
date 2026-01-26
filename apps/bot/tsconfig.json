@@ -19,5 +19,11 @@
   "exclude": ["node_modules", "dist"],
   "references": [
     { "path": "../../packages/shared" }
-  ]
+  ],
+  "ts-node": {
+    "esm": false,
+    "compilerOptions": {
+      "module": "commonjs"
+    }
+  }
 }

@@ -12,7 +12,7 @@ import { exec } from 'child_process';
 
 const execAsync = promisify(exec);
 
-interface BackupInfo {
+export interface BackupInfo {
   filename: string;
   path: string;
   sizeBytes: number;

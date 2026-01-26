@@ -3,7 +3,7 @@
  * Track Twitter KOLs (Key Opinion Leaders) and their token calls
  */
 
-import { SupabaseDB } from '../database/supabase-db';
+import { supabaseDb } from '../database/supabase-db';
 import { sentimentAnalyzer } from './sentimentAnalyzer';
 import { logger } from '../utils/logger';
 
@@ -60,7 +60,7 @@ export interface InfluencerStats {
 }
 
 export class InfluencerTracker {
-  constructor(private db: SupabaseDB) {}
+  constructor(private db: typeof supabaseDb) {}
 
   /**
    * Add or update an influencer

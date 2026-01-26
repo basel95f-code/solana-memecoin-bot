@@ -3,10 +3,10 @@
  */
 
 import type { Context, Telegraf } from 'telegraf';
-import type { SupabaseDB } from '../../database/supabase-db';
+import type { supabaseDb } from '../../database/supabase-db';
 import { logger } from '../../utils/logger';
 
-export function registerTwitterCommand(bot: Telegraf, db: SupabaseDB): void {
+export function registerTwitterCommand(bot: Telegraf, db: typeof supabaseDb): void {
   bot.command('twitter', async (ctx: Context) => {
     const text = ctx.message && 'text' in ctx.message ? ctx.message.text : '';
     const args = text.split(' ').slice(1);

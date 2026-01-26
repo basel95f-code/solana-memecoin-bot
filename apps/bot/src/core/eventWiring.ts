@@ -156,12 +156,12 @@ function setupLiquidityMonitorListeners(): void {
       apiServer.addAlert({
         type: 'liquidity_' + alert.type,
         title: alert.type.toUpperCase().replace('_', ' '),
-        description: \\ - \\,
-        emoji: emojiMap[alert.type] || '??',
+        description: `${alert.symbol} - ${alert.message}`,
+        emoji: emojiMap[alert.type] || '⚠️',
         timestamp: Date.now(),
       });
 
-      logger.info('LiquidityMonitor', \Alert sent: \ for \\);
+      logger.info('LiquidityMonitor', `Alert sent: ${alert.type} for ${alert.symbol}`);
     } catch (error) {
       logger.error('LiquidityMonitor', 'Error sending liquidity alert', toError(error));
     }
@@ -182,21 +182,21 @@ function setupDevWalletTrackerListeners(): void {
 
       // Add to dashboard
       const emojiMap = {
-        first_sell: '??',
-        large_dump: '??',
-        rapid_selling: '?',
-        complete_exit: '??',
+        first_sell: '⚠️',
+        large_dump: '🚨',
+        rapid_selling: '📉',
+        complete_exit: '💀',
       };
 
       apiServer.addAlert({
         type: 'dev_' + alert.type,
         title: alert.type.toUpperCase().replace('_', ' '),
-        description: \\ - \\,
-        emoji: emojiMap[alert.type] || '??',
+        description: `${alert.symbol} - ${alert.message}`,
+        emoji: emojiMap[alert.type] || '⚠️',
         timestamp: Date.now(),
       });
 
-      logger.info('DevWalletTracker', \Alert sent: \ for \\);
+      logger.info('DevWalletTracker', `Alert sent: ${alert.type} for ${alert.symbol}`);
     } catch (error) {
       logger.error('DevWalletTracker', 'Error sending dev behavior alert', toError(error));
     }
@@ -219,12 +219,12 @@ function setupBundledWalletDetectorListeners(): void {
       apiServer.addAlert({
         type: 'bundled_wallets',
         title: 'BUNDLED WALLETS',
-        description: \\ - \\,
-        emoji: alert.severity === 'critical' ? '??' : '??',
+        description: `${alert.symbol} - ${alert.message}`,
+        emoji: alert.severity === 'critical' ? '🚨' : '⚠️',
         timestamp: Date.now(),
       });
 
-      logger.warn('BundledWalletDetector', \Alert sent: \ - \\);
+      logger.warn('BundledWalletDetector', `Alert sent: ${alert.type} - ${alert.symbol}`);
     } catch (error) {
       logger.error('BundledWalletDetector', 'Error sending bundle alert', toError(error));
     }
@@ -245,22 +245,22 @@ function setupTopHolderTrackerListeners(): void {
 
       // Add to dashboard
       const emojiMap = {
-        whale_accumulation: '????',
-        whale_dump: '????',
-        new_whale: '??',
-        whale_exit: '??',
-        rank_change: '??',
+        whale_accumulation: '🐋💎',
+        whale_dump: '🐋💀',
+        new_whale: '🐋',
+        whale_exit: '👋',
+        rank_change: '📊',
       };
 
       apiServer.addAlert({
         type: 'holder_' + alert.type,
         title: alert.type.toUpperCase().replace('_', ' '),
-        description: \\ - \\,
-        emoji: emojiMap[alert.type] || '??',
+        description: `${alert.symbol} - ${alert.message}`,
+        emoji: emojiMap[alert.type] || '📊',
         timestamp: Date.now(),
       });
 
-      logger.info('TopHolderTracker', \Alert sent: \ for \\);
+      logger.info('TopHolderTracker', `Alert sent: ${alert.type} for ${alert.symbol}`);
     } catch (error) {
       logger.error('TopHolderTracker', 'Error sending holder change alert', toError(error));
     }

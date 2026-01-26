@@ -885,10 +885,10 @@ export function formatTrainingHistory(runs: Array<{
 
 export function formatLiquidityAlert(alert: LiquidityAlert): string {
   const emojiMap = {
-    drain: alert.severity === 'critical' ? '??' : '??',
-    unlock: '??',
-    burn_change: '??',
-    locker_expiry: '?',
+    drain: alert.severity === 'critical' ? '🚨' : '⚠️',
+    unlock: '🔓',
+    burn_change: '🔥',
+    locker_expiry: '⏰',
   };
 
   const emoji = emojiMap[alert.type];
@@ -898,34 +898,34 @@ export function formatLiquidityAlert(alert: LiquidityAlert): string {
                 'LOCKER EXPIRY';
 
   const lines = [
-    \\ <b>\</b>\,
-    \\,
-    \<b>\</b>\,
+    `${emoji} <b>${title}</b>`,
+    ``,
+    `<b>${alert.symbol}</b>`,
     alert.message,
   ];
 
   // Add details
   if (alert.details.percentChange) {
     const change = alert.details.percentChange;
-    lines.push(\Change: \\%\);
+    lines.push(`Change: ${formatPercent(change)}`);
   }
 
   if (alert.details.drainedUsd) {
-    lines.push(\Drained: $\\);
+    lines.push(`Drained: $${formatNumber(alert.details.drainedUsd)}`);
   }
 
   if (alert.details.before.liquidityUsd && alert.details.after.liquidityUsd) {
-    lines.push(\\);
-    lines.push(\Before: $\\);
-    lines.push(\After: $\\);
+    lines.push(``);
+    lines.push(`Before: $${formatNumber(alert.details.before.liquidityUsd)}`);
+    lines.push(`After: $${formatNumber(alert.details.after.liquidityUsd)}`);
   }
 
-  lines.push(\\);
-  lines.push(\<code>\</code>\);
+  lines.push(``);
+  lines.push(`<code>${alert.tokenMint}</code>`);
 
   if (alert.severity === 'critical') {
-    lines.push(\\);
-    lines.push(\? <b>CRITICAL - Consider selling immediately</b>\);
+    lines.push(``);
+    lines.push(`🚨 <b>CRITICAL - Consider selling immediately</b>`);
   }
 
   return lines.join('\n');
@@ -939,42 +939,42 @@ export function formatLiquidityAlert(alert: LiquidityAlert): string {
 
 export function formatDevBehaviorAlert(alert: { type: string; severity: string; symbol: string; devAddress: string; message: string; details: any }): string {
   const emojiMap: Record<string, string> = {
-    first_sell: '??',
-    large_dump: '??',
-    rapid_selling: '?',
-    complete_exit: '??',
+    first_sell: '⚠️',
+    large_dump: '🚨',
+    rapid_selling: '📉',
+    complete_exit: '💀',
   };
 
-  const emoji = emojiMap[alert.type] || '??';
+  const emoji = emojiMap[alert.type] || '⚠️';
   const title = alert.type === 'first_sell' ? 'DEV FIRST SELL' :
                 alert.type === 'large_dump' ? 'DEV DUMP' :
                 alert.type === 'rapid_selling' ? 'RAPID SELLING' :
                 'DEV EXIT';
 
   const lines = [
-    \\ <b>\</b>\,
-    \\,
-    \<b>\</b>\,
+    `${emoji} <b>${title}</b>`,
+    ``,
+    `<b>${alert.symbol}</b>`,
     alert.message,
-    \\,
-    \Dev: <code>\...\</code>\,
+    ``,
+    `Dev: <code>${truncateAddress(alert.devAddress)}</code>`,
   ];
 
   if (alert.details.soldPercent !== undefined) {
-    lines.push(\Sold: \%\);
+    lines.push(`Sold: ${alert.details.soldPercent.toFixed(1)}%`);
   }
 
   if (alert.details.currentHolding !== undefined) {
-    lines.push(\Remaining: \%\);
+    lines.push(`Remaining: ${alert.details.currentHolding.toFixed(1)}%`);
   }
 
   if (alert.details.sellCount !== undefined) {
-    lines.push(\Sell count: \\);
+    lines.push(`Sell count: ${alert.details.sellCount}`);
   }
 
   if (alert.severity === 'critical') {
-    lines.push(\\);
-    lines.push(\? <b>CRITICAL - High rug risk</b>\);
+    lines.push(``);
+    lines.push(`🚨 <b>CRITICAL - High rug risk</b>`);
   }
 
   return lines.join('\n');
@@ -987,40 +987,40 @@ export function formatDevBehaviorAlert(alert: { type: string; severity: string; 
 // -------------------------------------------
 
 export function formatBundleAlert(alert: { type: string; severity: string; symbol: string; message: string; details: any }): string {
-  const emoji = alert.severity === 'critical' ? '??' : '??';
+  const emoji = alert.severity === 'critical' ? '🚨' : '⚠️';
   const title = 'BUNDLED WALLETS DETECTED';
 
   const lines = [
-    \\ <b>\</b>\,
-    \\,
-    \<b>\</b>\,
+    `${emoji} <b>${title}</b>`,
+    ``,
+    `<b>${alert.symbol}</b>`,
     alert.message,
-    \\,
+    ``,
   ];
 
   if (alert.details.walletsInBundle) {
-    lines.push(\Wallets in bundle: \\);
+    lines.push(`Wallets in bundle: ${alert.details.walletsInBundle}`);
   }
 
   if (alert.details.totalPercent) {
-    lines.push(\Total held: \%\);
+    lines.push(`Total held: ${alert.details.totalPercent.toFixed(1)}%`);
   }
 
   if (alert.details.creationSlot) {
-    lines.push(\Creation slot: \\);
+    lines.push(`Creation slot: ${alert.details.creationSlot}`);
   }
 
   if (alert.details.fundingSource) {
-    lines.push(\\);
-    lines.push(\Funding source: <code>\...</code>\);
+    lines.push(``);
+    lines.push(`Funding source: <code>${truncateAddress(alert.details.fundingSource)}</code>`);
   }
 
   if (alert.severity === 'critical') {
-    lines.push(\\);
-    lines.push(\? <b>CRITICAL - Possible Sybil attack</b>\);
+    lines.push(``);
+    lines.push(`🚨 <b>CRITICAL - Possible Sybil attack</b>`);
   } else {
-    lines.push(\\);
-    lines.push(\?? Suspicious wallet creation pattern - proceed with caution\);
+    lines.push(``);
+    lines.push(`⚠️ Suspicious wallet creation pattern - proceed with caution`);
   }
 
   return lines.join('\n');
@@ -1034,14 +1034,14 @@ export function formatBundleAlert(alert: { type: string; severity: string; symbo
 
 export function formatHolderChangeAlert(alert: { type: string; severity: string; symbol: string; walletAddress: string; message: string; details: any }): string {
   const emojiMap: Record<string, string> = {
-    whale_accumulation: '????',
-    whale_dump: '????',
-    new_whale: '??',
-    whale_exit: '??',
-    rank_change: '??',
+    whale_accumulation: '🐋💎',
+    whale_dump: '🐋💀',
+    new_whale: '🐋',
+    whale_exit: '👋',
+    rank_change: '📊',
   };
 
-  const emoji = emojiMap[alert.type] || '??';
+  const emoji = emojiMap[alert.type] || '📊';
   const title = alert.type === 'whale_accumulation' ? 'WHALE ACCUMULATION' :
                 alert.type === 'whale_dump' ? 'WHALE DUMP' :
                 alert.type === 'new_whale' ? 'NEW WHALE' :
@@ -1049,32 +1049,32 @@ export function formatHolderChangeAlert(alert: { type: string; severity: string;
                 'RANK CHANGE';
 
   const lines = [
-    \\ <b>\</b>\,
-    \\,
-    \<b>\</b>\,
+    `${emoji} <b>${title}</b>`,
+    ``,
+    `<b>${alert.symbol}</b>`,
     alert.message,
-    \\,
-    \Wallet: <code>\...\</code>\,
+    ``,
+    `Wallet: <code>${truncateAddress(alert.walletAddress)}</code>`,
   ];
 
   if (alert.details.oldPercent !== undefined && alert.details.newPercent !== undefined) {
-    lines.push(\Position: \% ? \%\);
+    lines.push(`Position: ${alert.details.oldPercent.toFixed(1)}% → ${alert.details.newPercent.toFixed(1)}%`);
   } else if (alert.details.newPercent !== undefined) {
-    lines.push(\Position: \%\);
+    lines.push(`Position: ${alert.details.newPercent.toFixed(1)}%`);
   }
 
   if (alert.details.oldRank !== undefined && alert.details.newRank !== undefined) {
-    lines.push(\Rank: #\ ? #\\);
+    lines.push(`Rank: #${alert.details.oldRank} → #${alert.details.newRank}`);
   } else if (alert.details.newRank !== undefined) {
-    lines.push(\Rank: #\\);
+    lines.push(`Rank: #${alert.details.newRank}`);
   }
 
   if (alert.severity === 'critical') {
-    lines.push(\\);
-    lines.push(\?? <b>Large dump detected - consider selling</b>\);
+    lines.push(``);
+    lines.push(`🚨 <b>Large dump detected - consider selling</b>`);
   } else if (alert.type === 'whale_accumulation' && alert.details.percentChange > 3) {
-    lines.push(\\);
-    lines.push(\?? Whale loading up - bullish signal\);
+    lines.push(``);
+    lines.push(`💎 Whale loading up - bullish signal`);
   }
 
   return lines.join('\n');
@@ -1096,32 +1096,32 @@ export function formatPatternAnalysis(
 
   const lines = [
     '',
-    '<b>? Pattern Analysis</b>',
+    '<b>📊 Pattern Analysis</b>',
   ];
 
   // Top matches
   for (const match of matches.slice(0, 3)) {
-    const emoji = match.patternType === 'success' ? '?' : '??';
+    const emoji = match.patternType === 'success' ? '🚀' : '💀';
     lines.push(
-      ${emoji}  (% match, % success)
+      `${emoji} ${match.patternName} (${(match.matchScore * 100).toFixed(0)}% match, ${(match.successRate * 100).toFixed(0)}% success)`
     );
   }
 
   // Prediction
   lines.push('');
-  const predEmoji = prediction.predictedOutcome === 'success' ? '??' : 
-                    prediction.predictedOutcome === 'rug' ? '??' : '?';
-  lines.push(${predEmoji} Prediction: % success probability);
+  const predEmoji = prediction.predictedOutcome === 'success' ? '🎯' :
+                    prediction.predictedOutcome === 'rug' ? '🚨' : '⚪';
+  lines.push(`${predEmoji} Prediction: ${(prediction.successProbability * 100).toFixed(0)}% success probability`);
 
   // Similar tokens
   if (similarTokens && similarTokens.length > 0) {
     lines.push('');
-    lines.push('?? Similar Successful Tokens:');
+    lines.push('💎 Similar Successful Tokens:');
     for (const token of similarTokens.slice(0, 2)) {
-      const multiplier = token.max_price && token.initial_price 
-        ? (token.max_price / token.initial_price).toFixed(1) 
+      const multiplier = token.max_price && token.initial_price
+        ? (token.max_price / token.initial_price).toFixed(1)
         : '?';
-      lines.push(  �  (x peak) - % similar);
+      lines.push(`  • ${token.symbol || token.name} (${multiplier}x peak) - ${(token.similarity * 100).toFixed(0)}% similar`);
     }
   }
 

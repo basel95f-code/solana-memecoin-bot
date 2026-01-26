@@ -37,9 +37,9 @@ import { registerCopyTradingCommands } from './copytrading';
 import { registerTwitterCommand } from './twitter';
 import { registerInfluencersCommand } from './influencers';
 import { registerSocialStatsCommand } from './social_stats';
-import type { SupabaseDB } from '../../database/supabase-db';
+import type { supabaseDb } from '../../database/supabase-db';
 
-export function registerAllCommands(bot: Telegraf, db?: SupabaseDB): void {
+export function registerAllCommands(bot: Telegraf, db?: typeof supabaseDb): void {
   // Register all command handlers
   registerGroupSetupCommand(bot);
   registerTopicSetupCommands(bot);

@@ -21,14 +21,23 @@ class TopicManagerService {
   async getTopicConfig(chatId: string, topicId: number): Promise<TopicConfig | null> {
     try {
       const db = database.getDb();
-      const row = db.prepare(`
+      if (!db) return null;
+
+      const result = db.exec(`
         SELECT * FROM topic_configs
         WHERE chat_id = ? AND topic_id = ?
-      `).get(chatId, topicId);
+      `, [chatId, topicId]);
 
-      if (!row) {
+      if (result.length === 0 || result[0].values.length === 0) {
         return null;
       }
+
+      const columns = result[0].columns;
+      const values = result[0].values[0];
+      const row: any = {};
+      columns.forEach((col, i) => {
+        row[col] = values[i];
+      });
 
       return this.deserializeTopicConfig(row);
     } catch (error) {
@@ -43,13 +52,24 @@ class TopicManagerService {
   async getChatTopics(chatId: string): Promise<TopicConfig[]> {
     try {
       const db = database.getDb();
-      const rows = db.prepare(`
+      if (!db) return [];
+
+      const result = db.exec(`
         SELECT * FROM topic_configs
         WHERE chat_id = ?
         ORDER BY topic_name
-      `).all(chatId);
+      `, [chatId]);
 
-      return rows.map(row => this.deserializeTopicConfig(row));
+      if (result.length === 0) return [];
+
+      const columns = result[0].columns;
+      return result[0].values.map(values => {
+        const row: any = {};
+        columns.forEach((col, i) => {
+          row[col] = values[i];
+        });
+        return this.deserializeTopicConfig(row);
+      });
     } catch (error) {
       logger.error('TopicManager', 'Failed to get chat topics', error as Error);
       return [];
@@ -67,23 +87,25 @@ class TopicManagerService {
   ): Promise<void> {
     try {
       const db = database.getDb();
+      if (!db) throw new Error('Database not available');
+
       const now = Math.floor(Date.now() / 1000);
 
       const existing = await this.getTopicConfig(chatId, topicId);
 
       if (existing) {
         // Update existing
-        db.prepare(`
+        db.run(`
           UPDATE topic_configs
           SET mode = ?, topic_name = ?, updated_at = ?
           WHERE chat_id = ? AND topic_id = ?
-        `).run(mode, topicName, now, chatId, topicId);
+        `, [mode, topicName, now, chatId, topicId]);
       } else {
         // Create new
-        db.prepare(`
+        db.run(`
           INSERT INTO topic_configs (chat_id, topic_id, topic_name, mode, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?)
-        `).run(chatId, topicId, topicName, mode, now, now);
+        `, [chatId, topicId, topicName, mode, now, now]);
       }
 
       logger.info('TopicManager', `Set topic ${topicName} (${topicId}) to ${mode} mode in chat ${chatId}`);
@@ -103,13 +125,15 @@ class TopicManagerService {
   ): Promise<void> {
     try {
       const db = database.getDb();
+      if (!db) throw new Error('Database not available');
+
       const now = Math.floor(Date.now() / 1000);
 
-      db.prepare(`
+      db.run(`
         UPDATE topic_configs
         SET allowed_commands = ?, updated_at = ?
         WHERE chat_id = ? AND topic_id = ?
-      `).run(JSON.stringify(commands), now, chatId, topicId);
+      `, [JSON.stringify(commands), now, chatId, topicId]);
 
       logger.info('TopicManager', `Updated allowed commands for topic ${topicId} in chat ${chatId}`);
     } catch (error) {
@@ -129,30 +153,32 @@ class TopicManagerService {
   ): Promise<void> {
     try {
       const db = database.getDb();
+      if (!db) throw new Error('Database not available');
+
       const now = Math.floor(Date.now() / 1000);
 
       const existing = await this.getTopicConfig(chatId, topicId);
 
       if (existing) {
         // Update existing
-        db.prepare(`
+        db.run(`
           UPDATE topic_configs
           SET mode = ?, topic_name = ?, allowed_commands = ?, updated_at = ?
           WHERE chat_id = ? AND topic_id = ?
-        `).run(
+        `, [
           preset.mode,
           topicName,
           preset.allowedCommands ? JSON.stringify(preset.allowedCommands) : null,
           now,
           chatId,
           topicId
-        );
+        ]);
       } else {
         // Create new
-        db.prepare(`
+        db.run(`
           INSERT INTO topic_configs (chat_id, topic_id, topic_name, mode, allowed_commands, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).run(
+        `, [
           chatId,
           topicId,
           topicName,
@@ -160,7 +186,7 @@ class TopicManagerService {
           preset.allowedCommands ? JSON.stringify(preset.allowedCommands) : null,
           now,
           now
-        );
+        ]);
       }
 
       logger.info('TopicManager', `Applied preset to topic ${topicName} (${topicId}) in chat ${chatId}`);
@@ -176,10 +202,12 @@ class TopicManagerService {
   async deleteTopicConfig(chatId: string, topicId: number): Promise<void> {
     try {
       const db = database.getDb();
-      db.prepare(`
+      if (!db) throw new Error('Database not available');
+
+      db.run(`
         DELETE FROM topic_configs
         WHERE chat_id = ? AND topic_id = ?
-      `).run(chatId, topicId);
+      `, [chatId, topicId]);
 
       logger.info('TopicManager', `Deleted topic config for topic ${topicId} in chat ${chatId}`);
     } catch (error) {

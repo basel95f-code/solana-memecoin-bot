@@ -4,7 +4,7 @@
  * Uses Twitter API v2 (requires Bearer Token)
  */
 
-import { SupabaseDB } from '../database/supabase-db';
+import { supabaseDb } from '../database/supabase-db';
 import { sentimentAnalyzer, SentimentResult } from './sentimentAnalyzer';
 import { InfluencerTracker } from './influencerTracker';
 import { logger } from '../utils/logger';
@@ -93,7 +93,7 @@ export class TwitterMonitor {
   ];
 
   constructor(
-    private db: SupabaseDB,
+    private db: typeof supabaseDb,
     private influencerTracker: InfluencerTracker,
     bearerToken?: string
   ) {

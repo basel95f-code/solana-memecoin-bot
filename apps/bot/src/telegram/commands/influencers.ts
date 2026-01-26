@@ -3,10 +3,10 @@
  */
 
 import type { Context, Telegraf } from 'telegraf';
-import type { SupabaseDB } from '../../database/supabase-db';
+import type { supabaseDb } from '../../database/supabase-db';
 import { logger } from '../../utils/logger';
 
-export function registerInfluencersCommand(bot: Telegraf, db: SupabaseDB): void {
+export function registerInfluencersCommand(bot: Telegraf, db: typeof supabaseDb): void {
   bot.command('influencers', async (ctx: Context) => {
     try {
       // Fetch top influencers by success rate

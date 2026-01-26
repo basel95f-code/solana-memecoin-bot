@@ -38,15 +38,15 @@ let supabaseClient: SupabaseClient | null = null;
  * Get or create Supabase client
  * Uses service role key for full database access
  */
-export function getSupabaseClient(): SupabaseClient {
+export function getSupabaseClient(): SupabaseClient | null {
   if (supabaseClient) {
     return supabaseClient;
   }
 
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error(
-      'Missing Supabase configuration. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env'
-    );
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY ||
+      SUPABASE_URL.includes('placeholder') || SUPABASE_SERVICE_ROLE_KEY.includes('placeholder')) {
+    logger.warn('Supabase', 'Supabase not configured - some features will be unavailable');
+    return null;
   }
 
   supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, POOL_CONFIG);
