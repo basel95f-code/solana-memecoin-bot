@@ -246,6 +246,7 @@ function getDefaultHolders(): HolderAnalysis {
     top20HoldersPercent: 100,
     largestHolderPercent: 100,
     whaleAddresses: [],
+    whaleCount: 0,
     devWalletPercent: 0,
     isConcentrated: true,
     topHolders: [],

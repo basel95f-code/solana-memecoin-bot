@@ -140,6 +140,114 @@ export function registerDiscoveryCommands(bot: Telegraf): void {
     }
   });
 
+  // /trending_established command - Established trending tokens
+  bot.command('trending_established', async (ctx: Context) => {
+    const loadingMsg = await ctx.replyWithHTML(`📈 Fetching established trending tokens...`);
+
+    try {
+      const tokens = await dexScreenerService.getTrendingTokens(10, 100000, 1000000, 7);
+      const formatted = formatTrendingList(tokens, `🔥 <b>ESTABLISHED TRENDING TOKENS</b>`);
+
+      await ctx.telegram.editMessageText(
+        ctx.chat!.id,
+        loadingMsg.message_id,
+        undefined,
+        formatted,
+        { parse_mode: 'HTML', ...trendingKeyboard() }
+      );
+    } catch (error) {
+      console.error('Trending established command error:', error);
+      await ctx.telegram.editMessageText(
+        ctx.chat!.id,
+        loadingMsg.message_id,
+        undefined,
+        `❌ Error fetching established trending tokens.`,
+        { parse_mode: 'HTML' }
+      );
+    }
+  });
+
+  // /gainers_established command - Established gainers
+  bot.command('gainers_established', async (ctx: Context) => {
+    const loadingMsg = await ctx.replyWithHTML(`📈 Fetching established gainers...`);
+
+    try {
+      const tokens = await dexScreenerService.getTopGainers(10, 50000, 500000, 7);
+      const formatted = formatTrendingList(tokens, `📈 <b>ESTABLISHED TOP GAINERS</b> (24h)`);
+
+      await ctx.telegram.editMessageText(
+        ctx.chat!.id,
+        loadingMsg.message_id,
+        undefined,
+        formatted,
+        { parse_mode: 'HTML' }
+      );
+    } catch (error) {
+      console.error('Gainers established command error:', error);
+      await ctx.telegram.editMessageText(
+        ctx.chat!.id,
+        loadingMsg.message_id,
+        undefined,
+        `❌ Error fetching established gainers.`,
+        { parse_mode: 'HTML' }
+      );
+    }
+  });
+
+  // /losers_established command - Established losers
+  bot.command('losers_established', async (ctx: Context) => {
+    const loadingMsg = await ctx.replyWithHTML(`📉 Fetching established losers...`);
+
+    try {
+      const tokens = await dexScreenerService.getTopLosers(10, 50000, 500000, 7);
+      const formatted = formatTrendingList(tokens, `📉 <b>ESTABLISHED TOP LOSERS</b> (24h)`);
+
+      await ctx.telegram.editMessageText(
+        ctx.chat!.id,
+        loadingMsg.message_id,
+        undefined,
+        formatted,
+        { parse_mode: 'HTML' }
+      );
+    } catch (error) {
+      console.error('Losers established command error:', error);
+      await ctx.telegram.editMessageText(
+        ctx.chat!.id,
+        loadingMsg.message_id,
+        undefined,
+        `❌ Error fetching established losers.`,
+        { parse_mode: 'HTML' }
+      );
+    }
+  });
+
+  // /volume_established command - Established volume leaders
+  bot.command('volume_established', async (ctx: Context) => {
+    const loadingMsg = await ctx.replyWithHTML(`💹 Fetching established volume leaders...`);
+
+    try {
+      const tokens = await dexScreenerService.getVolumeLeaders(10, 100000, 1000000, 7);
+      const formatted = formatTrendingList(tokens, `💹 <b>ESTABLISHED VOLUME LEADERS</b> (24h)`);
+
+      await ctx.telegram.editMessageText(
+        ctx.chat!.id,
+        loadingMsg.message_id,
+        undefined,
+        formatted,
+        { parse_mode: 'HTML' }
+      );
+    } catch (error) {
+      console.error('Volume established command error:', error);
+      await ctx.telegram.editMessageText(
+        ctx.chat!.id,
+        loadingMsg.message_id,
+        undefined,
+        `❌ Error fetching established volume data.`,
+        { parse_mode: 'HTML' }
+      );
+    }
+  });
+
   // /smartmoney command - tokens smart money is accumulating
   bot.command('smartmoney', async (ctx: Context) => {
     const loadingMsg = await ctx.replyWithHTML(`🐋 Fetching smart money activity from GMGN.ai...`);

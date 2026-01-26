@@ -52,6 +52,7 @@ export interface HolderAnalysis {
   top20HoldersPercent: number;
   largestHolderPercent: number;
   whaleAddresses: string[];
+  whaleCount: number;
   devWalletPercent: number;
   isConcentrated: boolean;
   topHolders: HolderInfo[]; // Top holder details for analysis

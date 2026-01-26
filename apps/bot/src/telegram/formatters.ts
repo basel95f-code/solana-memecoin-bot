@@ -22,23 +22,28 @@ import type { PatternMatch, Prediction } from '../services/patternDetector';
 // UTILITY FUNCTIONS
 // ═══════════════════════════════════════════
 
-export function formatNumber(num: number): string {
+export function formatNumber(num: number | undefined | null): string {
+  if (num === undefined || num === null || isNaN(num)) return '?';
   if (num >= 1_000_000_000) return (num / 1_000_000_000).toFixed(1) + 'B';
   if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + 'M';
   if (num >= 1_000) return (num / 1_000).toFixed(1) + 'K';
   if (num >= 1) return num.toFixed(2);
+  if (num >= 0.01) return num.toFixed(4);
   return num.toFixed(6);
 }
 
-export function formatPercent(num: number): string {
+export function formatPercent(num: number | undefined | null): string {
+  if (num === undefined || num === null || isNaN(num)) return '0.0%';
   const sign = num >= 0 ? '+' : '';
   return `${sign}${num.toFixed(1)}%`;
 }
 
-export function formatPrice(price: number): string {
+export function formatPrice(price: number | undefined | null): string {
+  if (price === undefined || price === null || isNaN(price)) return '$?';
   if (price >= 1) return `$${price.toFixed(2)}`;
   if (price >= 0.0001) return `$${price.toFixed(6)}`;
-  return `$${price.toExponential(2)}`;
+  if (price > 0) return `$${price.toExponential(2)}`;
+  return '$0';
 }
 
 export function getRiskEmoji(level: RiskLevel): string {
@@ -128,9 +133,9 @@ export function formatTokenAlert(
     // Market line
     price > 0 ? `${formatPrice(price)} ${getPriceEmoji(change)} ${formatPercent(change)}` : null,
     // Stats line
-    `💧 $${formatNumber(liquidity.totalLiquidityUsd)} ${liquidity.lpBurned ? '🔥' : liquidity.lpLocked ? '🔒' : ''}` +
-    (mcap > 0 ? ` • MC $${formatNumber(mcap)}` : ''),
-    vol > 0 ? `📊 Vol $${formatNumber(vol)} • ${holders.totalHolders > 0 ? holders.totalHolders : '?'} holders` : null,
+    `💧 $${formatNumber(liquidity.totalLiquidityUsd)} ${liquidity.lpBurned ? '🔥' : liquidity.lpLocked ? '🔒' : '⚠️'}` +
+    (mcap && mcap > 0 ? ` • MC $${formatNumber(mcap)}` : ''),
+    vol > 0 ? `📊 Vol $${formatNumber(vol)} • ${holders.totalHolders > 0 ? formatNumber(holders.totalHolders) : '?'} holders` : null,
     ``,
     // Safety (compact)
     `${contract.mintAuthorityRevoked ? '✓' : '✗'} Mint ` +
@@ -139,8 +144,9 @@ export function formatTokenAlert(
   ];
 
   // Smart money (only if active)
-  if (smartMoney && smartMoney.netSmartMoney !== 0) {
-    const sm = smartMoney.netSmartMoney > 0 ? `🐋 +${smartMoney.netSmartMoney}` : `🐋 ${smartMoney.netSmartMoney}`;
+  if (smartMoney && (smartMoney.netSmartMoney ?? 0) !== 0) {
+    const netSm = smartMoney.netSmartMoney ?? 0;
+    const sm = netSm > 0 ? `🐋 +${netSm}` : `🐋 ${netSm}`;
     lines.push(sm + ` smart money`);
   }
 
@@ -180,14 +186,14 @@ export function formatFullAnalysis(analysis: TokenAnalysis, dexData?: DexScreene
     `${getRiskEmoji(risk.level)} ${badge} <b>${risk.score}/100</b> ${risk.level}`,
     ``,
     `<b>◆ Market</b>`,
-    price > 0 ? `Price: ${formatPrice(price)} ${formatPercent(change)}` : null,
-    dexData?.marketCap ? `MCap: $${formatNumber(dexData.marketCap)}` : null,
+    price > 0 ? `Price: ${formatPrice(price)} ${formatPercent(change)}` : `Price: ${formatPrice(price)}`,
+    dexData?.marketCap && dexData.marketCap > 0 ? `MCap: $${formatNumber(dexData.marketCap)}` : null,
     `Liquidity: $${formatNumber(liquidity.totalLiquidityUsd)}`,
-    dexData?.volume?.h24 ? `Volume 24h: $${formatNumber(dexData.volume.h24)}` : null,
+    dexData?.volume?.h24 && dexData.volume.h24 > 0 ? `Volume 24h: $${formatNumber(dexData.volume.h24)}` : null,
     ``,
     `<b>◆ Holders</b>`,
-    `Total: ${holders.totalHolders || '?'} • Top10: ${holders.top10HoldersPercent.toFixed(1)}%`,
-    `Largest: ${holders.largestHolderPercent.toFixed(1)}% • Dev: ${holders.devWalletPercent.toFixed(1)}%`,
+    `Total: ${holders.totalHolders > 0 ? formatNumber(holders.totalHolders) : '?'} • Top10: ${(holders.top10HoldersPercent ?? 0).toFixed(1)}%`,
+    `Largest: ${(holders.largestHolderPercent ?? 0).toFixed(1)}% • Dev: ${(holders.devWalletPercent ?? 0).toFixed(1)}%`,
     ``,
     `<b>◆ Security</b>`,
     `${contract.mintAuthorityRevoked ? '✓' : '✗'} Mint revoked`,
@@ -200,12 +206,12 @@ export function formatFullAnalysis(analysis: TokenAnalysis, dexData?: DexScreene
   ];
 
   // Smart money
-  if (smartMoney && (smartMoney.smartBuys24h > 0 || smartMoney.smartSells24h > 0)) {
+  if (smartMoney && ((smartMoney.smartBuys24h ?? 0) > 0 || (smartMoney.smartSells24h ?? 0) > 0)) {
     lines.push(``);
     lines.push(`<b>◆ Smart Money</b>`);
-    const net = smartMoney.netSmartMoney;
+    const net = smartMoney.netSmartMoney ?? 0;
     const emoji = net > 0 ? '🐋' : net < 0 ? '🚨' : '⚪';
-    lines.push(`${emoji} ${net > 0 ? '+' : ''}${net} net (${smartMoney.smartBuys24h}B/${smartMoney.smartSells24h}S)`);
+    lines.push(`${emoji} ${net > 0 ? '+' : ''}${net} net (${smartMoney.smartBuys24h ?? 0}B/${smartMoney.smartSells24h ?? 0}S)`);
   }
 
   // NOTE: Tracked smart money wallets section is added dynamically in /check command
@@ -214,9 +220,10 @@ export function formatFullAnalysis(analysis: TokenAnalysis, dexData?: DexScreene
   if (sentiment?.hasSentimentData) {
     lines.push(``);
     lines.push(`<b>◆ Sentiment</b>`);
-    const label = sentiment.sentimentScore > 0.2 ? '🟢 Positive' :
-                  sentiment.sentimentScore < -0.2 ? '🔴 Negative' : '⚪ Neutral';
-    lines.push(`${label} (${sentiment.tweetCount} tweets)`);
+    const score = sentiment.sentimentScore ?? 0;
+    const label = score > 0.2 ? '🟢 Positive' :
+                  score < -0.2 ? '🔴 Negative' : '⚪ Neutral';
+    lines.push(`${label} (${sentiment.tweetCount ?? 0} tweets)`);
   }
 
   // Risk factors
@@ -232,7 +239,7 @@ export function formatFullAnalysis(analysis: TokenAnalysis, dexData?: DexScreene
 
 export function formatDexScreenerAnalysis(dexData: DexScreenerPair): string {
   const price = parseFloat(dexData.priceUsd || '0');
-  const change = dexData.priceChange?.h24 || 0;
+  const change = dexData.priceChange?.h24 ?? 0;
 
   return [
     `📊 <b>QUICK SCAN</b>`,
@@ -241,11 +248,11 @@ export function formatDexScreenerAnalysis(dexData: DexScreenerPair): string {
     `<code>${dexData.baseToken.address}</code>`,
     ``,
     `Price: ${formatPrice(price)} ${formatPercent(change)}`,
-    dexData.marketCap ? `MCap: $${formatNumber(dexData.marketCap)}` : null,
-    `Liquidity: $${formatNumber(dexData.liquidity?.usd || 0)}`,
-    `Volume 24h: $${formatNumber(dexData.volume?.h24 || 0)}`,
+    dexData.marketCap && dexData.marketCap > 0 ? `MCap: $${formatNumber(dexData.marketCap)}` : null,
+    `Liquidity: $${formatNumber(dexData.liquidity?.usd ?? 0)}`,
+    dexData.volume?.h24 && dexData.volume.h24 > 0 ? `Volume 24h: $${formatNumber(dexData.volume.h24)}` : null,
     ``,
-    `Buys: ${dexData.txns?.h24?.buys || 0} • Sells: ${dexData.txns?.h24?.sells || 0}`,
+    `Buys: ${dexData.txns?.h24?.buys ?? 0} • Sells: ${dexData.txns?.h24?.sells ?? 0}`,
     dexData.pairCreatedAt ? `Age: ${timeAgo(dexData.pairCreatedAt)}` : null,
     ``,
     `<i>⚠ RPC limit - basic data only</i>`,
@@ -257,12 +264,13 @@ export function formatDexScreenerAnalysis(dexData: DexScreenerPair): string {
 // ═══════════════════════════════════════════
 
 export function formatWatchlistAlert(token: WatchedToken): string {
-  const emoji = token.priceChangePercent >= 0 ? '📈' : '📉';
+  const change = token.priceChangePercent ?? 0;
+  const emoji = change >= 0 ? '📈' : '📉';
 
   return [
-    `${emoji} <b>${token.symbol}</b> ${formatPercent(token.priceChangePercent)}`,
+    `${emoji} <b>${token.symbol}</b> ${formatPercent(change)}`,
     ``,
-    `${formatPrice(token.addedPrice)} → ${formatPrice(token.lastPrice)}`,
+    `${formatPrice(token.addedPrice ?? 0)} → ${formatPrice(token.lastPrice ?? 0)}`,
   ].join('\n');
 }
 
@@ -278,9 +286,10 @@ export function formatWatchlist(tokens: WatchedToken[]): string {
   const lines = [`⭐ <b>WATCHLIST</b> (${tokens.length})`, ``];
 
   tokens.forEach((token, i) => {
-    const emoji = token.priceChangePercent >= 0 ? '▲' : '▼';
+    const change = token.priceChangePercent ?? 0;
+    const emoji = change >= 0 ? '▲' : '▼';
     lines.push(
-      `${i + 1}. <b>${token.symbol}</b> ${emoji} ${formatPercent(token.priceChangePercent)}`
+      `${i + 1}. <b>${token.symbol}</b> ${emoji} ${formatPercent(change)}`
     );
   });
 
@@ -299,12 +308,12 @@ export function formatTrendingList(tokens: TrendingToken[], title: string): stri
   const lines = [title, ``];
 
   tokens.slice(0, 10).forEach((token, i) => {
-    const emoji = getPriceEmoji(token.priceChange24h);
+    const emoji = getPriceEmoji(token.priceChange24h ?? 0);
     lines.push(
       `${i + 1}. <b>${token.symbol}</b> ${emoji} ${formatPercent(token.priceChange24h)}`
     );
     lines.push(
-      `   $${formatNumber(token.priceUsd)} • V:$${formatNumber(token.volume24h)}`
+      `   ${formatPrice(token.priceUsd)} • V:$${formatNumber(token.volume24h)}`
     );
   });
 
@@ -324,12 +333,13 @@ export function formatSmartMoneyList(tokens: SmartMoneyPick[], title: string): s
 
   tokens.slice(0, 8).forEach((token, i) => {
     const sm = token.smartMoney;
-    const emoji = sm.netSmartMoney > 0 ? '🐋' : '🚨';
+    const emoji = (sm.netSmartMoney ?? 0) > 0 ? '🐋' : '🚨';
     lines.push(
       `${i + 1}. ${emoji} <b>${token.symbol}</b> ${formatPercent(token.priceChange24h)}`
     );
+    const netSm = sm.netSmartMoney ?? 0;
     lines.push(
-      `   +${sm.smartBuys24h}B/-${sm.smartSells24h}S = <b>${sm.netSmartMoney > 0 ? '+' : ''}${sm.netSmartMoney}</b>`
+      `   +${sm.smartBuys24h ?? 0}B/-${sm.smartSells24h ?? 0}S = <b>${netSm > 0 ? '+' : ''}${netSm}</b>`
     );
   });
 
@@ -905,16 +915,16 @@ export function formatLiquidityAlert(alert: LiquidityAlert): string {
   ];
 
   // Add details
-  if (alert.details.percentChange) {
+  if (alert.details.percentChange !== undefined && alert.details.percentChange !== null) {
     const change = alert.details.percentChange;
     lines.push(`Change: ${formatPercent(change)}`);
   }
 
-  if (alert.details.drainedUsd) {
+  if (alert.details.drainedUsd !== undefined && alert.details.drainedUsd !== null) {
     lines.push(`Drained: $${formatNumber(alert.details.drainedUsd)}`);
   }
 
-  if (alert.details.before.liquidityUsd && alert.details.after.liquidityUsd) {
+  if (alert.details.before?.liquidityUsd !== undefined && alert.details.after?.liquidityUsd !== undefined) {
     lines.push(``);
     lines.push(`Before: $${formatNumber(alert.details.before.liquidityUsd)}`);
     lines.push(`After: $${formatNumber(alert.details.after.liquidityUsd)}`);
@@ -960,15 +970,15 @@ export function formatDevBehaviorAlert(alert: { type: string; severity: string; 
     `Dev: <code>${truncateAddress(alert.devAddress)}</code>`,
   ];
 
-  if (alert.details.soldPercent !== undefined) {
+  if (alert.details.soldPercent !== undefined && alert.details.soldPercent !== null) {
     lines.push(`Sold: ${alert.details.soldPercent.toFixed(1)}%`);
   }
 
-  if (alert.details.currentHolding !== undefined) {
+  if (alert.details.currentHolding !== undefined && alert.details.currentHolding !== null) {
     lines.push(`Remaining: ${alert.details.currentHolding.toFixed(1)}%`);
   }
 
-  if (alert.details.sellCount !== undefined) {
+  if (alert.details.sellCount !== undefined && alert.details.sellCount !== null) {
     lines.push(`Sell count: ${alert.details.sellCount}`);
   }
 
@@ -998,15 +1008,15 @@ export function formatBundleAlert(alert: { type: string; severity: string; symbo
     ``,
   ];
 
-  if (alert.details.walletsInBundle) {
+  if (alert.details.walletsInBundle !== undefined && alert.details.walletsInBundle !== null) {
     lines.push(`Wallets in bundle: ${alert.details.walletsInBundle}`);
   }
 
-  if (alert.details.totalPercent) {
+  if (alert.details.totalPercent !== undefined && alert.details.totalPercent !== null) {
     lines.push(`Total held: ${alert.details.totalPercent.toFixed(1)}%`);
   }
 
-  if (alert.details.creationSlot) {
+  if (alert.details.creationSlot !== undefined && alert.details.creationSlot !== null) {
     lines.push(`Creation slot: ${alert.details.creationSlot}`);
   }
 
@@ -1057,22 +1067,24 @@ export function formatHolderChangeAlert(alert: { type: string; severity: string;
     `Wallet: <code>${truncateAddress(alert.walletAddress)}</code>`,
   ];
 
-  if (alert.details.oldPercent !== undefined && alert.details.newPercent !== undefined) {
+  if (alert.details.oldPercent !== undefined && alert.details.oldPercent !== null &&
+      alert.details.newPercent !== undefined && alert.details.newPercent !== null) {
     lines.push(`Position: ${alert.details.oldPercent.toFixed(1)}% → ${alert.details.newPercent.toFixed(1)}%`);
-  } else if (alert.details.newPercent !== undefined) {
+  } else if (alert.details.newPercent !== undefined && alert.details.newPercent !== null) {
     lines.push(`Position: ${alert.details.newPercent.toFixed(1)}%`);
   }
 
-  if (alert.details.oldRank !== undefined && alert.details.newRank !== undefined) {
+  if (alert.details.oldRank !== undefined && alert.details.oldRank !== null &&
+      alert.details.newRank !== undefined && alert.details.newRank !== null) {
     lines.push(`Rank: #${alert.details.oldRank} → #${alert.details.newRank}`);
-  } else if (alert.details.newRank !== undefined) {
+  } else if (alert.details.newRank !== undefined && alert.details.newRank !== null) {
     lines.push(`Rank: #${alert.details.newRank}`);
   }
 
   if (alert.severity === 'critical') {
     lines.push(``);
     lines.push(`🚨 <b>Large dump detected - consider selling</b>`);
-  } else if (alert.type === 'whale_accumulation' && alert.details.percentChange > 3) {
+  } else if (alert.type === 'whale_accumulation' && (alert.details.percentChange ?? 0) > 3) {
     lines.push(``);
     lines.push(`💎 Whale loading up - bullish signal`);
   }
@@ -1118,10 +1130,11 @@ export function formatPatternAnalysis(
     lines.push('');
     lines.push('💎 Similar Successful Tokens:');
     for (const token of similarTokens.slice(0, 2)) {
-      const multiplier = token.max_price && token.initial_price
+      const multiplier = token.max_price && token.initial_price && token.initial_price > 0
         ? (token.max_price / token.initial_price).toFixed(1)
         : '?';
-      lines.push(`  • ${token.symbol || token.name} (${multiplier}x peak) - ${(token.similarity * 100).toFixed(0)}% similar`);
+      const similarity = (token.similarity ?? 0) * 100;
+      lines.push(`  • ${token.symbol || token.name || 'Unknown'} (${multiplier}x peak) - ${similarity.toFixed(0)}% similar`);
     }
   }
 

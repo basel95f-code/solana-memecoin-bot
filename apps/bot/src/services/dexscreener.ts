@@ -182,7 +182,7 @@ class DexScreenerService {
   /**
    * Get trending tokens from boosts/profiles
    */
-  async getTrendingTokens(limit: number = 10): Promise<TrendingToken[]> {
+  async getTrendingTokens(limit: number = 10, minLiquidity: number = 1000, minMcap: number = 0, minAgeDays: number = 0): Promise<TrendingToken[]> {
     // Try boosts endpoint first
     const boostsResponse = await this.boostsApi.get<any[]>(
       '/latest/v1',
@@ -212,24 +212,33 @@ class DexScreenerService {
     const pairDataMap = await this.getMultipleTokensData(tokenAddresses);
 
     const trending: TrendingToken[] = [];
+    const maxAgeDays = minAgeDays * 24 * 60 * 60 * 1000; // Convert days to milliseconds
+    const now = Date.now();
+
     for (const token of solanaTokens) {
       if (trending.length >= limit) break;
       const pairData = pairDataMap.get(token.tokenAddress);
-      if (pairData && pairData.baseToken.symbol !== 'SOL' && (pairData.liquidity?.usd || 0) >= 1000) {
+      if (pairData && pairData.baseToken.symbol !== 'SOL' && (pairData.liquidity?.usd || 0) >= minLiquidity) {
+        // Apply market cap filter
+        if (minMcap > 0 && (pairData.marketCap || 0) < minMcap) continue;
+
+        // Apply age filter
+        if (minAgeDays > 0 && pairData.pairCreatedAt && (now - pairData.pairCreatedAt) < maxAgeDays) continue;
+
         trending.push(this.pairToTrendingToken(pairData));
       }
     }
 
     // Fill with profiles if not enough
     if (trending.length < limit) {
-      const profileTokens = await this.getTrendingFromProfiles(limit - trending.length);
+      const profileTokens = await this.getTrendingFromProfiles(limit - trending.length, minLiquidity, minMcap, minAgeDays);
       trending.push(...profileTokens);
     }
 
     return trending.slice(0, limit);
   }
 
-  private async getTrendingFromProfiles(limit: number): Promise<TrendingToken[]> {
+  private async getTrendingFromProfiles(limit: number, minLiquidity: number = 1000, minMcap: number = 0, minAgeDays: number = 0): Promise<TrendingToken[]> {
     const response = await this.profilesApi.get<any[]>(
       '/latest/v1',
       {
@@ -253,10 +262,19 @@ class DexScreenerService {
     const pairDataMap = await this.getMultipleTokensData(tokenAddresses);
 
     const trending: TrendingToken[] = [];
+    const maxAgeDays = minAgeDays * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+
     for (const profile of solanaProfiles) {
       if (trending.length >= limit) break;
       const pairData = pairDataMap.get(profile.tokenAddress);
-      if (pairData && pairData.baseToken.symbol !== 'SOL' && (pairData.liquidity?.usd || 0) >= 1000) {
+      if (pairData && pairData.baseToken.symbol !== 'SOL' && (pairData.liquidity?.usd || 0) >= minLiquidity) {
+        // Apply market cap filter
+        if (minMcap > 0 && (pairData.marketCap || 0) < minMcap) continue;
+
+        // Apply age filter
+        if (minAgeDays > 0 && pairData.pairCreatedAt && (now - pairData.pairCreatedAt) < maxAgeDays) continue;
+
         trending.push(this.pairToTrendingToken(pairData));
       }
     }
@@ -267,8 +285,8 @@ class DexScreenerService {
   /**
    * Get top gainers
    */
-  async getTopGainers(limit: number = 10): Promise<TrendingToken[]> {
-    const trending = await this.fetchSolanaPairsFromBoosts();
+  async getTopGainers(limit: number = 10, minLiquidity: number = 500, minMcap: number = 0, minAgeDays: number = 0): Promise<TrendingToken[]> {
+    const trending = await this.fetchSolanaPairsFromBoosts(minLiquidity, minMcap, minAgeDays);
     return trending
       .filter((p: DexScreenerPair) => (p.priceChange?.h24 || 0) > 0)
       .sort((a: DexScreenerPair, b: DexScreenerPair) => (b.priceChange?.h24 || 0) - (a.priceChange?.h24 || 0))
@@ -279,8 +297,8 @@ class DexScreenerService {
   /**
    * Get top losers
    */
-  async getTopLosers(limit: number = 10): Promise<TrendingToken[]> {
-    const trending = await this.fetchSolanaPairsFromBoosts();
+  async getTopLosers(limit: number = 10, minLiquidity: number = 500, minMcap: number = 0, minAgeDays: number = 0): Promise<TrendingToken[]> {
+    const trending = await this.fetchSolanaPairsFromBoosts(minLiquidity, minMcap, minAgeDays);
     return trending
       .filter((p: DexScreenerPair) => (p.priceChange?.h24 || 0) < 0)
       .sort((a: DexScreenerPair, b: DexScreenerPair) => (a.priceChange?.h24 || 0) - (b.priceChange?.h24 || 0))
@@ -291,8 +309,8 @@ class DexScreenerService {
   /**
    * Get volume leaders
    */
-  async getVolumeLeaders(limit: number = 10): Promise<TrendingToken[]> {
-    const trending = await this.fetchSolanaPairsFromBoosts();
+  async getVolumeLeaders(limit: number = 10, minLiquidity: number = 500, minMcap: number = 0, minAgeDays: number = 0): Promise<TrendingToken[]> {
+    const trending = await this.fetchSolanaPairsFromBoosts(minLiquidity, minMcap, minAgeDays);
     return trending
       .sort((a: DexScreenerPair, b: DexScreenerPair) => (b.volume?.h24 || 0) - (a.volume?.h24 || 0))
       .slice(0, limit)
@@ -475,7 +493,7 @@ class DexScreenerService {
   // Helper Methods
   // ============================================
 
-  private async fetchSolanaPairsFromBoosts(): Promise<DexScreenerPair[]> {
+  private async fetchSolanaPairsFromBoosts(minLiquidity: number = 500, minMcap: number = 0, minAgeDays: number = 0): Promise<DexScreenerPair[]> {
     // Try boosts first
     const boostsResponse = await this.boostsApi.get<any[]>(
       '/latest/v1',
@@ -484,6 +502,8 @@ class DexScreenerService {
 
     const pairs: DexScreenerPair[] = [];
     const seenAddresses = new Set<string>();
+    const maxAgeDays = minAgeDays * 24 * 60 * 60 * 1000;
+    const now = Date.now();
 
     if (!boostsResponse.error && boostsResponse.data) {
       const solanaTokens = boostsResponse.data
@@ -495,7 +515,13 @@ class DexScreenerService {
 
       for (const token of solanaTokens) {
         const pairData = pairDataMap.get(token.tokenAddress);
-        if (pairData && pairData.baseToken.symbol !== 'SOL' && (pairData.liquidity?.usd || 0) >= 500) {
+        if (pairData && pairData.baseToken.symbol !== 'SOL' && (pairData.liquidity?.usd || 0) >= minLiquidity) {
+          // Apply market cap filter
+          if (minMcap > 0 && (pairData.marketCap || 0) < minMcap) continue;
+
+          // Apply age filter
+          if (minAgeDays > 0 && pairData.pairCreatedAt && (now - pairData.pairCreatedAt) < maxAgeDays) continue;
+
           if (!seenAddresses.has(pairData.baseToken.address)) {
             pairs.push(pairData);
             seenAddresses.add(pairData.baseToken.address);
@@ -521,7 +547,13 @@ class DexScreenerService {
 
         for (const profile of solanaProfiles) {
           const pairData = profilePairMap.get(profile.tokenAddress);
-          if (pairData && pairData.baseToken.symbol !== 'SOL' && (pairData.liquidity?.usd || 0) >= 500) {
+          if (pairData && pairData.baseToken.symbol !== 'SOL' && (pairData.liquidity?.usd || 0) >= minLiquidity) {
+            // Apply market cap filter
+            if (minMcap > 0 && (pairData.marketCap || 0) < minMcap) continue;
+
+            // Apply age filter
+            if (minAgeDays > 0 && pairData.pairCreatedAt && (now - pairData.pairCreatedAt) < maxAgeDays) continue;
+
             if (!seenAddresses.has(pairData.baseToken.address)) {
               pairs.push(pairData);
               seenAddresses.add(pairData.baseToken.address);

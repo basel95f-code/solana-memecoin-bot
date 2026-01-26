@@ -119,6 +119,10 @@ export function registerAllCommands(bot: Telegraf, db?: typeof supabaseDb): void
     { command: 'trending', description: 'Trending tokens' },
     { command: 'new', description: 'New tokens' },
     { command: 'gainers', description: 'Top gainers' },
+    { command: 'trending_established', description: 'Established trending tokens' },
+    { command: 'gainers_established', description: 'Established gainers' },
+    { command: 'losers_established', description: 'Established losers' },
+    { command: 'volume_established', description: 'Established volume leaders' },
 
     // ESSENTIAL: Wallet Monitoring (Keep core only)
     { command: 'track', description: 'Track a wallet' },
