@@ -8,13 +8,10 @@ import type { AdvancedAlert } from '../services/advancedMonitor';
 import { advancedMonitor } from '../services/advancedMonitor';
 import { walletMonitorService } from '../services/walletMonitor';
 import { liquidityMonitor } from '../services/liquidityMonitor';
-import type { LiquidityAlert } from '../services/liquidityMonitor';
 import { devWalletTracker } from '../services/devWalletTracker';
-import type { DevBehaviorAlert } from '../services/devWalletTracker';
 import { bundledWalletDetector } from '../services/bundledWalletDetector';
-import type { BundleAlert } from '../services/bundledWalletDetector';
 import { topHolderTracker } from '../services/topHolderTracker';
-import type { HolderChangeAlert } from '../services/topHolderTracker';
+import type { LiquidityAlert, DevBehaviorAlert, BundleAlert, HolderChangeAlert } from '../types';
 import { raydiumMonitor } from '../monitors/raydium';
 import { pumpFunMonitor } from '../monitors/pumpfun';
 import { jupiterMonitor } from '../monitors/jupiter';
@@ -25,6 +22,7 @@ import { formatAdvancedAlert } from '../telegram/commands/advanced';
 import { formatLiquidityAlert, formatDevBehaviorAlert, formatBundleAlert, formatHolderChangeAlert } from '../telegram/formatters';
 import type { PoolInfo, WalletActivityAlert } from '../types';
 import { logger } from '../utils/logger';
+import { toError } from '../utils/errors';
 import { queueProcessor } from './queueProcessor';
 import { shouldSendAdvancedAlert } from './alertFilter';
 
@@ -64,7 +62,7 @@ export function setupWalletMonitorListeners(): void {
 
       console.log(`👛 Wallet alert: ${alert.wallet.label} ${alert.transaction.type} ${alert.transaction.tokenSymbol || alert.transaction.tokenMint.slice(0, 8)}`);
     } catch (error) {
-      logger.silentError('WalletMonitor', 'Error handling wallet activity alert', error as Error);
+      logger.silentError('WalletMonitor', 'Error handling wallet activity alert', toError(error));
     }
   });
 }
@@ -165,7 +163,7 @@ function setupLiquidityMonitorListeners(): void {
 
       logger.info('LiquidityMonitor', \Alert sent: \ for \\);
     } catch (error) {
-      logger.error('LiquidityMonitor', 'Error sending liquidity alert', error as Error);
+      logger.error('LiquidityMonitor', 'Error sending liquidity alert', toError(error));
     }
   });
 }
@@ -200,7 +198,7 @@ function setupDevWalletTrackerListeners(): void {
 
       logger.info('DevWalletTracker', \Alert sent: \ for \\);
     } catch (error) {
-      logger.error('DevWalletTracker', 'Error sending dev behavior alert', error as Error);
+      logger.error('DevWalletTracker', 'Error sending dev behavior alert', toError(error));
     }
   });
 }
@@ -228,7 +226,7 @@ function setupBundledWalletDetectorListeners(): void {
 
       logger.warn('BundledWalletDetector', \Alert sent: \ - \\);
     } catch (error) {
-      logger.error('BundledWalletDetector', 'Error sending bundle alert', error as Error);
+      logger.error('BundledWalletDetector', 'Error sending bundle alert', toError(error));
     }
   });
 }
@@ -264,7 +262,7 @@ function setupTopHolderTrackerListeners(): void {
 
       logger.info('TopHolderTracker', \Alert sent: \ for \\);
     } catch (error) {
-      logger.error('TopHolderTracker', 'Error sending holder change alert', error as Error);
+      logger.error('TopHolderTracker', 'Error sending holder change alert', toError(error));
     }
   });
 }
