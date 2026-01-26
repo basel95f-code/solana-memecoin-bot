@@ -1,5 +1,7 @@
 /**
  * Authentication middleware
+ * 
+ * FIX #45: Generic error messages in production to prevent information disclosure
  */
 
 import type { Request, Response, NextFunction } from 'express';
@@ -20,6 +22,13 @@ declare global {
   }
 }
 
+// FIX #45: Use generic messages in production to prevent information disclosure
+const isProduction = process.env.NODE_ENV === 'production';
+
+function getErrorMessage(devMessage: string, prodMessage: string = 'Authentication failed'): string {
+  return isProduction ? prodMessage : devMessage;
+}
+
 /**
  * Authenticate API key from Authorization header
  */
@@ -33,8 +42,12 @@ export async function authenticateAPIKey(
 
     if (!authHeader) {
       res.status(401).json({
-        error: 'Missing Authorization header',
-        message: 'Please provide an API key in the Authorization header as "Bearer YOUR_API_KEY"'
+        error: 'Unauthorized',
+        // FIX #45: Generic message in production
+        message: getErrorMessage(
+          'Please provide an API key in the Authorization header as "Bearer YOUR_API_KEY"',
+          'Authentication required'
+        )
       });
       return;
     }
@@ -43,8 +56,12 @@ export async function authenticateAPIKey(
     const parts = authHeader.split(' ');
     if (parts.length !== 2 || parts[0] !== 'Bearer') {
       res.status(401).json({
-        error: 'Invalid Authorization header format',
-        message: 'Use format: "Bearer YOUR_API_KEY"'
+        error: 'Unauthorized',
+        // FIX #45: Generic message in production
+        message: getErrorMessage(
+          'Use format: "Bearer YOUR_API_KEY"',
+          'Invalid authentication format'
+        )
       });
       return;
     }
@@ -57,8 +74,12 @@ export async function authenticateAPIKey(
     if (!apiKey) {
       logger.warn(`Invalid API key attempted: ${rawKey.substring(0, 10)}...`);
       res.status(401).json({
-        error: 'Invalid API key',
-        message: 'The provided API key is invalid or has expired'
+        error: 'Unauthorized',
+        // FIX #45: Generic message - don't reveal if key exists or is expired
+        message: getErrorMessage(
+          'The provided API key is invalid or has expired',
+          'Authentication failed'
+        )
       });
       return;
     }
@@ -69,8 +90,12 @@ export async function authenticateAPIKey(
     if (!withinLimit) {
       logger.warn(`Rate limit exceeded for API key: ${apiKey.name} (${apiKey.id})`);
       res.status(429).json({
-        error: 'Rate limit exceeded',
-        message: `You have exceeded the rate limit of ${apiKey.rateLimit} requests per minute`
+        error: 'Too Many Requests',
+        // FIX #45: Don't reveal specific rate limit in production
+        message: getErrorMessage(
+          `You have exceeded the rate limit of ${apiKey.rateLimit} requests per minute`,
+          'Rate limit exceeded. Please try again later.'
+        )
       });
       return;
     }
@@ -90,7 +115,7 @@ export async function authenticateAPIKey(
   } catch (error) {
     logger.error('Authentication error:', error);
     res.status(500).json({
-      error: 'Internal server error',
+      error: 'Internal Server Error',
       message: 'An error occurred during authentication'
     });
   }

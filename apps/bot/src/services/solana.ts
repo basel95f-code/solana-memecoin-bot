@@ -360,12 +360,16 @@ class SolanaService {
 
   /**
    * Get token holders using Helius DAS API (handles large datasets with pagination)
+   * FIX #11: Added explicit logging when Helius API key not found
    */
   private async getTokenHoldersHelius(mintAddress: string, limit: number = 20): Promise<Array<{ address: string; balance: number }>> {
     try {
-      // Extract API key from RPC URL
-      const apiKeyMatch = config.solanaRpcUrl.match(/api-key=([^&]+)/);
+      // Extract API key from RPC URL (supports both query param and path formats)
+      const apiKeyMatch = config.solanaRpcUrl.match(/api-key=([^&]+)/) || 
+                          config.solanaRpcUrl.match(/\/([a-zA-Z0-9-]{32,})(?:\/|$)/);
       if (!apiKeyMatch) {
+        // FIX #11: Log explicitly that Helius method is skipped due to missing API key
+        logger.debug('Solana', 'Helius API key not found in RPC URL, skipping Helius holder lookup');
         return []; // Not using Helius, skip
       }
 

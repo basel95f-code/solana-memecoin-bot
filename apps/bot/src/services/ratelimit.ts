@@ -1,3 +1,10 @@
+/**
+ * Rate Limiting Service
+ * 
+ * FIXES APPLIED:
+ * - #3: Added mutex/lock mechanism to prevent race conditions during concurrent access
+ */
+
 import { config } from '../config';
 
 interface CooldownEntry {
@@ -11,6 +18,41 @@ class RateLimitService {
   private tokenCooldowns: Map<string, Map<string, CooldownEntry>> = new Map();
   // chatId -> array of alert timestamps for sliding window counting
   private alertTimestamps: Map<string, number[]> = new Map();
+  
+  // FIX #3: Mutex locks to prevent race conditions
+  private locks: Map<string, Promise<void>> = new Map();
+  private lockResolvers: Map<string, () => void> = new Map();
+
+  /**
+   * FIX #3: Acquire a lock for a specific chat to prevent race conditions
+   */
+  private async acquireLock(chatId: string): Promise<void> {
+    // Wait for any existing lock to be released
+    const existingLock = this.locks.get(chatId);
+    if (existingLock) {
+      await existingLock;
+    }
+    
+    // Create a new lock
+    let resolver: () => void;
+    const lockPromise = new Promise<void>((resolve) => {
+      resolver = resolve;
+    });
+    this.locks.set(chatId, lockPromise);
+    this.lockResolvers.set(chatId, resolver!);
+  }
+
+  /**
+   * FIX #3: Release a lock for a specific chat
+   */
+  private releaseLock(chatId: string): void {
+    const resolver = this.lockResolvers.get(chatId);
+    if (resolver) {
+      resolver();
+      this.locks.delete(chatId);
+      this.lockResolvers.delete(chatId);
+    }
+  }
 
   private getCooldownMs(): number {
     return config.rateLimit.tokenCooldownMinutes * 60 * 1000;
@@ -25,62 +67,84 @@ class RateLimitService {
     return chatCooldowns;
   }
 
-  canSendAlert(chatId: string, tokenMint: string): boolean {
-    const chatCooldowns = this.getOrCreateChatCooldowns(chatId);
-    const entry = chatCooldowns.get(tokenMint);
+  /**
+   * FIX #3: Made async with lock to prevent race condition
+   */
+  async canSendAlert(chatId: string, tokenMint: string): Promise<boolean> {
+    await this.acquireLock(chatId);
+    try {
+      const chatCooldowns = this.getOrCreateChatCooldowns(chatId);
+      const entry = chatCooldowns.get(tokenMint);
 
-    if (!entry) {
-      return true;
+      if (!entry) {
+        return true;
+      }
+
+      const now = Date.now();
+      const cooldownMs = this.getCooldownMs();
+
+      // Check if cooldown has expired
+      if (now - entry.lastAlertTime >= cooldownMs) {
+        return true;
+      }
+
+      return false;
+    } finally {
+      this.releaseLock(chatId);
     }
-
-    const now = Date.now();
-    const cooldownMs = this.getCooldownMs();
-
-    // Check if cooldown has expired
-    if (now - entry.lastAlertTime >= cooldownMs) {
-      return true;
-    }
-
-    return false;
   }
 
-  canSendAnyAlert(chatId: string): boolean {
-    // Use sliding window for O(1) amortized counting
-    const timestamps = this.alertTimestamps.get(chatId);
-    if (!timestamps || timestamps.length === 0) {
-      return true;
+  /**
+   * FIX #3: Made async with lock to prevent race condition during timestamp mutation
+   */
+  async canSendAnyAlert(chatId: string): Promise<boolean> {
+    await this.acquireLock(chatId);
+    try {
+      const timestamps = this.alertTimestamps.get(chatId);
+      if (!timestamps || timestamps.length === 0) {
+        return true;
+      }
+
+      const now = Date.now();
+      const oneHourAgo = now - 3600000;
+
+      // FIX #3: Create new array instead of mutating during iteration
+      const validTimestamps = timestamps.filter(t => t >= oneHourAgo);
+      this.alertTimestamps.set(chatId, validTimestamps);
+
+      return validTimestamps.length < config.rateLimit.maxAlertsPerHour;
+    } finally {
+      this.releaseLock(chatId);
     }
-
-    const now = Date.now();
-    const oneHourAgo = now - 3600000;
-
-    // Prune old timestamps from the front (they're sorted)
-    while (timestamps.length > 0 && timestamps[0] < oneHourAgo) {
-      timestamps.shift();
-    }
-
-    return timestamps.length < config.rateLimit.maxAlertsPerHour;
   }
 
-  markAlertSent(chatId: string, tokenMint: string): void {
-    const chatCooldowns = this.getOrCreateChatCooldowns(chatId);
-    const now = Date.now();
+  /**
+   * FIX #3: Made async with lock to prevent race condition
+   */
+  async markAlertSent(chatId: string, tokenMint: string): Promise<void> {
+    await this.acquireLock(chatId);
+    try {
+      const chatCooldowns = this.getOrCreateChatCooldowns(chatId);
+      const now = Date.now();
 
-    const existing = chatCooldowns.get(tokenMint);
+      const existing = chatCooldowns.get(tokenMint);
 
-    chatCooldowns.set(tokenMint, {
-      lastAlertTime: now,
-      alertCount: (existing?.alertCount || 0) + 1,
-      hourStartTime: existing?.hourStartTime || now,
-    });
+      chatCooldowns.set(tokenMint, {
+        lastAlertTime: now,
+        alertCount: (existing?.alertCount || 0) + 1,
+        hourStartTime: existing?.hourStartTime || now,
+      });
 
-    // Add to sliding window timestamps
-    let timestamps = this.alertTimestamps.get(chatId);
-    if (!timestamps) {
-      timestamps = [];
-      this.alertTimestamps.set(chatId, timestamps);
+      // Add to sliding window timestamps
+      let timestamps = this.alertTimestamps.get(chatId);
+      if (!timestamps) {
+        timestamps = [];
+        this.alertTimestamps.set(chatId, timestamps);
+      }
+      timestamps.push(now);
+    } finally {
+      this.releaseLock(chatId);
     }
-    timestamps.push(now);
   }
 
   getCooldownRemaining(chatId: string, tokenMint: string): number {

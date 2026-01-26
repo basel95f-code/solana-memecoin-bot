@@ -1,3 +1,13 @@
+/**
+ * Solana Memecoin Bot - Main Entry Point
+ * 
+ * FIXES APPLIED:
+ * - #5: Handle database initialization failures properly
+ * - #9: Wrap ALL async event handlers in try/catch
+ * - #17: Add global unhandled rejection handler
+ * - #24: Track and clear all interval timers on shutdown
+ */
+
 import { config } from './config';
 import { telegramService } from './services/telegram';
 import { solanaService } from './services/solana';
@@ -50,8 +60,23 @@ import type { AccumulationAlert, DistributionAlert, CoordinatedMovement } from '
 import type { WalletCluster, SybilAttack } from './services/enhancedClusterDetector';
 import type { WalletActivity } from './monitors/walletTransactions';
 
+// FIX #17: Global unhandled rejection handler
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Main', `Unhandled Promise Rejection: ${reason}`, reason as Error);
+  // Don't crash - log and continue, but this indicates a bug to fix
+});
+
+process.on('uncaughtException', (error) => {
+  logger.error('Main', 'Uncaught Exception - shutting down gracefully', error);
+  // Give time to log, then exit
+  setTimeout(() => process.exit(1), 1000);
+});
+
 class SolanaMemecoinBot {
   private isRunning: boolean = false;
+  
+  // FIX #24: Track all interval timers for proper cleanup
+  private intervals: NodeJS.Timeout[] = [];
 
   async start(): Promise<void> {
     console.log('');
@@ -59,9 +84,14 @@ class SolanaMemecoinBot {
     console.log('================================================');
 
     try {
-      // Initialize database (SQLite with WAL mode)
-      await database.initialize();
-      logger.info('Main', 'Database initialized');
+      // FIX #5: Initialize database with proper error handling - fail fast if DB fails
+      try {
+        await database.initialize();
+        logger.info('Main', 'Database initialized');
+      } catch (dbError) {
+        logger.error('Main', 'FATAL: Database initialization failed - cannot continue', dbError as Error);
+        throw dbError; // Propagate to top-level catch to prevent bot from running without DB
+      }
 
       // Initialize ML rug predictor
       await rugPredictor.initialize();
@@ -191,7 +221,7 @@ class SolanaMemecoinBot {
         }
       });
 
-      // Set up whale activity alert listeners
+      // FIX #9: Set up whale activity alert listeners with proper error handling
       whaleActivityTracker.on('accumulation', async (alert: AccumulationAlert) => {
         try {
           const message = formatAccumulationAlert(alert);
@@ -219,12 +249,17 @@ class SolanaMemecoinBot {
         }
       });
 
-      // Periodic cleanup for whale activity tracker
-      setInterval(() => {
-        whaleActivityTracker.cleanup();
+      // FIX #24: Track interval for cleanup on shutdown
+      const whaleCleanupInterval = setInterval(() => {
+        try {
+          whaleActivityTracker.cleanup();
+        } catch (error) {
+          logger.error('Main', 'Whale activity cleanup failed', error as Error);
+        }
       }, 24 * 60 * 60 * 1000); // Daily cleanup
+      this.intervals.push(whaleCleanupInterval);
 
-      // Set up cluster detection alert listeners
+      // FIX #9: Set up cluster detection alert listeners with proper error handling
       enhancedClusterDetector.on('clusterDetected', async (cluster: WalletCluster) => {
         try {
           const message = formatClusterAlert(cluster);
@@ -243,15 +278,25 @@ class SolanaMemecoinBot {
         }
       });
 
-      // Periodic cleanup for cluster detector
-      setInterval(() => {
-        enhancedClusterDetector.cleanup();
+      // FIX #24: Track interval for cleanup on shutdown
+      const clusterCleanupInterval = setInterval(() => {
+        try {
+          enhancedClusterDetector.cleanup();
+        } catch (error) {
+          logger.error('Main', 'Cluster detector cleanup failed', error as Error);
+        }
       }, 24 * 60 * 60 * 1000); // Daily cleanup
+      this.intervals.push(clusterCleanupInterval);
 
-      // Periodic cleanup for multi-timeframe analyzer
-      setInterval(() => {
-        multiTimeframeAnalyzer.cleanup();
+      // FIX #24: Track interval for cleanup on shutdown
+      const mtaCleanupInterval = setInterval(() => {
+        try {
+          multiTimeframeAnalyzer.cleanup();
+        } catch (error) {
+          logger.error('Main', 'Multi-timeframe analyzer cleanup failed', error as Error);
+        }
       }, 24 * 60 * 60 * 1000); // Daily cleanup
+      this.intervals.push(mtaCleanupInterval);
 
       // Start advanced monitoring (volume spikes, whale alerts, etc.)
       await advancedMonitor.start();
@@ -313,12 +358,17 @@ class SolanaMemecoinBot {
       // Start queue processor
       queueProcessor.start();
 
-      // Periodic cleanup tasks
-      setInterval(() => {
-        tokenCache.cleanup();
-        rateLimitService.cleanup();
-        this.logStats();
+      // FIX #24: Track main cleanup interval for proper shutdown
+      const mainCleanupInterval = setInterval(() => {
+        try {
+          tokenCache.cleanup();
+          rateLimitService.cleanup();
+          this.logStats();
+        } catch (error) {
+          logger.error('Main', 'Main cleanup task failed', error as Error);
+        }
       }, CLEANUP.MAIN_LOOP_INTERVAL_MS);
+      this.intervals.push(mainCleanupInterval);
 
       console.log('');
       console.log('✅ Bot is now running and monitoring for new tokens');
@@ -380,6 +430,13 @@ class SolanaMemecoinBot {
     this.isRunning = false;
 
     try {
+      // FIX #24: Clear all tracked interval timers first
+      logger.info('Main', `Clearing ${this.intervals.length} interval timers...`);
+      for (const interval of this.intervals) {
+        clearInterval(interval);
+      }
+      this.intervals = [];
+
       // Stop queue processor
       queueProcessor.stop();
 

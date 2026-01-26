@@ -46,7 +46,30 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
+ * Custom error class to preserve retry context
+ * FIX #30: Preserves original error and adds retry context
+ */
+export class RetryError extends Error {
+  public readonly originalError: Error;
+  public readonly attempts: number;
+  public readonly errors: Error[];
+
+  constructor(message: string, originalError: Error, attempts: number, errors: Error[]) {
+    super(message);
+    this.name = 'RetryError';
+    this.originalError = originalError;
+    this.attempts = attempts;
+    this.errors = errors;
+    // Preserve original stack trace
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, RetryError);
+    }
+  }
+}
+
+/**
  * Execute a function with retry logic and exponential backoff
+ * FIX #30: Preserves error context through all retry attempts
  */
 export async function withRetry<T>(
   fn: () => Promise<T>,
@@ -57,19 +80,29 @@ export async function withRetry<T>(
 
   let lastError: Error;
   let delay = opts.initialDelayMs;
+  // FIX #30: Track all errors for debugging
+  const allErrors: Error[] = [];
 
   for (let attempt = 1; attempt <= opts.maxRetries + 1; attempt++) {
     try {
       return await fn();
     } catch (error) {
       lastError = error as Error;
+      allErrors.push(lastError);
 
       // Check if we should retry
       const isLastAttempt = attempt > opts.maxRetries;
       const isRetryable = isRetryableError(lastError, retryableErrors);
 
       if (isLastAttempt || !isRetryable) {
-        throw lastError;
+        // FIX #30: Wrap error with full context
+        const retryError = new RetryError(
+          `Failed after ${attempt} attempts: ${lastError.message}`,
+          lastError,
+          attempt,
+          allErrors
+        );
+        throw retryError;
       }
 
       // Call onRetry callback if provided
@@ -83,7 +116,13 @@ export async function withRetry<T>(
     }
   }
 
-  throw lastError!;
+  // FIX #30: This shouldn't be reached, but if it is, provide context
+  throw new RetryError(
+    `Failed after all retries: ${lastError!.message}`,
+    lastError!,
+    opts.maxRetries + 1,
+    allErrors
+  );
 }
 
 /**
@@ -116,11 +155,18 @@ export function createRetryableAxios(axiosInstance: any, options: RetryOptions =
 
 /**
  * Circuit breaker for failing endpoints
+ * 
+ * FIX #4: Properly limits executions in half-open state
+ * FIX #30: Preserves error context in retry failures
  */
 export class CircuitBreaker {
   private failures: number = 0;
   private lastFailure: number = 0;
   private state: 'closed' | 'open' | 'half-open' = 'closed';
+  
+  // FIX #4: Track half-open attempts to limit test requests
+  private halfOpenAttempts: number = 0;
+  private readonly maxHalfOpenAttempts: number = 1; // Only allow 1 test request
 
   constructor(
     private threshold: number = 5,
@@ -128,13 +174,23 @@ export class CircuitBreaker {
   ) {}
 
   async execute<T>(fn: () => Promise<T>): Promise<T> {
-    // Check if circuit should be reset
+    // FIX #4: Check if circuit should be reset to half-open
     if (this.state === 'open') {
-      if (Date.now() - this.lastFailure > this.resetTimeMs) {
+      const timeSinceFailure = Date.now() - this.lastFailure;
+      if (timeSinceFailure > this.resetTimeMs) {
         this.state = 'half-open';
+        this.halfOpenAttempts = 0; // Reset attempts counter
       } else {
-        throw new Error('Circuit breaker is open');
+        throw new Error(`Circuit breaker is open. Retry in ${Math.ceil((this.resetTimeMs - timeSinceFailure) / 1000)}s`);
       }
+    }
+
+    // FIX #4: Limit executions in half-open state
+    if (this.state === 'half-open') {
+      if (this.halfOpenAttempts >= this.maxHalfOpenAttempts) {
+        throw new Error('Circuit breaker is testing recovery, please wait');
+      }
+      this.halfOpenAttempts++;
     }
 
     try {
@@ -149,6 +205,7 @@ export class CircuitBreaker {
 
   private onSuccess(): void {
     this.failures = 0;
+    this.halfOpenAttempts = 0;
     this.state = 'closed';
   }
 
@@ -156,7 +213,11 @@ export class CircuitBreaker {
     this.failures++;
     this.lastFailure = Date.now();
 
-    if (this.failures >= this.threshold) {
+    if (this.state === 'half-open') {
+      // FIX #4: If test request fails in half-open, go back to open
+      this.state = 'open';
+      console.warn(`Circuit breaker test failed, returning to open state`);
+    } else if (this.failures >= this.threshold) {
       this.state = 'open';
       console.warn(`Circuit breaker opened after ${this.failures} failures`);
     }
@@ -170,8 +231,17 @@ export class CircuitBreaker {
     return this.state;
   }
 
+  getStats(): { state: string; failures: number; lastFailure: number } {
+    return {
+      state: this.state,
+      failures: this.failures,
+      lastFailure: this.lastFailure
+    };
+  }
+
   reset(): void {
     this.failures = 0;
+    this.halfOpenAttempts = 0;
     this.state = 'closed';
   }
 }

@@ -1,55 +1,66 @@
 /**
  * SQLite database schema for persistent storage
  * Stores token analysis history, alerts, and ML training data
+ * 
+ * FIX #12: Added CHECK constraints for data validation
+ * FIX #42: Explicitly set WAL mode on table creation
  */
 
 export const SCHEMA = `
+-- FIX #42: Enable WAL mode for better concurrent performance
+PRAGMA journal_mode=WAL;
+
 -- ============================================
 -- Token Analysis History
 -- Stores full analysis results for each token
+-- FIX #12: Added CHECK constraints for data integrity
 -- ============================================
 CREATE TABLE IF NOT EXISTS token_analysis (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  mint TEXT NOT NULL,
+  -- FIX #12: Validate mint address length (Solana addresses are 32-44 chars base58)
+  mint TEXT NOT NULL CHECK(length(mint) >= 32 AND length(mint) <= 44),
   symbol TEXT,
   name TEXT,
 
   -- Risk classification
-  risk_score INTEGER,
-  risk_level TEXT,
+  -- FIX #12: Risk score must be 0-100
+  risk_score INTEGER CHECK(risk_score IS NULL OR (risk_score >= 0 AND risk_score <= 100)),
+  risk_level TEXT CHECK(risk_level IS NULL OR risk_level IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL', 'low', 'medium', 'high', 'critical')),
 
   -- Liquidity data
-  liquidity_usd REAL,
-  lp_burned_percent REAL,
-  lp_locked_percent REAL,
+  -- FIX #12: Liquidity and percentages cannot be negative
+  liquidity_usd REAL CHECK(liquidity_usd IS NULL OR liquidity_usd >= 0),
+  lp_burned_percent REAL CHECK(lp_burned_percent IS NULL OR (lp_burned_percent >= 0 AND lp_burned_percent <= 100)),
+  lp_locked_percent REAL CHECK(lp_locked_percent IS NULL OR (lp_locked_percent >= 0 AND lp_locked_percent <= 100)),
 
   -- Holder data
-  total_holders INTEGER,
-  top10_percent REAL,
-  top20_percent REAL,
-  largest_holder_percent REAL,
-  whale_count INTEGER,
+  -- FIX #12: Holder counts cannot be negative
+  total_holders INTEGER CHECK(total_holders IS NULL OR total_holders >= 0),
+  top10_percent REAL CHECK(top10_percent IS NULL OR (top10_percent >= 0 AND top10_percent <= 100)),
+  top20_percent REAL CHECK(top20_percent IS NULL OR (top20_percent >= 0 AND top20_percent <= 100)),
+  largest_holder_percent REAL CHECK(largest_holder_percent IS NULL OR (largest_holder_percent >= 0 AND largest_holder_percent <= 100)),
+  whale_count INTEGER CHECK(whale_count IS NULL OR whale_count >= 0),
 
-  -- Contract data
-  mint_revoked INTEGER DEFAULT 0,
-  freeze_revoked INTEGER DEFAULT 0,
-  is_honeypot INTEGER DEFAULT 0,
-  has_transfer_fee INTEGER DEFAULT 0,
-  transfer_fee_percent REAL,
+  -- Contract data (boolean as 0/1)
+  mint_revoked INTEGER DEFAULT 0 CHECK(mint_revoked IN (0, 1)),
+  freeze_revoked INTEGER DEFAULT 0 CHECK(freeze_revoked IN (0, 1)),
+  is_honeypot INTEGER DEFAULT 0 CHECK(is_honeypot IN (0, 1)),
+  has_transfer_fee INTEGER DEFAULT 0 CHECK(has_transfer_fee IN (0, 1)),
+  transfer_fee_percent REAL CHECK(transfer_fee_percent IS NULL OR (transfer_fee_percent >= 0 AND transfer_fee_percent <= 100)),
 
   -- Social data
-  has_twitter INTEGER DEFAULT 0,
-  has_telegram INTEGER DEFAULT 0,
-  has_website INTEGER DEFAULT 0,
-  twitter_followers INTEGER,
-  telegram_members INTEGER,
+  has_twitter INTEGER DEFAULT 0 CHECK(has_twitter IN (0, 1)),
+  has_telegram INTEGER DEFAULT 0 CHECK(has_telegram IN (0, 1)),
+  has_website INTEGER DEFAULT 0 CHECK(has_website IN (0, 1)),
+  twitter_followers INTEGER CHECK(twitter_followers IS NULL OR twitter_followers >= 0),
+  telegram_members INTEGER CHECK(telegram_members IS NULL OR telegram_members >= 0),
 
   -- Source metadata
   source TEXT,
   pool_address TEXT,
 
   -- Timestamps (Unix epoch seconds)
-  analyzed_at INTEGER NOT NULL,
+  analyzed_at INTEGER NOT NULL CHECK(analyzed_at > 0),
   created_at INTEGER DEFAULT (strftime('%s', 'now'))
 );
 

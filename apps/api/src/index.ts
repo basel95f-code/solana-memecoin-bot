@@ -42,8 +42,9 @@ export const wsServer = new RealtimeWebSocketServer(server);
 // Middleware
 app.use(helmet()); // Security headers
 app.use(compression()); // Response compression
+// FIX #25: Don't use wildcard CORS in production
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
+  origin: process.env.CORS_ORIGIN || (process.env.NODE_ENV === 'production' ? false : '*'),
   credentials: true
 }));
 app.use(express.json());
@@ -64,6 +65,15 @@ const globalLimiter = rateLimit({
   legacyHeaders: false
 });
 
+// FIX #26: Separate lighter rate limit for health checks
+const healthLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 30, // 30 health checks per minute (still generous for monitoring)
+  message: 'Too many health check requests',
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 app.use('/api', globalLimiter);
 
 // API Documentation
@@ -72,8 +82,8 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
   customSiteTitle: 'Solana Memecoin Bot API Docs'
 }));
 
-// Health check (no auth required)
-app.use(`/api/${API_VERSION}`, healthRouter);
+// FIX #26: Health check with separate rate limit (no auth required)
+app.use(`/api/${API_VERSION}/health`, healthLimiter, healthRouter);
 
 // Protected routes (require authentication)
 app.use(`/api/${API_VERSION}`, authenticateAPIKey, tokensRouter);
@@ -83,8 +93,10 @@ app.use(`/api/${API_VERSION}`, authenticateAPIKey, alertsRouter);
 app.use(`/api/${API_VERSION}`, authenticateAPIKey, statsRouter);
 app.use(`/api/${API_VERSION}`, authenticateAPIKey, portfolioRouter);
 
-// Admin routes (require admin key)
-app.use(`/api/${API_VERSION}`, adminRouter);
+// FIX #6: Admin routes now use requireAdmin middleware defined in admin.ts
+// The admin routes already have their own authentication via requireAdmin middleware
+// But we add an extra layer of protection by requiring at least basic API key auth first
+app.use(`/api/${API_VERSION}`, authenticateAPIKey, adminRouter);
 
 // Root endpoint
 app.get('/', (req, res) => {

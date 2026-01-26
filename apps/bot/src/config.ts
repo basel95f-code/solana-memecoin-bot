@@ -1,7 +1,24 @@
+/**
+ * Configuration Module
+ * 
+ * FIXES APPLIED:
+ * - #10: Added strict validation for critical config values
+ * - #20: Fixed environment variable splitting for empty strings
+ */
+
 import dotenv from 'dotenv';
 import type { ExtendedBotConfig } from './types';
 
 dotenv.config();
+
+// FIX #10: List of critical config names that should throw on invalid values
+const CRITICAL_CONFIGS = new Set([
+  'SOLANA_RPC_URL',
+  'TELEGRAM_BOT_TOKEN',
+  'TELEGRAM_CHAT_ID',
+  'MIN_LIQUIDITY_USD',
+  'MAX_ALERTS_PER_HOUR',
+]);
 
 function getEnvVar(name: string, required: boolean = true): string {
   const value = process.env[name];
@@ -11,14 +28,33 @@ function getEnvVar(name: string, required: boolean = true): string {
   return value || '';
 }
 
-function getEnvNumber(name: string, defaultValue: number): number {
+/**
+ * FIX #10: Enhanced number parsing with critical config validation
+ */
+function getEnvNumber(name: string, defaultValue: number, options?: { min?: number; max?: number }): number {
   const value = process.env[name];
   if (!value) return defaultValue;
+  
   const parsed = parseInt(value, 10);
   if (isNaN(parsed)) {
+    // FIX #10: Throw error for critical configs instead of using default
+    if (CRITICAL_CONFIGS.has(name)) {
+      throw new Error(`Invalid number for critical config ${name}: "${value}"`);
+    }
     console.warn(`Invalid number for ${name}, using default: ${defaultValue}`);
     return defaultValue;
   }
+  
+  // Validate range if specified
+  if (options?.min !== undefined && parsed < options.min) {
+    console.warn(`${name} value ${parsed} below minimum ${options.min}, using minimum`);
+    return options.min;
+  }
+  if (options?.max !== undefined && parsed > options.max) {
+    console.warn(`${name} value ${parsed} above maximum ${options.max}, using maximum`);
+    return options.max;
+  }
+  
   return parsed;
 }
 
@@ -26,6 +62,16 @@ function getEnvBoolean(name: string, defaultValue: boolean): boolean {
   const value = process.env[name]?.toLowerCase();
   if (!value) return defaultValue;
   return value === 'true' || value === '1' || value === 'yes';
+}
+
+/**
+ * FIX #20: Safe string splitting that handles empty strings properly
+ */
+function getEnvStringArray(name: string): string[] {
+  const value = process.env[name];
+  // Return empty array if value is empty or undefined
+  if (!value || value.trim() === '') return [];
+  return value.split(',').map(c => c.trim()).filter(c => c.length > 0);
 }
 
 export function loadConfig(): ExtendedBotConfig {
@@ -121,19 +167,14 @@ export function loadConfig(): ExtendedBotConfig {
     },
 
     // Multi-platform sentiment settings
+    // FIX #20: Use safe array splitting function
     sentiment: {
       enabled: getEnvBoolean('SENTIMENT_ENABLED', true),
       twitterEnabled: getEnvBoolean('TWITTER_SENTIMENT_ENABLED', true),
       telegramEnabled: getEnvBoolean('TELEGRAM_SENTIMENT_ENABLED', false),
       discordEnabled: getEnvBoolean('DISCORD_SENTIMENT_ENABLED', false),
-      defaultTelegramChannels: getEnvVar('DEFAULT_TELEGRAM_CHANNELS', false)
-        .split(',')
-        .map(c => c.trim())
-        .filter(c => c.length > 0),
-      defaultDiscordChannels: getEnvVar('DEFAULT_DISCORD_CHANNELS', false)
-        .split(',')
-        .map(c => c.trim())
-        .filter(c => c.length > 0),
+      defaultTelegramChannels: getEnvStringArray('DEFAULT_TELEGRAM_CHANNELS'),
+      defaultDiscordChannels: getEnvStringArray('DEFAULT_DISCORD_CHANNELS'),
     },
   };
 }

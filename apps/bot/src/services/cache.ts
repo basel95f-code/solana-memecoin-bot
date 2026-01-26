@@ -87,6 +87,8 @@ class TokenCache {
    * Evict least recently used entries when cache is full
    * Optimized: O(n * k) with binary search insertion instead of O(n log n) full sort
    * For k=100 and n=10000, this is ~10x faster than full sort
+   * 
+   * FIX #8: Clear references immediately to prevent memory leak
    */
   private evictLRU(): void {
     const k = this.evictionBatchSize;
@@ -110,12 +112,16 @@ class TokenCache {
       }
     }
 
+    // FIX #8: Extract mints first, then clear the oldest array to release references
+    const mintsToDelete = oldest.map(o => o.mint);
+    oldest.length = 0; // Clear references immediately to prevent memory leak
+
     // Evict the oldest entries
-    for (const { mint } of oldest) {
+    for (const mint of mintsToDelete) {
       this.cache.delete(mint);
     }
 
-    console.log(`Cache eviction: removed ${oldest.length} LRU entries, size now ${this.cache.size}`);
+    console.log(`Cache eviction: removed ${mintsToDelete.length} LRU entries, size now ${this.cache.size}`);
   }
 
   /**

@@ -1,7 +1,32 @@
 /**
  * Centralized configuration constants
  * All hardcoded values extracted for easy tuning and maintenance
+ * 
+ * FIX #31: Added time constants for common intervals
  */
+
+// ============================================
+// FIX #31: Time Constants (avoid magic numbers)
+// ============================================
+export const TIME = {
+  MS_PER_SECOND: 1000,
+  MS_PER_MINUTE: 60 * 1000,
+  MS_PER_HOUR: 60 * 60 * 1000,
+  MS_PER_DAY: 24 * 60 * 60 * 1000,
+  SECONDS_PER_MINUTE: 60,
+  SECONDS_PER_HOUR: 3600,
+  SECONDS_PER_DAY: 86400,
+  // Commonly used intervals
+  ONE_MINUTE_MS: 60 * 1000,
+  FIVE_MINUTES_MS: 5 * 60 * 1000,
+  TEN_MINUTES_MS: 10 * 60 * 1000,
+  THIRTY_MINUTES_MS: 30 * 60 * 1000,
+  ONE_HOUR_MS: 60 * 60 * 1000,
+  SIX_HOURS_MS: 6 * 60 * 60 * 1000,
+  TWELVE_HOURS_MS: 12 * 60 * 60 * 1000,
+  ONE_DAY_MS: 24 * 60 * 60 * 1000,
+  ONE_WEEK_MS: 7 * 24 * 60 * 60 * 1000,
+} as const;
 
 // ============================================
 // Queue & Processing Settings
