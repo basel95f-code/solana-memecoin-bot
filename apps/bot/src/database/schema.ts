@@ -241,7 +241,7 @@ CREATE INDEX IF NOT EXISTS idx_ml_models_name ON ml_models(model_name);
 /**
  * Migration scripts for schema updates
  */
-export const MIGRATIONS: { version: number; sql: string }[] = [
+export const MIGRATIONS: { version: number; sql: string; description?: string }[] = [
   // Backtesting framework tables
   {
     version: 1,
@@ -1386,6 +1386,120 @@ export const MIGRATIONS: { version: number; sql: string }[] = [
       -- Insert default schedule
       INSERT OR IGNORE INTO training_schedule (frequency_days, min_new_samples, next_run_at, updated_at)
       VALUES (7, 50, strftime('%s', 'now') + 604800, strftime('%s', 'now'));
+    `
+  },
+  {
+    version: 17,
+    description: 'Add group leaderboard features',
+    sql: `
+      -- ============================================
+      -- Group Leaderboard Tables
+      -- Track token calls and leaderboard stats for group chats
+      -- ============================================
+      
+      -- Group Calls Table
+      CREATE TABLE IF NOT EXISTS group_calls (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        group_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        username TEXT,
+        token_mint TEXT NOT NULL,
+        symbol TEXT,
+        entry_price REAL NOT NULL,
+        entry_mcap REAL,
+        called_at INTEGER NOT NULL,
+        ath_price REAL,
+        ath_mcap REAL,
+        ath_timestamp INTEGER,
+        current_price REAL,
+        current_return REAL,
+        points INTEGER DEFAULT 0,
+        is_rug INTEGER DEFAULT 0,
+        notes TEXT,
+        updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_group_calls_group ON group_calls(group_id);
+      CREATE INDEX IF NOT EXISTS idx_group_calls_user ON group_calls(group_id, user_id);
+      CREATE INDEX IF NOT EXISTS idx_group_calls_token ON group_calls(token_mint);
+      CREATE INDEX IF NOT EXISTS idx_group_calls_time ON group_calls(called_at DESC);
+
+      -- Leaderboard Stats Table
+      CREATE TABLE IF NOT EXISTS leaderboard_stats (
+        group_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        username TEXT,
+        total_calls INTEGER DEFAULT 0,
+        total_points INTEGER DEFAULT 0,
+        hit_rate REAL DEFAULT 0,
+        avg_return REAL DEFAULT 0,
+        median_return REAL DEFAULT 0,
+        best_call TEXT,
+        best_return REAL DEFAULT 0,
+        calls_2x INTEGER DEFAULT 0,
+        calls_5x INTEGER DEFAULT 0,
+        calls_10x INTEGER DEFAULT 0,
+        calls_50x INTEGER DEFAULT 0,
+        calls_100x INTEGER DEFAULT 0,
+        calls_rug INTEGER DEFAULT 0,
+        first_call_at INTEGER,
+        last_call_at INTEGER,
+        updated_at INTEGER DEFAULT (strftime('%s', 'now')),
+        PRIMARY KEY (group_id, user_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_leaderboard_group ON leaderboard_stats(group_id);
+      CREATE INDEX IF NOT EXISTS idx_leaderboard_points ON leaderboard_stats(group_id, total_points DESC);
+
+      -- Group Settings Table
+      CREATE TABLE IF NOT EXISTS group_settings (
+        group_id TEXT PRIMARY KEY,
+        leaderboard_enabled INTEGER DEFAULT 1,
+        auto_track_enabled INTEGER DEFAULT 1,
+        min_mcap_filter REAL DEFAULT 0,
+        leaderboard_title TEXT DEFAULT 'Leaderboard',
+        show_usernames INTEGER DEFAULT 1,
+        default_timeframe TEXT DEFAULT '7d',
+        multiplier_2x REAL DEFAULT 2,
+        multiplier_5x REAL DEFAULT 5,
+        multiplier_10x REAL DEFAULT 10,
+        multiplier_50x REAL DEFAULT 20,
+        multiplier_100x REAL DEFAULT 30,
+        penalty_rug REAL DEFAULT -5,
+        penalty_loss REAL DEFAULT -2,
+        created_at INTEGER DEFAULT (strftime('%s', 'now')),
+        updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+      );
+
+      -- Trigger to auto-update leaderboard stats
+      CREATE TRIGGER IF NOT EXISTS update_leaderboard_on_call_change
+      AFTER UPDATE ON group_calls
+      BEGIN
+        INSERT OR REPLACE INTO leaderboard_stats (
+          group_id, user_id, username, total_calls, total_points, hit_rate, avg_return,
+          median_return, best_return, calls_2x, calls_5x, calls_10x, calls_50x,
+          calls_100x, calls_rug, first_call_at, last_call_at, updated_at
+        )
+        SELECT 
+          NEW.group_id, NEW.user_id, NEW.username,
+          COUNT(*) as total_calls,
+          SUM(points) as total_points,
+          ROUND(AVG(CASE WHEN current_return >= 1.0 THEN 1 ELSE 0 END) * 100, 1) as hit_rate,
+          ROUND(AVG(current_return), 2) as avg_return,
+          ROUND(AVG(current_return), 2) as median_return,
+          MAX(current_return) as best_return,
+          SUM(CASE WHEN current_return >= 2 THEN 1 ELSE 0 END) as calls_2x,
+          SUM(CASE WHEN current_return >= 5 THEN 1 ELSE 0 END) as calls_5x,
+          SUM(CASE WHEN current_return >= 10 THEN 1 ELSE 0 END) as calls_10x,
+          SUM(CASE WHEN current_return >= 50 THEN 1 ELSE 0 END) as calls_50x,
+          SUM(CASE WHEN current_return >= 100 THEN 1 ELSE 0 END) as calls_100x,
+          SUM(CASE WHEN is_rug = 1 THEN 1 ELSE 0 END) as calls_rug,
+          MIN(called_at) as first_call_at,
+          MAX(called_at) as last_call_at,
+          strftime('%s', 'now') as updated_at
+        FROM group_calls
+        WHERE group_id = NEW.group_id AND user_id = NEW.user_id;
+      END;
     `
   }
 ];

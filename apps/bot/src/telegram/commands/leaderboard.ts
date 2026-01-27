@@ -1,295 +1,319 @@
+/**
+ * Group Leaderboard Commands
+ * Commands for tracking calls and displaying leaderboards
+ */
+
 import type { Context, Telegraf } from 'telegraf';
-import { leaderboardService } from '../../services/leaderboard';
-import { chatContextService } from '../../services/chatContext';
-import { Markup } from 'telegraf';
+import { groupLeaderboard } from '../../services/groupLeaderboard';
+import { logger } from '../../utils/logger';
 
-function formatLeaderboard(
-  rankings: any[],
-  period: 'week' | 'month' | 'alltime',
-  chatTitle?: string
-): string {
-  const periodText = period === 'week' ? 'This Week' : period === 'month' ? 'This Month' : 'All Time';
-  
-  if (rankings.length === 0) {
-    return (
-      `🏆 <b>Leaderboard - ${periodText}</b>\n\n` +
-      `No tokens tracked yet!\n\n` +
-      `Start adding tokens with <code>/groupwatch [token_address]</code> to compete!`
-    );
+/**
+ * Format leaderboard display
+ */
+function formatLeaderboard(entries: any[], timeframe: string): string {
+  if (entries.length === 0) {
+    return `📊 <b>Leaderboard (${timeframe})</b>\n\nNo calls yet! Be the first to call a token with /call`;
   }
 
-  let message = `🏆 <b>Leaderboard - ${periodText}</b>\n`;
-  if (chatTitle) {
-    message += `<i>${chatTitle}</i>\n`;
-  }
-  message += `\n`;
+  let message = `📊 <b>Leaderboard (${timeframe})</b>\n\n`;
 
-  for (let i = 0; i < rankings.length; i++) {
-    const ranking = rankings[i];
-    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
-    const username = ranking.username || 'Anonymous'; // Show "Anonymous" for opted-out users
+  entries.forEach((entry, index) => {
+    const tierEmoji = entry.tier.split(' ')[0];
+    const username = entry.username || `User ${entry.userId.slice(-4)}`;
+    const hitRate = entry.hitRate.toFixed(0);
     
-    const avgMult = ranking.avgMultiplier.toFixed(2);
-    const successRate = ranking.successRate.toFixed(0);
+    message += `${entry.rank}. ${tierEmoji} <b>${username}</b>\n`;
+    message += `   💎 ${entry.totalPoints} pts | 📊 ${entry.totalCalls} calls | ✅ ${hitRate}% hit\n`;
     
-    message += `${medal} <b>${username}</b>\n`;
-    message += `   💎 ${ranking.gemsFound} finds | ${avgMult}x avg | ${successRate}% success\n`;
-    message += `   📊 Score: ${Math.round(ranking.totalScore)}\n\n`;
-  }
+    if (entry.bestReturn > 0) {
+      message += `   🎯 Best: ${entry.bestReturn.toFixed(1)}x\n`;
+    }
+    
+    message += `\n`;
+  });
 
-  message += `<i>View your stats: /mystats</i>`;
+  message += `\n💡 <i>Track your calls with /call &lt;mint&gt; &lt;price&gt;</i>`;
+
   return message;
 }
 
-function formatUserStats(stats: any): string {
+/**
+ * Format user stats
+ */
+function formatUserStats(stats: any, rank: number | null): string {
   if (!stats) {
-    return (
-      `📊 <b>Your Stats</b>\n\n` +
-      `You haven't added any tokens to the leaderboard yet!\n\n` +
-      `Add tokens with <code>/groupwatch [token_address]</code> to start tracking.`
-    );
+    return `📊 <b>Your Stats</b>\n\nYou haven't made any calls yet!\nUse /call &lt;mint&gt; &lt;price&gt; to start tracking.`;
   }
 
-  const username = stats.username || `User ${stats.userId}`;
-  const avgMult = stats.avgMultiplier.toFixed(2);
-  const successRate = stats.successRate.toFixed(0);
-  const bestMult = stats.bestMultiplier.toFixed(2);
+  const tierEmoji = stats.tier?.split(' ')[0] || '🌱';
+  const username = stats.username || 'You';
+  const rankText = rank ? `#${rank}` : 'Unranked';
 
-  let message = `📊 <b>Stats for ${username}</b>\n\n`;
-  
-  message += `🏆 <b>Rank:</b> #${stats.currentRank}\n`;
-  message += `📈 <b>Total Score:</b> ${Math.round(stats.totalScore)}\n\n`;
-  
-  message += `💎 <b>Tokens Found:</b> ${stats.totalTokens}\n`;
-  message += `📊 <b>Avg Multiplier:</b> ${avgMult}x\n`;
-  message += `✅ <b>Success Rate:</b> ${successRate}%\n\n`;
-  
-  if (stats.bestTokenSymbol) {
-    message += `🌟 <b>Best Find:</b> ${stats.bestTokenSymbol} (${bestMult}x)\n\n`;
+  let message = `📊 <b>${username}'s Stats</b>\n\n`;
+  message += `🏅 Rank: ${rankText}\n`;
+  message += `${tierEmoji} Tier: ${stats.tier || '🌱 Seedling'}\n`;
+  message += `💎 Points: ${stats.totalPoints}\n`;
+  message += `📊 Total Calls: ${stats.totalCalls}\n`;
+  message += `✅ Hit Rate: ${stats.hitRate?.toFixed(0) || 0}%\n`;
+  message += `📈 Avg Return: ${stats.avgReturn?.toFixed(2) || 0}x\n\n`;
+
+  message += `<b>Performance Breakdown:</b>\n`;
+  if (stats.calls100x > 0) message += `💎 100x+: ${stats.calls100x}\n`;
+  if (stats.calls50x > 0) message += `🚀 50x+: ${stats.calls50x}\n`;
+  if (stats.calls10x > 0) message += `🔥 10x+: ${stats.calls10x}\n`;
+  if (stats.calls5x > 0) message += `📈 5x+: ${stats.calls5x}\n`;
+  if (stats.calls2x > 0) message += `✅ 2x+: ${stats.calls2x}\n`;
+  if (stats.callsRug > 0) message += `🚨 Rugs: ${stats.callsRug}\n`;
+
+  if (stats.bestReturn > 0) {
+    message += `\n🎯 <b>Best Call:</b> ${stats.bestReturn.toFixed(1)}x`;
+    if (stats.bestCall) {
+      message += ` (${stats.bestCall.slice(0, 8)}...)`;
+    }
   }
-  
-  message += `<i>Keep finding gems to climb the leaderboard! 🚀</i>`;
-  
+
   return message;
 }
 
-function createLeaderboardKeyboard(currentPeriod: 'week' | 'month' | 'alltime') {
-  const buttons = [];
-  
-  if (currentPeriod !== 'week') {
-    buttons.push(Markup.button.callback('📅 Week', 'leaderboard_week'));
+/**
+ * Format recent calls
+ */
+function formatRecentCalls(calls: any[]): string {
+  if (calls.length === 0) {
+    return `📋 <b>Recent Calls</b>\n\nNo calls in this group yet!`;
   }
-  if (currentPeriod !== 'month') {
-    buttons.push(Markup.button.callback('📅 Month', 'leaderboard_month'));
-  }
-  if (currentPeriod !== 'alltime') {
-    buttons.push(Markup.button.callback('📅 All Time', 'leaderboard_alltime'));
-  }
-  
-  return Markup.inlineKeyboard([buttons]);
+
+  let message = `📋 <b>Last ${calls.length} Calls</b>\n\n`;
+
+  calls.forEach((call) => {
+    const username = call.username || `User ${call.userId.slice(-4)}`;
+    const symbol = call.symbol || call.tokenMint.slice(0, 8);
+    const roi = call.currentReturn?.toFixed(2) || '1.00';
+    const points = call.points || 0;
+    const timeAgo = formatTimeAgo(call.calledAt);
+
+    let statusEmoji = '📊';
+    if (call.isRug) statusEmoji = '🚨';
+    else if (call.currentReturn >= 10) statusEmoji = '🔥';
+    else if (call.currentReturn >= 5) statusEmoji = '📈';
+    else if (call.currentReturn >= 2) statusEmoji = '✅';
+
+    message += `${statusEmoji} <b>${username}</b> → $${symbol}\n`;
+    message += `   ${roi}x (${points >= 0 ? '+' : ''}${points} pts) • ${timeAgo}\n`;
+  });
+
+  return message;
 }
 
+/**
+ * Format time ago helper
+ */
+function formatTimeAgo(timestamp: number): string {
+  const now = Math.floor(Date.now() / 1000);
+  const diff = now - timestamp;
+
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+/**
+ * Register leaderboard commands
+ */
 export function registerLeaderboardCommands(bot: Telegraf): void {
-  // /leaderboard command - Show group leaderboard
-  bot.command('leaderboard', async (ctx: Context) => {
-    const chatContext = chatContextService.getChatContext(ctx);
-    if (!chatContext) return;
+  /**
+   * /call command - Track a token call
+   * Usage: /call <mint> <entry_price>
+   */
+  bot.command('call', async (ctx: Context) => {
+    try {
+      // Only works in groups
+      if (ctx.chat?.type !== 'group' && ctx.chat?.type !== 'supergroup') {
+        await ctx.reply('❌ This command only works in group chats!');
+        return;
+      }
 
-    // Only works in groups
-    if (!chatContext.isGroup) {
-      await ctx.replyWithHTML(
-        `❌ This command only works in group chats.\n\n` +
-        `Use <code>/mystats</code> to see your personal stats.`
-      );
-      return;
-    }
-
-    // Check if leaderboard is enabled
-    const isEnabled = await leaderboardService.isEnabledInGroup(chatContext.chatId);
-    if (!isEnabled) {
-      await ctx.replyWithHTML(
-        `📊 <b>Leaderboard</b>\n\n` +
-        `The leaderboard is currently disabled in this group.\n\n` +
-        `Admins can enable it with:\n` +
-        `<code>/leaderboard settings enable</code>`
-      );
-      return;
-    }
-
-    const text = ctx.message && 'text' in ctx.message ? ctx.message.text : '';
-    const args = text.split(' ').slice(1);
-
-    // Handle /leaderboard optin
-    if (args[0] === 'optin' || args[0] === 'join') {
-      try {
-        await chatContextService.updateUserSettings(chatContext.userId, {
-          participateInLeaderboard: true
-        });
-        await ctx.replyWithHTML(
-          `✅ <b>Leaderboard Opt-in Successful!</b>\n\n` +
-          `Your token discoveries will now be tracked and displayed on the leaderboard.\n\n` +
-          `🏆 Start adding tokens with <code>/groupwatch [token]</code> to compete!\n\n` +
-          `<i>You can opt-out anytime with /leaderboard optout</i>`
+      const args = ctx.message?.text?.split(' ').slice(1) || [];
+      
+      if (args.length < 2) {
+        await ctx.reply(
+          `📊 <b>Track a Token Call</b>\n\n` +
+          `Usage: /call &lt;mint&gt; &lt;entry_price&gt;\n\n` +
+          `Example:\n` +
+          `/call DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263 0.0012\n\n` +
+          `💡 The bot will track your call and award points based on performance!`,
+          { parse_mode: 'HTML' }
         );
-      } catch (error) {
-        console.error('Leaderboard opt-in error:', error);
-        await ctx.replyWithHTML(`❌ Error opting in to leaderboard.`);
+        return;
       }
-      return;
+
+      const mint = args[0];
+      const entryPrice = parseFloat(args[1]);
+
+      if (isNaN(entryPrice) || entryPrice <= 0) {
+        await ctx.reply('❌ Invalid entry price! Must be a positive number.');
+        return;
+      }
+
+      if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) {
+        await ctx.reply('❌ Invalid token mint address!');
+        return;
+      }
+
+      const groupId = ctx.chat.id.toString();
+      const userId = ctx.from?.id.toString() || '';
+      const username = ctx.from?.username || ctx.from?.first_name;
+
+      const call = await groupLeaderboard.recordCall(
+        groupId,
+        userId,
+        username,
+        mint,
+        entryPrice
+      );
+
+      await ctx.reply(
+        `✅ <b>Call Recorded!</b>\n\n` +
+        `👤 Caller: ${username || 'You'}\n` +
+        `🪙 Token: <code>${mint.slice(0, 8)}...${mint.slice(-6)}</code>\n` +
+        `💰 Entry: $${entryPrice}\n\n` +
+        `📊 Track performance with /mylb\n` +
+        `🏆 View leaderboard with /lb`,
+        { parse_mode: 'HTML' }
+      );
+
+      logger.info('LeaderboardCmd', `Call recorded: ${username} in group ${groupId}`);
+    } catch (error) {
+      logger.error('LeaderboardCmd', 'Failed to record call', error as Error);
+      await ctx.reply(`❌ Error: ${(error as Error).message}`);
     }
+  });
 
-    // Handle /leaderboard optout
-    if (args[0] === 'optout' || args[0] === 'leave') {
-      try {
-        await chatContextService.updateUserSettings(chatContext.userId, {
-          participateInLeaderboard: false
-        });
-        await ctx.replyWithHTML(
-          `✅ <b>Leaderboard Opt-out Successful</b>\n\n` +
-          `Your discoveries will no longer be tracked.\n` +
-          `Your previous entries will be anonymized.\n\n` +
-          `<i>You can opt back in anytime with /leaderboard optin</i>`
-        );
-      } catch (error) {
-        console.error('Leaderboard opt-out error:', error);
-        await ctx.replyWithHTML(`❌ Error opting out of leaderboard.`);
+  /**
+   * /lb command - Show leaderboard
+   * Usage: /lb [timeframe]
+   * Timeframes: 1d, 7d, 30d, all (default: 7d)
+   */
+  bot.command('lb', async (ctx: Context) => {
+    try {
+      // Only works in groups
+      if (ctx.chat?.type !== 'group' && ctx.chat?.type !== 'supergroup') {
+        await ctx.reply('❌ This command only works in group chats!');
+        return;
       }
-      return;
+
+      const args = ctx.message?.text?.split(' ').slice(1) || [];
+      const timeframe = args[0] || '7d';
+
+      if (!['1d', '7d', '30d', 'all'].includes(timeframe)) {
+        await ctx.reply('❌ Invalid timeframe! Use: 1d, 7d, 30d, or all');
+        return;
+      }
+
+      const groupId = ctx.chat.id.toString();
+      const entries = await groupLeaderboard.getGroupLeaderboard(groupId, timeframe, 10);
+
+      const message = formatLeaderboard(entries, timeframe);
+      await ctx.reply(message, { parse_mode: 'HTML' });
+
+      logger.info('LeaderboardCmd', `Leaderboard displayed for group ${groupId}`);
+    } catch (error) {
+      logger.error('LeaderboardCmd', 'Failed to show leaderboard', error as Error);
+      await ctx.reply('❌ Failed to load leaderboard. Please try again.');
     }
+  });
 
-    // Handle /leaderboard settings (admin only)
-    if (args[0] === 'settings') {
-      const isAdmin = await chatContextService.isGroupAdmin(chatContext.chatId, chatContext.userId);
-      if (!isAdmin) {
-        await ctx.replyWithHTML(`❌ Only group admins can manage leaderboard settings.`);
+  /**
+   * /mylb command - Show personal stats
+   */
+  bot.command('mylb', async (ctx: Context) => {
+    try {
+      // Only works in groups
+      if (ctx.chat?.type !== 'group' && ctx.chat?.type !== 'supergroup') {
+        await ctx.reply('❌ This command only works in group chats!');
         return;
       }
 
-      if (args[1] === 'enable') {
-        const groupSettings = await chatContextService.getGroupSettings(chatContext.chatId);
-        if (groupSettings) {
-          await chatContextService.updateGroupSettings(chatContext.chatId, {
-            enableLeaderboard: true
-          });
-          await ctx.replyWithHTML(
-            `✅ <b>Leaderboard Enabled</b>\n\n` +
-            `Users can now opt-in to leaderboard tracking!\n\n` +
-            `<i>Note: Users must opt-in via /settings to participate.</i>`
-          );
-        }
+      const groupId = ctx.chat.id.toString();
+      const userId = ctx.from?.id.toString() || '';
+
+      const stats = await groupLeaderboard.getUserStats(groupId, userId);
+      const leaderboard = await groupLeaderboard.getGroupLeaderboard(groupId, 'all', 100);
+      const rank = leaderboard.findIndex(e => e.userId === userId) + 1 || null;
+
+      const message = formatUserStats(stats, rank);
+      await ctx.reply(message, { parse_mode: 'HTML' });
+
+      logger.info('LeaderboardCmd', `Stats displayed for user ${userId} in group ${groupId}`);
+    } catch (error) {
+      logger.error('LeaderboardCmd', 'Failed to show stats', error as Error);
+      await ctx.reply('❌ Failed to load your stats. Please try again.');
+    }
+  });
+
+  /**
+   * /calls command - Show recent calls
+   */
+  bot.command('calls', async (ctx: Context) => {
+    try {
+      // Only works in groups
+      if (ctx.chat?.type !== 'group' && ctx.chat?.type !== 'supergroup') {
+        await ctx.reply('❌ This command only works in group chats!');
         return;
-      } else if (args[1] === 'disable') {
-        const groupSettings = await chatContextService.getGroupSettings(chatContext.chatId);
-        if (groupSettings) {
-          await chatContextService.updateGroupSettings(chatContext.chatId, {
-            enableLeaderboard: false
-          });
-          await ctx.replyWithHTML(`✅ Leaderboard disabled for this group.`);
-        }
+      }
+
+      const groupId = ctx.chat.id.toString();
+      const calls = await groupLeaderboard.getRecentCalls(groupId, 20);
+
+      const message = formatRecentCalls(calls);
+      await ctx.reply(message, { parse_mode: 'HTML' });
+
+      logger.info('LeaderboardCmd', `Recent calls displayed for group ${groupId}`);
+    } catch (error) {
+      logger.error('LeaderboardCmd', 'Failed to show calls', error as Error);
+      await ctx.reply('❌ Failed to load recent calls. Please try again.');
+    }
+  });
+
+  /**
+   * /recall command - Delete a call (within 5 minutes)
+   * Usage: /recall <call_id>
+   */
+  bot.command('recall', async (ctx: Context) => {
+    try {
+      // Only works in groups
+      if (ctx.chat?.type !== 'group' && ctx.chat?.type !== 'supergroup') {
+        await ctx.reply('❌ This command only works in group chats!');
         return;
+      }
+
+      const args = ctx.message?.text?.split(' ').slice(1) || [];
+      
+      if (args.length < 1) {
+        await ctx.reply('Usage: /recall <call_id>\n\nYou can only delete calls within 5 minutes of posting.');
+        return;
+      }
+
+      const callId = parseInt(args[0]);
+      if (isNaN(callId)) {
+        await ctx.reply('❌ Invalid call ID!');
+        return;
+      }
+
+      const userId = ctx.from?.id.toString() || '';
+      const success = await groupLeaderboard.deleteCall(callId, userId);
+
+      if (success) {
+        await ctx.reply('✅ Call deleted successfully!');
       } else {
-        await ctx.replyWithHTML(
-          `<b>Leaderboard Settings</b>\n\n` +
-          `Commands:\n` +
-          `• <code>/leaderboard settings enable</code> - Enable leaderboard\n` +
-          `• <code>/leaderboard settings disable</code> - Disable leaderboard\n\n` +
-          `<i>Admin only</i>`
-        );
-        return;
+        await ctx.reply('❌ Call not found or cannot be deleted (only your own calls within 5 minutes).');
       }
-    }
-
-    // Determine period
-    let period: 'week' | 'month' | 'alltime' = 'week';
-    if (args[0] === 'month') {
-      period = 'month';
-    } else if (args[0] === 'alltime' || args[0] === 'all') {
-      period = 'alltime';
-    }
-
-    try {
-      const rankings = await leaderboardService.getLeaderboard(chatContext.chatId, period);
-      const chatTitle = ctx.chat && 'title' in ctx.chat ? ctx.chat.title : undefined;
-      const formatted = formatLeaderboard(rankings, period, chatTitle);
-
-      await ctx.replyWithHTML(formatted, createLeaderboardKeyboard(period));
     } catch (error) {
-      console.error('Leaderboard command error:', error);
-      await ctx.replyWithHTML(`❌ Error fetching leaderboard.`);
+      logger.error('LeaderboardCmd', 'Failed to delete call', error as Error);
+      await ctx.reply(`❌ Error: ${(error as Error).message}`);
     }
   });
 
-  // /mystats command - Show personal stats
-  bot.command('mystats', async (ctx: Context) => {
-    const chatContext = chatContextService.getChatContext(ctx);
-    if (!chatContext) return;
-
-    // Only works in groups
-    if (!chatContext.isGroup) {
-      await ctx.replyWithHTML(
-        `❌ This command only works in group chats.\n\n` +
-        `Your stats are tracked per-group when you add tokens.`
-      );
-      return;
-    }
-
-    // Check if leaderboard is enabled
-    const isEnabled = await leaderboardService.isEnabledInGroup(chatContext.chatId);
-    if (!isEnabled) {
-      await ctx.replyWithHTML(
-        `❌ The leaderboard is disabled in this group.\n\n` +
-        `Admins can enable it with <code>/leaderboard settings enable</code>`
-      );
-      return;
-    }
-
-    // Check if user has opted in
-    const hasOptedIn = await leaderboardService.hasOptedIn(chatContext.userId);
-    if (!hasOptedIn) {
-      await ctx.replyWithHTML(
-        `📊 <b>Leaderboard Opt-in Required</b>\n\n` +
-        `You need to opt-in to leaderboard tracking to see your stats.\n\n` +
-        `This allows the bot to:\n` +
-        `• Track tokens you add to the group watchlist\n` +
-        `• Calculate your success rate and rankings\n` +
-        `• Display your username on the leaderboard\n\n` +
-        `Opt-in with: <code>/settings</code> and enable "Participate in Leaderboard"\n\n` +
-        `<i>Privacy-first: You can opt-out anytime!</i>`
-      );
-      return;
-    }
-
-    try {
-      const stats = await leaderboardService.getUserStats(chatContext.chatId, chatContext.userId);
-      const formatted = formatUserStats(stats);
-
-      await ctx.replyWithHTML(formatted);
-    } catch (error) {
-      console.error('Mystats command error:', error);
-      await ctx.replyWithHTML(`❌ Error fetching your stats.`);
-    }
-  });
-
-  // Handle leaderboard period toggle callbacks
-  bot.action(/^leaderboard_(week|month|alltime)$/, async (ctx) => {
-    const chatContext = chatContextService.getChatContext(ctx);
-    if (!chatContext || !chatContext.isGroup) return;
-
-    const period = ctx.match[1] as 'week' | 'month' | 'alltime';
-
-    try {
-      const rankings = await leaderboardService.getLeaderboard(chatContext.chatId, period);
-      const chatTitle = ctx.chat && 'title' in ctx.chat ? ctx.chat.title : undefined;
-      const formatted = formatLeaderboard(rankings, period, chatTitle);
-
-      await ctx.editMessageText(formatted, {
-        parse_mode: 'HTML',
-        ...createLeaderboardKeyboard(period)
-      });
-      await ctx.answerCbQuery();
-    } catch (error) {
-      console.error('Leaderboard callback error:', error);
-      await ctx.answerCbQuery('Error fetching leaderboard');
-    }
-  });
+  logger.info('Commands', 'Leaderboard commands registered');
 }

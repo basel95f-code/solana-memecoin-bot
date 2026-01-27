@@ -3,7 +3,8 @@
  * Broadcasts alerts to connected frontend clients via WebSocket
  */
 
-import { WebSocket, WebSocketServer } from 'ws';
+import WebSocket from 'ws';
+const WebSocketServer = WebSocket.Server;
 import { logger } from '../../../utils/logger';
 import { BaseChannel } from './BaseChannel';
 import type { Alert, AlertBatch, DeliveryResult, ChannelType } from '../types';

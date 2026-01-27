@@ -1772,6 +1772,63 @@ class DatabaseService {
   }
 
   /**
+   * Prepare a SQL statement (SQL.js compatibility)
+   */
+  prepare(sql: string) {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    const stmt = this.db.prepare(sql);
+    return {
+      get: (...params: any[]) => {
+        stmt.bind(params);
+        const hasRow = stmt.step();
+        if (!hasRow) return null;
+        const result = stmt.getAsObject();
+        stmt.reset();
+        return result;
+      },
+      all: (...params: any[]) => {
+        stmt.bind(params);
+        const results: any[] = [];
+        while (stmt.step()) {
+          results.push(stmt.getAsObject());
+        }
+        stmt.reset();
+        return results;
+      },
+      run: (...params: any[]) => {
+        stmt.bind(params);
+        stmt.step();
+        stmt.reset();
+        return { changes: this.db!.getRowsModified(), lastInsertRowid: 0 };
+      }
+    };
+  }
+
+  /**
+   * Execute a raw SQL query (SQL.js compatibility)
+   */
+  query(sql: string, params: any[] = []) {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    const stmt = this.db.prepare(sql);
+    if (params.length > 0) {
+      stmt.bind(params);
+    }
+
+    const results: any[] = [];
+    while (stmt.step()) {
+      results.push(stmt.getAsObject());
+    }
+    stmt.free();
+    return results;
+  }
+
+  /**
    * Close the database connection gracefully
    */
   async close(): Promise<void> {

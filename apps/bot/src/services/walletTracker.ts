@@ -3,7 +3,9 @@
  * Manages tracked wallets and their performance metrics
  */
 
-import { supabase } from '../database/supabase';
+import { getSupabaseClient } from '../database/supabase';
+
+const supabase = getSupabaseClient();
 import { logger } from '../utils/logger';
 import { Connection, PublicKey } from '@solana/web3.js';
 import { solanaService } from './solana';

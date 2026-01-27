@@ -98,6 +98,13 @@ class DexScreenerService {
   }
 
   /**
+   * Alias for getTokenData (backward compatibility)
+   */
+  async getPair(tokenAddress: string): Promise<DexScreenerPair | null> {
+    return this.getTokenData(tokenAddress);
+  }
+
+  /**
    * Batch fetch multiple tokens (up to 30 per request)
    */
   async getMultipleTokensData(tokenAddresses: string[]): Promise<Map<string, DexScreenerPair>> {

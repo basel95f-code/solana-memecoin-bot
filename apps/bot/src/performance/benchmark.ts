@@ -337,6 +337,8 @@ export class BenchmarkEngine {
         baseReserve: Math.random() * 1000000,
         quoteReserve: Math.random() * 100,
         lpMint: this.generateRandomMint(),
+        source: 'raydium' as const,
+        createdAt: new Date(),
       };
 
       tokens.push({ mint, pool });

@@ -588,6 +588,8 @@ export interface ExtendedBotConfig extends BotConfig {
   telegramMtproto: TelegramMtprotoConfig;
   discordBot: DiscordBotConfig;
   sentiment: SentimentConfig;
+  ADMIN_CHAT_ID?: string;
+  ADMIN_USER_IDS?: string[];
 }
 
 // ============================================

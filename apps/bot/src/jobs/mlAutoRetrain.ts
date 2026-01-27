@@ -6,7 +6,7 @@
 
 import { mlRetrainer } from '../services/ml/mlRetrainer';
 import { logger } from '../utils/logger';
-import { telegram } from '../services/telegram';
+import { telegramService as telegram } from '../services/telegram';
 import { config } from '../config';
 
 export async function checkAndRetrain(): Promise<void> {

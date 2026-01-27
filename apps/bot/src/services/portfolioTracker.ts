@@ -114,7 +114,7 @@ class PortfolioTracker {
       ]
     );
 
-    const positionId = result.lastID;
+    const positionId = result.lastInsertRowid;
 
     // Record trade
     database.run(

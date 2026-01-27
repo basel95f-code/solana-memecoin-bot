@@ -3,7 +3,7 @@
  * User-facing commands for accessing analytics insights
  */
 
-import { CommandContext } from 'grammy';
+import { Context as CommandContext } from 'telegraf';
 import { analyticsAPI } from '../../analytics/api';
 import { logger } from '../../utils/logger';
 

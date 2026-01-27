@@ -19,6 +19,7 @@ import type {
   IAlertChannel,
   ChannelConfig,
 } from './types';
+import { AlertType, AlertPriority } from './types';
 
 export class AlertManager extends EventEmitter {
   private deduplicator: AlertDeduplicator;
@@ -51,7 +52,7 @@ export class AlertManager extends EventEmitter {
         windowMs: 30 * 1000,
         maxSize: 10,
         minSize: 2,
-        types: ['new_token', 'volume_spike', 'price_alert', 'wallet_activity'],
+        types: [AlertType.NEW_TOKEN, AlertType.VOLUME_SPIKE, AlertType.PRICE_ALERT, AlertType.WALLET_ACTIVITY],
       },
       retryConfig: config.retryConfig || {
         enabled: true,
@@ -79,7 +80,7 @@ export class AlertManager extends EventEmitter {
     const fullAlert: Alert = {
       id: alert.id || uuidv4(),
       type: alert.type!,
-      priority: alert.priority || 'normal',
+      priority: alert.priority || AlertPriority.NORMAL,
       title: alert.title!,
       message: alert.message!,
       data: alert.data || {},

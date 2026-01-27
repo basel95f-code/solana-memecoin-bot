@@ -8,8 +8,8 @@
 import { EventEmitter } from 'events';
 import { logger } from '../../utils/logger';
 import { database } from '../../database';
-import { gmgnClient } from '../../services/gmgn';
-import { dexScreenerService } from '../../services/dexScreener';
+import { gmgnService } from '../../services/gmgn';
+import { dexScreenerService } from '../../services/dexscreener';
 import type { TokenSnapshot, MLFeatureVector, SamplingTier, TokenSamplingState } from './types';
 import { FeatureExtractor, featureExtractor } from './FeatureExtractor';
 import { AdaptiveSampler, adaptiveSampler } from '../sampling/AdaptiveSampler';
@@ -352,7 +352,7 @@ export class TokenSnapshotCollector extends EventEmitter {
       // Fetch token data from multiple sources
       const [dexData, gmgnData] = await Promise.all([
         dexScreenerService.getPair(mint).catch(() => null),
-        gmgnClient.getTokenInfo(mint).catch(() => null),
+        gmgnService.getTokenInfo(mint).catch(() => null),
       ]);
       
       // Skip if no data available

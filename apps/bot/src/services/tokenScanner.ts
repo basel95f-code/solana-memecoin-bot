@@ -329,7 +329,7 @@ class TokenScanner {
     );
 
     logger.info('TokenScanner', `Added filter: ${filter.name}`);
-    return result.lastID;
+    return result.lastInsertRowid;
   }
 
   /**

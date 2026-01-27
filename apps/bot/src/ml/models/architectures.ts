@@ -92,7 +92,7 @@ export function createLSTMModel(config: LSTMConfig): tf.LayersModel {
   // Output layer
   model.add(tf.layers.dense({
     units: config.outputUnits,
-    activation: config.outputActivation || 'linear',
+    activation: (config.outputActivation || 'linear') as any,
   }));
 
   // Compile
@@ -147,7 +147,7 @@ export function createGRUModel(config: LSTMConfig): tf.LayersModel {
 
   model.add(tf.layers.dense({
     units: config.outputUnits,
-    activation: config.outputActivation || 'linear',
+    activation: (config.outputActivation || 'linear') as any,
   }));
 
   model.compile({
@@ -193,7 +193,7 @@ export function createDenseModel(config: DenseConfig): tf.LayersModel {
   // Output layer
   model.add(tf.layers.dense({
     units: config.outputUnits,
-    activation: config.outputActivation || 'linear',
+    activation: (config.outputActivation || 'linear') as any,
   }));
 
   // Compile
@@ -214,9 +214,9 @@ class MultiHeadAttention extends tf.layers.Layer {
   private numHeads: number;
   private dModel: number;
   private depth: number;
-  private wq: tf.LayersModel;
-  private wk: tf.LayersModel;
-  private wv: tf.LayersModel;
+  private wq: tf.Sequential;
+  private wk: tf.Sequential;
+  private wv: tf.Sequential;
   private dense: tf.layers.Layer;
 
   constructor(config: { numHeads: number; dModel: number }) {
@@ -287,7 +287,7 @@ export function createTransformerModel(config: TransformerConfig): tf.LayersMode
 
   model.add(tf.layers.dense({
     units: config.outputUnits,
-    activation: config.outputActivation || 'linear',
+    activation: (config.outputActivation || 'linear') as any,
   }));
 
   model.compile({
@@ -508,3 +508,4 @@ export default {
   createTransferLearningModel,
   EnsembleModel,
 };
+

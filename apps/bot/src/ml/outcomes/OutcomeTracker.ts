@@ -11,8 +11,8 @@
 import { EventEmitter } from 'events';
 import { logger } from '../../utils/logger';
 import { database } from '../../database';
-import { dexScreenerService } from '../../services/dexScreener';
-import { gmgnClient } from '../../services/gmgn';
+import { dexScreenerService } from '../../services/dexscreener';
+import { gmgnService } from '../../services/gmgn';
 import { LabelGenerator, labelGenerator } from './LabelGenerator';
 import type { 
   OutcomeTracking, 
@@ -354,7 +354,7 @@ export class OutcomeTracker extends EventEmitter {
   ): Promise<void> {
     try {
       // Get whale data from GMGN
-      const whaleData = await gmgnClient.getWhaleActivity(mint);
+      const whaleData = await gmgnService.getWhaleActivity(mint);
       
       if (whaleData) {
         // Check for large sells (>5% of supply)
@@ -570,7 +570,7 @@ export class OutcomeTracker extends EventEmitter {
   private async fetchCurrentData(mint: string): Promise<any> {
     try {
       // Try GMGN first
-      const gmgnData = await gmgnClient.getTokenInfo(mint);
+      const gmgnData = await gmgnService.getTokenInfo(mint);
       if (gmgnData?.price) {
         return {
           priceUsd: gmgnData.price,

@@ -55,7 +55,7 @@ async function getDatabaseService(): Promise<DatabaseService> {
     return supabaseDb;
   } else {
     logger.info('Database', 'Using SQLite backend');
-    const { db } = await import('./index');
+    const { database: db } = await import('./index');
     
     // Wrap SQLite db to match async interface
     return {

@@ -625,7 +625,7 @@ class RugPredictor {
    */
   async recordPrediction(tokenMint: string, result: PredictionResult): Promise<void> {
     try {
-      const currentVersion = await modelVersionManager.getCurrentVersion();
+      const currentVersion = modelVersionManager.getActiveVersion();
       const predictedOutcome = result.rugProbability > 0.5 ? 'rug' : 'pump';
 
       await mlRetrainer.recordPrediction(tokenMint, {

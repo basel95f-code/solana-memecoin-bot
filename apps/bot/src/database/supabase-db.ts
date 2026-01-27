@@ -46,7 +46,7 @@ interface AlertInput {
 }
 
 class SupabaseDatabaseService {
-  private client: SupabaseClient;
+  public client: SupabaseClient | null;
   private initialized: boolean = false;
 
   constructor() {

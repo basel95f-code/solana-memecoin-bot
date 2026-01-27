@@ -6,7 +6,7 @@
 import type { Context, Telegraf } from 'telegraf';
 import { Markup } from 'telegraf';
 import { smartMoneyLearner, type SmartMoneyWallet } from '../../services/smartMoneyLearner';
-import { databaseService } from '../../database';
+import { database as databaseService } from '../../database';
 import { logger } from '../../utils/logger';
 import { PublicKey } from '@solana/web3.js';
 

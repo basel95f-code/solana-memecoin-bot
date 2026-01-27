@@ -73,7 +73,7 @@ client.once('ready', async () => {
 client.on('interactionCreate', async (interaction) => {
   try {
     if (interaction.isChatInputCommand()) {
-      const command = commands[interaction.commandName];
+      const command = commands[interaction.commandName as keyof typeof commands];
       
       if (!command) {
         await interaction.reply({ content: '❌ Unknown command', ephemeral: true });
@@ -89,10 +89,13 @@ client.on('interactionCreate', async (interaction) => {
     
     const errorMessage = { content: '❌ An error occurred while executing this command', ephemeral: true };
     
-    if (interaction.replied || interaction.deferred) {
-      await interaction.followUp(errorMessage);
-    } else {
-      await interaction.reply(errorMessage);
+    // Type guard: only certain interaction types have reply capabilities
+    if (interaction.isRepliable()) {
+      if (interaction.replied || interaction.deferred) {
+        await interaction.followUp(errorMessage);
+      } else {
+        await interaction.reply(errorMessage);
+      }
     }
   }
 });

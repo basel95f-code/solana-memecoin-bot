@@ -16,9 +16,6 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 // Connection pool configuration
 const POOL_CONFIG = {
-  db: {
-    poolSize: 10, // Maximum number of connections
-  },
   auth: {
     persistSession: false, // Don't persist sessions (bot doesn't need user sessions)
   },

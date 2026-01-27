@@ -8,7 +8,9 @@ import { Connection, PublicKey, ParsedTransactionWithMeta, PartiallyDecodedInstr
 import { config } from '../config';
 import { solanaService } from '../services/solana';
 import { walletTracker, type WalletTransaction } from '../services/walletTracker';
-import { supabase } from '../database/supabase';
+import { getSupabaseClient } from '../database/supabase';
+
+const supabase = getSupabaseClient();
 import { logger } from '../utils/logger';
 import { dexScreenerService } from '../services/dexscreener';
 

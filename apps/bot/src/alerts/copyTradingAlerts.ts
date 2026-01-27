@@ -6,7 +6,9 @@
 import { EventEmitter } from 'events';
 import { walletTracker } from '../services/walletTracker';
 import { walletTransactionMonitor, type WalletActivity } from '../monitors/walletTransactions';
-import { supabase } from '../database/supabase';
+import { getSupabaseClient } from '../database/supabase';
+
+const supabase = getSupabaseClient();
 import { logger } from '../utils/logger';
 
 // ============================================

@@ -6,7 +6,7 @@
 import { patternDetector } from '../services/patternDetector';
 import { database } from '../database';
 import { logger } from '../utils/logger';
-import { telegram } from '../services/telegram';
+import { telegramService as telegram } from '../services/telegram';
 import { config } from '../config';
 
 export async function updatePatterns(): Promise<void> {

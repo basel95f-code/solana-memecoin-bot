@@ -10,7 +10,7 @@
  * - Auto training orchestration
  */
 
-// Data Collection
+// Data Collection (primary exports - takes precedence)
 export * from './dataCollection';
 
 // Smart Sampling
@@ -25,14 +25,14 @@ export * from './monitoring';
 // Training Orchestration
 export * from './training';
 
-// Existing ML components
-export * from './featureEngineering';
+// Existing ML components (selective exports to avoid conflicts)
+export { FeatureEngineer, type EnhancedFeatures } from './featureEngineering';
 export * from './rugPredictor';
 export * from './pricePrediction';
 export * from './whaleBehavior';
 export * from './sentimentCorrelation';
 export * from './ensemblePredictor';
-export * from './trainingPipeline';
+export { TrainingPipeline } from './trainingPipeline';
 export * from './trainingMetrics';
 export * from './modelVersioning';
 export * from './manualLabeling';

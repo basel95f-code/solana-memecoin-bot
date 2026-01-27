@@ -417,7 +417,7 @@ class StrategyAutomation {
 
     logger.info('StrategyAutomation', `Added rule: ${rule.name}`);
     this.loadRules(); // Reload
-    return result.lastID;
+    return result.lastInsertRowid;
   }
 
   /**
