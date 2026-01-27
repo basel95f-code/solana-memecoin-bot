@@ -138,10 +138,10 @@ export class SmartMoneyTracker extends EventEmitter {
     priceUsd?: number
   ): Promise<void> {
     // Get current price for entry
-    let entryPrice = priceUsd || 0;
+    let entryPrice = Number(priceUsd) || 0;
     if (!entryPrice) {
       const tokenData = await dexScreenerService.getTokenData(tokenMint);
-      entryPrice = tokenData?.priceUsd || 0;
+      entryPrice = Number(tokenData?.priceUsd) || 0;
     }
 
     const trade: WalletTrade = {
@@ -195,10 +195,10 @@ export class SmartMoneyTracker extends EventEmitter {
     }
 
     // Get current price for exit
-    let exitPrice = priceUsd || 0;
+    let exitPrice = Number(priceUsd) || 0;
     if (!exitPrice) {
       const tokenData = await dexScreenerService.getTokenData(tokenMint);
-      exitPrice = tokenData?.priceUsd || 0;
+      exitPrice = Number(tokenData?.priceUsd) || 0;
     }
 
     // Close the trade
@@ -418,7 +418,7 @@ export class SmartMoneyTracker extends EventEmitter {
         try {
           // Get current price
           const tokenData = await dexScreenerService.getTokenData(trade.tokenMint);
-          const currentPrice = tokenData?.priceUsd || 0;
+          const currentPrice = Number(tokenData?.priceUsd) || 0;
 
           if (currentPrice > 0 && trade.entryPrice > 0) {
             // Calculate unrealized P&L
