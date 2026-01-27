@@ -100,7 +100,7 @@ export class DeliveryManager extends EventEmitter {
     this.trackDeliveryTime(deliveryTime);
 
     // Update delivery record
-    delivery.status = 'sent';
+    delivery.status = DeliveryStatus.SENT;
     delivery.deliveredAt = timestamp;
     delivery.lastError = undefined;
     delivery.nextRetryAt = undefined;
@@ -137,7 +137,7 @@ export class DeliveryManager extends EventEmitter {
       this.emit('delivery:retry', delivery);
     } else {
       // Max retries exceeded - mark as failed
-      delivery.status = 'failed';
+      delivery.status = DeliveryStatus.FAILED;
       
       logger.error('DeliveryManager', `Delivery ${deliveryId} failed permanently after ${delivery.retryCount} attempts: ${error}`);
       

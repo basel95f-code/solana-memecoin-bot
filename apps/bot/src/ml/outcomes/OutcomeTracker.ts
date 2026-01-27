@@ -353,7 +353,9 @@ export class OutcomeTracker extends EventEmitter {
     currentData: any
   ): Promise<void> {
     try {
-      // Get whale data from GMGN
+      // TODO: Implement whale activity tracking when gmgnService.getWhaleActivity is available
+      // For now, skip whale detection
+      /*
       const whaleData = await gmgnService.getWhaleActivity(mint);
       
       if (whaleData) {
@@ -363,15 +365,18 @@ export class OutcomeTracker extends EventEmitter {
           tracking.whaleActionAt = Date.now();
           tracking.whaleLabel = 'DUMP';
         }
+      */
         
         // Check for large buys
+        /*
         if (whaleData.largeBuys && whaleData.largeBuys.length > 0) {
           if (!tracking.largeSellDetected) {
             tracking.largeBuyDetected = true;
             tracking.whaleLabel = 'ACCUMULATION';
           }
         }
-      }
+        */
+      //}
     } catch (error) {
       // Whale data is optional, continue without it
     }
@@ -574,9 +579,9 @@ export class OutcomeTracker extends EventEmitter {
       if (gmgnData?.price) {
         return {
           priceUsd: gmgnData.price,
-          liquidityUsd: gmgnData.liquidity,
-          holderCount: gmgnData.holderCount || gmgnData.holders,
-          volume1h: gmgnData.volume1h || gmgnData.v1h,
+          liquidityUsd: gmgnData.liquidity || 0,
+          holderCount: gmgnData.holder_count || 0,
+          volume1h: gmgnData.volume_24h || 0,
         };
       }
       
