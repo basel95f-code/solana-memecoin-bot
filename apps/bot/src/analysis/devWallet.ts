@@ -155,7 +155,7 @@ export async function findDevWallet(tokenMint: string): Promise<string | null> {
 /**
  * Analyze the dev's sell history for this token
  */
-async function analyzeDevSellHistory(
+export async function analyzeDevSellHistory(
   tokenMint: string,
   devAddress: string
 ): Promise<{
