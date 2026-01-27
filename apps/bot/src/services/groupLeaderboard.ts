@@ -355,6 +355,60 @@ class GroupLeaderboardService {
   }
 
   /**
+   * Get a specific call by ID (for PNL cards)
+   */
+  async getCall(callId: number, groupId: string): Promise<GroupCall | null> {
+    try {
+      const call = database.query(
+        'SELECT * FROM group_calls WHERE id = ? AND group_id = ?',
+        [callId, groupId]
+      )[0];
+
+      return call || null;
+    } catch (error) {
+      logger.error('GroupLeaderboard', 'Failed to get call', error as Error);
+      return null;
+    }
+  }
+
+  /**
+   * Get calls for a specific timeframe (for group PNL)
+   */
+  async getCallsForTimeframe(groupId: string, timeframe: string): Promise<GroupCall[]> {
+    try {
+      const now = Math.floor(Date.now() / 1000);
+      let timeFilter = 0;
+
+      switch (timeframe) {
+        case '1d':
+          timeFilter = now - 86400;
+          break;
+        case '7d':
+          timeFilter = now - 604800;
+          break;
+        case '30d':
+          timeFilter = now - 2592000;
+          break;
+        case 'all':
+        default:
+          timeFilter = 0;
+      }
+
+      const calls = database.query(
+        `SELECT * FROM group_calls 
+         WHERE group_id = ? AND called_at > ?
+         ORDER BY called_at DESC`,
+        [groupId, timeFilter]
+      );
+
+      return calls;
+    } catch (error) {
+      logger.error('GroupLeaderboard', 'Failed to get calls for timeframe', error as Error);
+      return [];
+    }
+  }
+
+  /**
    * Get tier emoji based on points
    */
   private getTier(points: number): string {
