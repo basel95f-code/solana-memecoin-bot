@@ -273,7 +273,7 @@ class MLRetrainer {
       logger.info('MLRetrainer', `Training with ${trainData.length} samples`);
 
       // Train model using existing pipeline
-      const result = await trainingPipeline.trainModel();
+      const result = await trainingPipeline.train();
 
       // Calculate metrics
       const metrics = await this.evaluateModel(version);

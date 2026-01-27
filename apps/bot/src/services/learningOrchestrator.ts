@@ -228,7 +228,7 @@ class LearningOrchestrator {
       }
 
       // Check liquidity - if it dropped significantly, likely rug
-      const currentLiquidity = parseFloat(pairData.liquidity?.usd || '0');
+      const currentLiquidity = parseFloat(String(pairData.liquidity?.usd || 0));
       if (currentLiquidity < outcome.initialLiquidity * 0.5) {
         outcome.outcomeType = 'rug';
         outcome.confidence = 0.9;

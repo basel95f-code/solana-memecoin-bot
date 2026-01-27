@@ -69,9 +69,27 @@ class IntegrationFlow {
     };
 
     try {
+      // Step 0: Get pool data first
+      const poolData = await dexScreenerService.getTokenData(tokenMint);
+      if (!poolData) {
+        result.reasoning.push('❌ Failed to fetch token data');
+        result.recommendation = 'AVOID';
+        return result;
+      }
+
+      // Create minimal PoolInfo from poolData
+      const pool = {
+        address: poolData.pairAddress || '',
+        tokenMint: tokenMint,
+        baseMint: poolData.baseToken?.address || '',
+        quoteMint: poolData.quoteToken?.address || '',
+        source: 'raydium',
+        createdAt: Date.now(),
+      };
+
       // Step 1: Token Analysis (foundation)
       logger.info('IntegrationFlow', 'Running token analysis...');
-      const analysis = await analyzeToken(tokenMint);
+      const analysis = await analyzeToken(tokenMint, pool);
       
       if (!analysis) {
         result.reasoning.push('❌ Failed to analyze token');

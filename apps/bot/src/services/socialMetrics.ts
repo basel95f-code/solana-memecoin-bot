@@ -42,28 +42,28 @@ export class SocialMetricsService {
 
     // Try to get Twitter followers if we have a Twitter URL
     let twitterFollowers: number | undefined;
-    if (tokenInfo.metadata?.extensions?.twitter) {
+    if (tokenInfo.metadata?.twitter) {
       try {
-        const twitterHandle = this.extractTwitterHandle(tokenInfo.metadata.extensions.twitter);
+        const twitterHandle = this.extractTwitterHandle(tokenInfo.metadata.twitter);
         if (twitterHandle) {
           // This would need actual Twitter API integration
           // For now, we'll skip real-time tracking
           logger.debug('SocialMetrics', `Would track Twitter @${twitterHandle} for ${mint}`);
         }
       } catch (error) {
-        logger.debug('SocialMetrics', `Failed to get Twitter followers for ${mint}`, toError(error));
+        logger.debug('SocialMetrics', `Failed to get Twitter followers for ${mint}`, error as Error);
       }
     }
 
     // Try to get Telegram members if we have a Telegram URL
     let telegramMembers: number | undefined;
-    if (tokenInfo.metadata?.extensions?.telegram) {
+    if (tokenInfo.metadata?.telegram) {
       try {
         // This would need Telegram API integration
         // For now, we'll skip real-time tracking
         logger.debug('SocialMetrics', `Would track Telegram for ${mint}`);
       } catch (error) {
-        logger.debug('SocialMetrics', `Failed to get Telegram members for ${mint}`, toError(error));
+        logger.debug('SocialMetrics', `Failed to get Telegram members for ${mint}`, error as Error);
       }
     }
 
