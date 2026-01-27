@@ -103,14 +103,14 @@ export class MultiTimeframeAnalyzer {
 
       const snapshot: TimeframeSnapshot = {
         timestamp: Date.now(),
-        price: dexData.priceNative || 0,
-        priceUsd: dexData.priceUsd,
-        liquidity: dexData.liquidity?.usd || 0,
-        volume24h: dexData.volume?.h24 || 0,
+        price: Number(dexData.priceNative) || 0,
+        priceUsd: Number(dexData.priceUsd) || 0,
+        liquidity: Number(dexData.liquidity?.usd) || 0,
+        volume24h: Number(dexData.volume?.h24) || 0,
         holders,
         top10Percent,
-        fdv: dexData.fdv || 0,
-        marketCap: dexData.marketCap || 0,
+        fdv: Number(dexData.fdv) || 0,
+        marketCap: Number(dexData.marketCap) || 0,
       };
 
       // Store in history

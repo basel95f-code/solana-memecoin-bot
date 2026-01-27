@@ -22,8 +22,9 @@ import type {
   ChannelConfig, 
   DiscordConfig,
   TelegramConfig,
-  WebSocketConfig 
+  WebhookConfig 
 } from '../services/alerts/types';
+import { AlertType, ChannelType } from '../services/alerts/types';
 
 export interface AlertSystemConfig {
   // Deduplication
@@ -72,7 +73,7 @@ export class AlertSystem extends EventEmitter {
         windowMs: config.batchWindowMs ?? 30 * 1000,
         maxSize: 10,
         minSize: 2,
-        types: ['new_token', 'volume_spike', 'price_alert', 'wallet_activity'],
+        types: [AlertType.NEW_TOKEN, AlertType.VOLUME_SPIKE, AlertType.PRICE_ALERT, AlertType.WALLET_ACTIVITY],
       },
       retryConfig: {
         enabled: true,
@@ -148,7 +149,7 @@ export class AlertSystem extends EventEmitter {
       
       const channelConfig: ChannelConfig = {
         id: 'telegram-default',
-        type: 'telegram',
+        type: ChannelType.TELEGRAM,
         name: 'Telegram',
         enabled: true,
         config,
@@ -178,7 +179,7 @@ export class AlertSystem extends EventEmitter {
       
       const channelConfig: ChannelConfig = {
         id: 'discord-default',
-        type: 'discord',
+        type: ChannelType.DISCORD,
         name: 'Discord',
         enabled: true,
         config,
@@ -208,7 +209,7 @@ export class AlertSystem extends EventEmitter {
       
       const channelConfig: ChannelConfig = {
         id: 'email-default',
-        type: 'custom_webhook',
+        type: ChannelType.CUSTOM_WEBHOOK,
         name: 'Email',
         enabled: true,
         config: {} as any,
@@ -239,7 +240,7 @@ export class AlertSystem extends EventEmitter {
       
       const channelConfig: ChannelConfig = {
         id: 'websocket-default',
-        type: 'custom_webhook',
+        type: ChannelType.CUSTOM_WEBHOOK,
         name: 'WebSocket',
         enabled: true,
         config: {} as any,

@@ -270,12 +270,10 @@ export class CoinGeckoSource implements IDiscoverySource {
     } catch (error: any) {
       if (axios.isAxiosError(error)) {
         const axiosError = error as AxiosError;
-        logger.error('CoinGeckoSource', `API request failed: ${axiosError.message}`, {
-          status: axiosError.response?.status,
-          statusText: axiosError.response?.statusText,
-        });
+        const errorDetails = new Error(`API request failed: ${axiosError.message} (status: ${axiosError.response?.status}, ${axiosError.response?.statusText})`);
+        logger.error('CoinGeckoSource', errorDetails.message, errorDetails);
       } else {
-        logger.error('CoinGeckoSource', 'Fetch error:', error);
+        logger.error('CoinGeckoSource', 'Fetch error:', error as Error);
       }
       throw error;
     }

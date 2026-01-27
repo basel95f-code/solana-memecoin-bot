@@ -6,7 +6,8 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../../utils/logger';
-import type { Alert, AlertBatch, BatchConfig, AlertType, AlertPriority } from './types';
+import type { Alert, AlertBatch, BatchConfig } from './types';
+import { AlertType, AlertPriority } from './types';
 
 interface BatchBuffer {
   type: AlertType;
@@ -27,10 +28,10 @@ export class AlertBatcher {
       maxSize: config.maxSize ?? 10,
       minSize: config.minSize ?? 2,
       types: config.types ?? [
-        'new_token',
-        'volume_spike',
-        'price_alert',
-        'wallet_activity',
+        AlertType.NEW_TOKEN,
+        AlertType.VOLUME_SPIKE,
+        AlertType.PRICE_ALERT,
+        AlertType.WALLET_ACTIVITY,
       ],
     };
     this.onBatchReady = onBatchReady;
@@ -146,7 +147,7 @@ export class AlertBatcher {
    * Get highest priority from alerts
    */
   private getHighestPriority(alerts: Alert[]): AlertPriority {
-    const priorities: AlertPriority[] = ['low', 'normal', 'high', 'critical'];
+    const priorities: AlertPriority[] = [AlertPriority.LOW, AlertPriority.NORMAL, AlertPriority.HIGH, AlertPriority.CRITICAL];
     const maxPriorityIndex = Math.max(
       ...alerts.map(a => priorities.indexOf(a.priority))
     );

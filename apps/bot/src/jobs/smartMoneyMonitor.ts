@@ -160,13 +160,13 @@ export class SmartMoneyMonitor {
           // Record entry
           await smartMoneyLearner.recordTrade(walletAddress, transfer.tokenMint, {
             tokenSymbol: tokenData?.baseToken?.symbol,
-            entryPrice: price,
-            entryLiquidity: tokenData?.liquidity?.usd,
+            entryPrice: Number(price),
+            entryLiquidity: tokenData?.liquidity?.usd ? Number(tokenData.liquidity.usd) : undefined,
           });
         } else if (transfer.type === 'sell') {
           // Close trade
           await smartMoneyLearner.closeTrade(walletAddress, transfer.tokenMint, {
-            exitPrice: price,
+            exitPrice: Number(price),
             exitReason: 'user_exit'
           });
         }

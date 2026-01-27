@@ -7,6 +7,7 @@
 import crypto from 'crypto';
 import { logger } from '../../utils/logger';
 import type { Alert, DedupConfig, DedupResult } from './types';
+import { AlertType } from './types';
 
 interface DedupEntry {
   alertId: string;
@@ -103,25 +104,25 @@ export class AlertDeduplicator {
 
     // Add data-specific keys based on alert type
     switch (alert.type) {
-      case 'new_token':
-      case 'trading_signal':
-      case 'rug_detected':
+      case AlertType.NEW_TOKEN:
+      case AlertType.TRADING_SIGNAL:
+      case AlertType.RUG_DETECTED:
         parts.push(alert.data.mint || alert.data.tokenAddress || '');
         break;
 
-      case 'whale_movement':
-      case 'wallet_activity':
+      case AlertType.WHALE_MOVEMENT:
+      case AlertType.WALLET_ACTIVITY:
         parts.push(alert.data.wallet || '');
         parts.push(alert.data.tokenMint || '');
         break;
 
-      case 'price_alert':
+      case AlertType.PRICE_ALERT:
         parts.push(alert.data.symbol || '');
         parts.push(alert.data.trigger || '');
         break;
 
-      case 'volume_spike':
-      case 'liquidity_drain':
+      case AlertType.VOLUME_SPIKE:
+      case AlertType.LIQUIDITY_DRAIN:
         parts.push(alert.data.mint || '');
         parts.push(alert.data.changePercent?.toString() || '');
         break;

@@ -31,13 +31,13 @@ export async function runLeaderboardUpdate(): Promise<void> {
     // Update each token (with rate limiting)
     for (const entry of entries) {
       try {
-        await leaderboardService.updateTokenPerformance(entry.token_mint);
+        await leaderboardService.updateTokenPerformance(entry.tokenMint);
         updatedCount++;
 
         // Rate limit: 1 update per second to avoid API throttling
         await new Promise(resolve => setTimeout(resolve, 1000));
       } catch (error) {
-        logger.error('LeaderboardJob', `Failed to update ${entry.token_mint}`, error as Error);
+        logger.error('LeaderboardJob', `Failed to update ${entry.tokenMint}`, error as Error);
         errorCount++;
       }
     }

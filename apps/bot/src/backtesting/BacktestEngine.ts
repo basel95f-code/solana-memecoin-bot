@@ -200,7 +200,7 @@ export class BacktestEngine extends EventEmitter {
           trade.exitPrice = currentPrice;
           trade.multiplier = multiplier;
           trade.outcome = multiplier >= 1.0 ? 'win' : 'loss';
-          trade.exitReason = condition.type;
+          trade.exitReason = condition.type === 'time_based' ? 'time_limit' : condition.type;
           return;
         }
       }
