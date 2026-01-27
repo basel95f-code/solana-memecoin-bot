@@ -78,13 +78,16 @@ class IntegrationFlow {
       }
 
       // Create minimal PoolInfo from poolData
-      const pool = {
+      const pool: any = {
         address: poolData.pairAddress || '',
         tokenMint: tokenMint,
         baseMint: poolData.baseToken?.address || '',
         quoteMint: poolData.quoteToken?.address || '',
-        source: 'raydium',
-        createdAt: Date.now(),
+        baseReserve: Number(poolData.liquidity?.base) || 0,
+        quoteReserve: Number(poolData.liquidity?.quote) || 0,
+        lpMint: '',
+        source: 'raydium' as const,
+        createdAt: new Date(poolData.pairCreatedAt || Date.now()),
       };
 
       // Step 1: Token Analysis (foundation)

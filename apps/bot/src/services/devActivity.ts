@@ -26,7 +26,7 @@ export class DevActivityService {
    */
   async getDevActivity(mint: string, tokenInfo?: TokenInfo): Promise<DevActivityData | null> {
     // Check cache first
-    const cached = await cacheManager.get<DevActivityData>(CacheKey.devActivity(mint));
+    const cached = await cacheManager.get<DevActivityData>(`dev_activity:${mint}`);
     if (cached) {
       return cached;
     }
@@ -62,7 +62,7 @@ export class DevActivityService {
       };
 
       // Cache for 10 minutes
-      await cacheManager.set(CacheKey.devActivity(mint), activityData, CacheTTL.MEDIUM);
+      await cacheManager.set(`dev_activity:${mint}`, activityData, CacheTTL.TOKEN_INFO);
 
       logger.debug('DevActivity', `Dev activity for ${mint}: score=0 (neutral), wallets=${devWallets.length}`);
 
