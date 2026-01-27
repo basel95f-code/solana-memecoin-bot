@@ -1501,5 +1501,31 @@ export const MIGRATIONS: { version: number; sql: string; description?: string }[
         WHERE group_id = NEW.group_id AND user_id = NEW.user_id;
       END;
     `
+  },
+  {
+    version: 18,
+    description: 'Add auto-trigger system tables',
+    sql: `
+      -- ============================================
+      -- Auto-Trigger Log Table
+      -- Tracks recently analyzed tokens to prevent spam
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS auto_trigger_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        group_id TEXT NOT NULL,
+        token_mint TEXT NOT NULL,
+        triggered_by TEXT NOT NULL,
+        analyzed_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_auto_trigger_group ON auto_trigger_log(group_id);
+      CREATE INDEX IF NOT EXISTS idx_auto_trigger_token ON auto_trigger_log(token_mint);
+      CREATE INDEX IF NOT EXISTS idx_auto_trigger_time ON auto_trigger_log(analyzed_at);
+
+      -- Add auto-trigger fields to group_settings
+      ALTER TABLE group_settings ADD COLUMN auto_mode TEXT DEFAULT 'quick';
+      ALTER TABLE group_settings ADD COLUMN detect_tickers INTEGER DEFAULT 0;
+      ALTER TABLE group_settings ADD COLUMN auto_cooldown INTEGER DEFAULT 60;
+    `
   }
 ];

@@ -4,6 +4,7 @@ import type { TokenAnalysis, WatchedToken, WalletActivityAlert, TrackedWallet, W
 import type { TradingSignal } from '../signals/types';
 import { registerAllCommands, incrementAlertsSent } from '../telegram/commands';
 import { registerTopicEnforcer } from '../middleware/topicEnforcer';
+import { autoTriggerMiddleware } from '../telegram/middleware/autoTrigger';
 import { formatTokenAlert, formatWatchlistAlert, formatSignalAlert } from '../telegram/formatters';
 import { alertActionKeyboard, signalActionKeyboard } from '../telegram/keyboards';
 import { storageService } from './storage';
@@ -87,6 +88,9 @@ class TelegramService {
     try {
       // Register topic enforcer middleware (before commands)
       registerTopicEnforcer(this.bot);
+
+      // Register auto-trigger middleware (detects token addresses in messages)
+      this.bot.use(autoTriggerMiddleware);
 
       // Register all modular commands
       registerAllCommands(this.bot);

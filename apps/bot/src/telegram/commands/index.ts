@@ -8,6 +8,7 @@ import { registerAnalysisCommands } from './analysis';
 import { registerWatchlistCommands } from './watchlist';
 import { registerGroupWatchlistCommands } from './groupwatchlist';
 import { registerLeaderboardCommands } from './leaderboard';
+import { registerAutoCommands } from '../middleware/autoTrigger';
 import { registerDiscoveryCommands } from './discovery';
 import { registerSettingsCommands } from './settings';
 import { registerAdvancedCommands } from './advanced';
@@ -54,6 +55,7 @@ export function registerAllCommands(bot: Telegraf, db?: typeof supabaseDb): void
   registerWatchlistCommands(bot);
   registerGroupWatchlistCommands(bot);
   registerLeaderboardCommands(bot);
+  registerAutoCommands(bot);
   registerDiscoveryCommands(bot);
   registerSettingsCommands(bot);
   registerAdvancedCommands(bot);
