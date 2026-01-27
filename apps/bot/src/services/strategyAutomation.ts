@@ -111,13 +111,15 @@ class StrategyAutomation {
     };
 
     try {
-      // Gather additional data
-      const [sentiment, securityAnalysis, pairData, mlPrediction] = await Promise.all([
+      // Gather additional data (first batch - no dependencies)
+      const [sentiment, securityAnalysis, pairData] = await Promise.all([
         this.getSentiment(analysis.token).catch(() => null),
         contractAnalyzer.analyzeContract(analysis.token.mint).catch(() => null),
         dexScreenerService.getTokenData(analysis.token.mint).catch(() => null),
-        this.getMLPrediction(analysis, pairData).catch(() => null),
       ]);
+
+      // Get ML prediction after we have pairData
+      const mlPrediction = await this.getMLPrediction(analysis, pairData).catch(() => null);
 
       // Build context for rule evaluation
       const context = {

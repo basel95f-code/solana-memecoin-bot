@@ -176,31 +176,31 @@ export function registerAlertRuleCommands(bot: Telegraf): void {
       return;
     }
 
-    let text = `📋 *Rule Details*\n\n`;
-    text += `*Name:* ${rule.name}\n`;
-    text += `*ID:* \`${rule.id}\`\n`;
-    text += `*Status:* ${rule.enabled ? '🟢 Enabled' : '⚫ Disabled'}\n`;
-    text += `*Priority:* ${getPriorityEmoji(rule.priority)} ${rule.priority}\n\n`;
+    let ruleDetails = `📋 *Rule Details*\n\n`;
+    ruleDetails += `*Name:* ${rule.name}\n`;
+    ruleDetails += `*ID:* \`${rule.id}\`\n`;
+    ruleDetails += `*Status:* ${rule.enabled ? '🟢 Enabled' : '⚫ Disabled'}\n`;
+    ruleDetails += `*Priority:* ${getPriorityEmoji(rule.priority)} ${rule.priority}\n\n`;
 
     if (rule.description) {
-      text += `*Description:*\n${rule.description}\n\n`;
+      ruleDetails += `*Description:*\n${rule.description}\n\n`;
     }
 
-    text += `*Channels:* ${rule.channels.join(', ')}\n`;
-    text += `*Cooldown:* ${rule.cooldownSeconds}s\n`;
-    text += `*Max per hour:* ${rule.maxAlertsPerHour}\n\n`;
+    ruleDetails += `*Channels:* ${rule.channels.join(', ')}\n`;
+    ruleDetails += `*Cooldown:* ${rule.cooldownSeconds}s\n`;
+    ruleDetails += `*Max per hour:* ${rule.maxAlertsPerHour}\n\n`;
 
-    text += `*Stats:*\n`;
-    text += `  • Triggered: ${rule.triggerCount} times\n`;
+    ruleDetails += `*Stats:*\n`;
+    ruleDetails += `  • Triggered: ${rule.triggerCount} times\n`;
     if (rule.lastTriggeredAt) {
       const lastTriggered = new Date(rule.lastTriggeredAt);
-      text += `  • Last: ${lastTriggered.toLocaleString()}\n`;
+      ruleDetails += `  • Last: ${lastTriggered.toLocaleString()}\n`;
     }
 
-    text += `\n*Tags:* ${rule.tags.join(', ') || 'none'}\n`;
-    text += `\n*Created:* ${new Date(rule.createdAt).toLocaleString()}`;
+    ruleDetails += `\n*Tags:* ${rule.tags.join(', ') || 'none'}\n`;
+    ruleDetails += `\n*Created:* ${new Date(rule.createdAt).toLocaleString()}`;
 
-    await ctx.replyWithMarkdown(text);
+    await ctx.replyWithMarkdown(ruleDetails);
   });
 
   // Callback handlers for interactive buttons
