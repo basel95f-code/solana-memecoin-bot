@@ -85,68 +85,26 @@ export function registerFilterCommands(bot: Telegraf): void {
 
     // Handle subcommands
     if (subcommand === 'tighten') {
-      const oldFilters = storageService.getUserSettings(chatId).filters;
-      const newFilters = storageService.tightenFilters(chatId);
-
-      // Track significant changes
-      const changes: { param: string; old: any; new: any }[] = [];
-      if (oldFilters.minLiquidity !== newFilters.minLiquidity) {
-        changes.push({ param: 'Min Liquidity', old: `$${oldFilters.minLiquidity}`, new: `$${newFilters.minLiquidity}` });
-      }
-      if (oldFilters.maxTop10Percent !== newFilters.maxTop10Percent) {
-        changes.push({ param: 'Max Top 10%', old: `${oldFilters.maxTop10Percent}%`, new: `${newFilters.maxTop10Percent}%` });
-      }
-      if (oldFilters.minRiskScore !== newFilters.minRiskScore) {
-        changes.push({ param: 'Min Risk Score', old: oldFilters.minRiskScore, new: newFilters.minRiskScore });
-      }
-      if (oldFilters.minHolders !== newFilters.minHolders) {
-        changes.push({ param: 'Min Holders', old: oldFilters.minHolders, new: newFilters.minHolders });
-      }
-      if (oldFilters.minTokenAge !== newFilters.minTokenAge) {
-        changes.push({ param: 'Min Token Age', old: `${Math.floor(oldFilters.minTokenAge / 60)}m`, new: `${Math.floor(newFilters.minTokenAge / 60)}m` });
-      }
-
-      // TODO: Implement formatFilterAdjustment
-      await ctx.reply(`✅ Filters tightened: ${changes.length} changes`);
+      // TODO: Implement tightenFilters method in StorageService
+      await ctx.reply('⚠️ Filter tightening is not yet implemented');
       return;
     }
 
     if (subcommand === 'loosen') {
-      const oldFilters = storageService.getUserSettings(chatId).filters;
-      const newFilters = storageService.loosenFilters(chatId);
-
-      // Track significant changes
-      const changes: { param: string; old: any; new: any }[] = [];
-      if (oldFilters.minLiquidity !== newFilters.minLiquidity) {
-        changes.push({ param: 'Min Liquidity', old: `$${oldFilters.minLiquidity}`, new: `$${newFilters.minLiquidity}` });
-      }
-      if (oldFilters.maxTop10Percent !== newFilters.maxTop10Percent) {
-        changes.push({ param: 'Max Top 10%', old: `${oldFilters.maxTop10Percent}%`, new: `${newFilters.maxTop10Percent}%` });
-      }
-      if (oldFilters.minRiskScore !== newFilters.minRiskScore) {
-        changes.push({ param: 'Min Risk Score', old: oldFilters.minRiskScore, new: newFilters.minRiskScore });
-      }
-      if (oldFilters.minHolders !== newFilters.minHolders) {
-        changes.push({ param: 'Min Holders', old: oldFilters.minHolders, new: newFilters.minHolders });
-      }
-      if (oldFilters.minTokenAge !== newFilters.minTokenAge) {
-        changes.push({ param: 'Min Token Age', old: `${Math.floor(oldFilters.minTokenAge / 60)}m`, new: `${Math.floor(newFilters.minTokenAge / 60)}m` });
-      }
-
-      // TODO: Implement formatFilterAdjustment
-      await ctx.reply(`✅ Filters loosened: ${changes.length} changes`);
+      // TODO: Implement loosenFilters method in StorageService
+      await ctx.reply('⚠️ Filter loosening is not yet implemented');
       return;
     }
 
     if (subcommand === 'stats') {
-      const perfData = storageService.getFilterPerformance(chatId);
-      // TODO: Implement formatFilterStats
-      await ctx.reply(`📊 Filter Performance:\nPassed: ${perfData.passed || 0}\nFiltered: ${perfData.filtered || 0}`);
+      // TODO: Implement getFilterPerformance method in StorageService
+      await ctx.reply('⚠️ Filter stats are not yet implemented');
       return;
     }
 
     if (subcommand === 'optimize') {
-      const bestProfile = storageService.getBestProfile(chatId);
+      // TODO: Implement getBestProfile method in StorageService
+      const bestProfile = null as any; // storageService.getBestProfile(chatId);
 
       if (!bestProfile) {
         await ctx.replyWithHTML(
@@ -168,7 +126,8 @@ export function registerFilterCommands(bot: Telegraf): void {
 
       // Switch to best profile
       storageService.setFilterProfile(chatId, bestProfile);
-      storageService.markOptimized(chatId);
+      // TODO: Implement markOptimized method in StorageService
+      // storageService.markOptimized(chatId);
 
       const emoji = PROFILE_INFO[bestProfile]?.emoji || '🏆';
 

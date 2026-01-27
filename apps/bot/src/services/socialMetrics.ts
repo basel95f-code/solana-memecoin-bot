@@ -51,7 +51,8 @@ export class SocialMetricsService {
           logger.debug('SocialMetrics', `Would track Twitter @${twitterHandle} for ${mint}`);
         }
       } catch (error) {
-        logger.debug('SocialMetrics', `Failed to get Twitter followers for ${mint}`, error as Error);
+        const err = error as Error;
+        logger.debug('SocialMetrics', `Failed to get Twitter followers for ${mint}`, { error: err.message });
       }
     }
 
@@ -63,7 +64,8 @@ export class SocialMetricsService {
         // For now, we'll skip real-time tracking
         logger.debug('SocialMetrics', `Would track Telegram for ${mint}`);
       } catch (error) {
-        logger.debug('SocialMetrics', `Failed to get Telegram members for ${mint}`, error as Error);
+        const err = error as Error;
+        logger.debug('SocialMetrics', `Failed to get Telegram members for ${mint}`, { error: err.message });
       }
     }
 

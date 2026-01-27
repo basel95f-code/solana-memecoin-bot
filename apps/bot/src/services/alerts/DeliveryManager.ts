@@ -181,7 +181,7 @@ export class DeliveryManager extends EventEmitter {
       return;
     }
 
-    delivery.status = 'retrying';
+    delivery.status = DeliveryStatus.RETRYING;
     delivery.nextRetryAt = nextRetryAt;
 
     const delaySeconds = Math.floor((nextRetryAt - Date.now()) / 1000);
@@ -337,7 +337,7 @@ export class DeliveryManager extends EventEmitter {
     }
 
     // Reset to pending and clear retry timestamp
-    delivery.status = 'pending';
+    delivery.status = DeliveryStatus.PENDING;
     delivery.nextRetryAt = undefined;
     
     logger.info('DeliveryManager', `Manual retry triggered for delivery ${deliveryId}`);
@@ -361,7 +361,7 @@ export class DeliveryManager extends EventEmitter {
       return false;
     }
 
-    delivery.status = 'cancelled';
+    delivery.status = DeliveryStatus.CANCELLED;
     delivery.nextRetryAt = undefined;
     
     logger.info('DeliveryManager', `Delivery ${deliveryId} cancelled`);
