@@ -1,17 +1,19 @@
 # TypeScript Build Fixes Needed
 
-**Status:** 151 TypeScript errors remaining in `@memecoin/bot` package (down from 583!)
+**Status:** 137 TypeScript errors remaining in `@memecoin/bot` package (down from 583!)
 
 ## 🎉 Latest Progress (2026-01-27)
 
-**Errors Fixed:** 583 → 151 (74% reduction!) 🔥
+**Errors Fixed:** 583 → 137 (77% reduction!) 🔥🔥
 
 ### Today's Session Progress
 - **Starting:** 178 errors
-- **Current:** 151 errors  
-- **Fixed:** 27 errors in this session
+- **Current:** 137 errors  
+- **Fixed:** 41 errors in this session (23% improvement!)
 
-**Recent Fixes (2026-01-27 Session):**
+**Recent Fixes (2026-01-27 Session - 41 total):**
+
+**Batch 1 (27 fixes):**
 - ✅ Fixed property naming: `token_mint` → `tokenMint` (updateLeaderboard.ts)
 - ✅ Fixed type coercions with `Number()` wrapping (smartMoneyMonitor, multiTimeframeAnalyzer)
 - ✅ Created tracker.ts stub for missing smartMoney import
@@ -21,6 +23,19 @@
 - ✅ Fixed CoinGeckoSource error object formatting
 - ✅ Fixed AlertPriority enum usage in AlertBatcher
 - ✅ Fixed all switch/case statements to use enum values
+
+**Batch 2 (8 fixes):**
+- ✅ Fixed gmgnClient → gmgnService references (OutcomeTracker)
+- ✅ Fixed AlertManager enum imports and usage
+- ✅ Fixed TensorFlow activation types (cast to any)
+- ✅ Fixed MultiHeadAttention layer types (LayersModel → Sequential)
+- ✅ Fixed ModelVersionManager.getCurrentVersion → getActiveVersion
+- ✅ Fixed duplicate export conflicts in ml/index.ts (selective exports)
+
+**Batch 3 (6 fixes):**
+- ✅ Fixed AlertRouter priority enum usage
+- ✅ Fixed DeliveryManager status enum (all status assignments)
+- ✅ Fixed WebSocketChannel type (InstanceType<typeof WebSocketServer>)
 
 **Previous Session Fixes:**
 - ✅ Relaxed TypeScript strict mode
