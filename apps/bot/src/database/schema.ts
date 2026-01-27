@@ -1527,5 +1527,45 @@ export const MIGRATIONS: { version: number; sql: string; description?: string }[
       ALTER TABLE group_settings ADD COLUMN detect_tickers INTEGER DEFAULT 0;
       ALTER TABLE group_settings ADD COLUMN auto_cooldown INTEGER DEFAULT 60;
     `
+  },
+  {
+    version: 19,
+    description: 'Add achievements and challenges system',
+    sql: `
+      -- ============================================
+      -- User Achievements Table
+      -- Tracks badges earned by users in each group
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS user_achievements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        group_id TEXT NOT NULL,
+        badge_type TEXT NOT NULL,
+        earned_at INTEGER NOT NULL,
+        UNIQUE(user_id, group_id, badge_type)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_achievements_user ON user_achievements(user_id, group_id);
+      CREATE INDEX IF NOT EXISTS idx_achievements_group ON user_achievements(group_id);
+      CREATE INDEX IF NOT EXISTS idx_achievements_time ON user_achievements(earned_at);
+
+      -- ============================================
+      -- Group Challenges Table
+      -- Tracks weekly/monthly challenges
+      -- ============================================
+      CREATE TABLE IF NOT EXISTS group_challenges (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        group_id TEXT NOT NULL,
+        challenge_type TEXT NOT NULL,
+        period_start INTEGER NOT NULL,
+        period_end INTEGER NOT NULL,
+        winner_user_id TEXT,
+        winner_value REAL,
+        is_active INTEGER DEFAULT 1
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_challenges_group ON group_challenges(group_id);
+      CREATE INDEX IF NOT EXISTS idx_challenges_active ON group_challenges(is_active, period_end);
+    `
   }
 ];

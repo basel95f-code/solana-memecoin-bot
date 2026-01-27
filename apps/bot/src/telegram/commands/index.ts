@@ -10,6 +10,7 @@ import { registerGroupWatchlistCommands } from './groupwatchlist';
 import { registerLeaderboardCommands } from './leaderboard';
 import { registerAutoCommands } from '../middleware/autoTrigger';
 import { registerPNLCommands } from './pnl';
+import { registerAchievementCommands } from './achievements';
 import { registerDiscoveryCommands } from './discovery';
 import { registerSettingsCommands } from './settings';
 import { registerAdvancedCommands } from './advanced';
@@ -58,6 +59,7 @@ export function registerAllCommands(bot: Telegraf, db?: typeof supabaseDb): void
   registerLeaderboardCommands(bot);
   registerAutoCommands(bot);
   registerPNLCommands(bot);
+  registerAchievementCommands(bot);
   registerDiscoveryCommands(bot);
   registerSettingsCommands(bot);
   registerAdvancedCommands(bot);

@@ -5,6 +5,7 @@
 
 import { database } from '../database';
 import { logger } from '../utils/logger';
+import { achievementService } from './achievements';
 
 export interface GroupCall {
   id?: number;
@@ -156,6 +157,11 @@ class GroupLeaderboardService {
          WHERE id = ?`,
         [currentPrice, currentReturn, points, athPrice, athTimestamp, Math.floor(Date.now() / 1000), callId]
       );
+
+      // Check for new achievements (async, don't block)
+      achievementService.checkAchievements(call.group_id, call.user_id).catch(err => {
+        logger.error('GroupLeaderboard', 'Failed to check achievements', err);
+      });
 
       logger.debug('GroupLeaderboard', `Updated call ${callId}: ${currentReturn.toFixed(2)}x (${points} points)`);
     } catch (error) {
