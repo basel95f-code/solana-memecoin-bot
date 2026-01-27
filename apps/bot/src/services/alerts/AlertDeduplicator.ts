@@ -100,10 +100,11 @@ export class AlertDeduplicator {
     }
 
     // Otherwise build key from type + important data
-    const parts = [alert.type];
+    const parts: string[] = [alert.type];
+    const alertType = alert.type as AlertType;
 
     // Add data-specific keys based on alert type
-    switch (alert.type) {
+    switch (alertType) {
       case AlertType.NEW_TOKEN:
       case AlertType.TRADING_SIGNAL:
       case AlertType.RUG_DETECTED:

@@ -100,6 +100,16 @@ function startApiServer() {
 export const apiServer = {
   start: startApiServer,
   server,
+  // Stub methods for WebSocket-like functionality
+  // These are no-ops for now until proper WebSocket integration
+  addAlert: (data: any): void => {
+    // TODO: Implement WebSocket alert broadcasting
+    logger.debug('api-server', 'Alert queued (WebSocket not integrated)', data);
+  },
+  addDiscovery: (data: any): void => {
+    // TODO: Implement WebSocket discovery broadcasting
+    logger.debug('api-server', 'Discovery queued (WebSocket not integrated)', data);
+  },
 };
 
 // Also export startApiServer for backward compatibility

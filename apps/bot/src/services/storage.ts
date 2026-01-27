@@ -871,6 +871,44 @@ class StorageService {
       return null;
     }
   }
+
+  /**
+   * Get filter performance data for a user
+   * Returns tracking data for win rates per profile
+   */
+  getFilterPerformance(chatId: string): FilterPerformanceData | null {
+    // TODO: Implement filter performance tracking
+    // This is a stub to fix compilation errors
+    // Performance tracking should store:
+    // - Profile stats (wins, losses, win rate, avg price change)
+    // - Smart money correlation
+    // - First/last outcome timestamps
+    return null;
+  }
+}
+
+// Type for filter performance data
+export interface FilterPerformanceData {
+  profileStats: {
+    [profile: string]: {
+      total: number;
+      winners: number;
+      losers: number;
+      winRate: number;
+      avgPriceChange24h: number;
+      avgRiskScore?: number;
+    };
+  };
+  smartMoneyCorrelation?: {
+    correlation: number;
+    sampleSize: number;
+    tokensWithSmartMoney: number;
+    tokensWithoutSmartMoney: number;
+    winnerWithSmartMoney: number;
+    winnerWithoutSmartMoney: number;
+  };
+  firstOutcome?: number;
+  lastUpdated: number;
 }
 
 export const storageService = new StorageService();

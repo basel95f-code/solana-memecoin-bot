@@ -114,7 +114,7 @@ export interface RateLimitConfig {
 // Aggregator Types
 // ============================================
 
-export interface AggregatorConfig {
+export interface AggregatorConfig extends Record<string, unknown> {
   dedupWindowMs: number; // How long to cache seen tokens
   minConfirmations: number; // Min sources before considering "confirmed"
   confirmationWeightThreshold: number; // Min total weight from sources

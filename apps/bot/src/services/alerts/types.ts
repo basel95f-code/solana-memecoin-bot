@@ -221,14 +221,14 @@ export interface AlertHistoryRecord {
 // Manager Configuration
 // ============================================
 
-export interface AlertManagerConfig {
+export interface AlertManagerConfig extends Record<string, unknown> {
   dedup: DedupConfig;
   batch: BatchConfig;
   retryConfig: RetryConfig;
   defaultChannels?: string[];
 }
 
-export interface RetryConfig {
+export interface RetryConfig extends Record<string, unknown> {
   enabled: boolean;
   maxRetries: number;
   initialDelayMs: number;

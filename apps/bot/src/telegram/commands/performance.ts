@@ -2,6 +2,13 @@ import type { Context, Telegraf } from 'telegraf';
 import { storageService } from '../../services/storage';
 import { formatPercent } from '../formatters';
 
+/**
+ * Helper to safely get text from message
+ */
+function getMessageText(ctx: Context): string | undefined {
+  return ctx.message && 'text' in ctx.message ? ctx.message.text : undefined;
+}
+
 // Profile emoji mapping
 const PROFILE_EMOJI: Record<string, string> = {
   sniper: '🎯',
@@ -159,7 +166,8 @@ export function registerPerformanceCommands(bot: Telegraf): void {
     const chatId = ctx.chat?.id.toString();
     if (!chatId) return;
 
-    const args = ctx.message?.text?.split(' ').slice(1) || [];
+    const messageText = getMessageText(ctx);
+    const args = messageText?.split(' ').slice(1) || [];
     const settings = storageService.getUserSettings(chatId);
     const profile = args[0]?.toLowerCase() || settings.filters.profile;
 

@@ -15,12 +15,20 @@ import { featureEngineering } from '../../ml/featureEngineering';
 import type { TokenAnalysis } from '../../types';
 
 /**
+ * Helper to safely get text from message
+ */
+function getMessageText(ctx: Context): string | undefined {
+  return ctx.message && 'text' in ctx.message ? ctx.message.text : undefined;
+}
+
+/**
  * /predict_price <token> [timeframe]
  * Predict price movement for 1h, 6h, or 24h
  */
 export async function handlePredictPrice(ctx: Context): Promise<void> {
   try {
-    const args = ctx.message?.text?.split(' ').slice(1) || [];
+    const messageText = getMessageText(ctx);
+    const args = messageText?.split(' ').slice(1) || [];
     const tokenAddress = args[0];
     const timeframe = (args[1] as '1h' | '6h' | '24h') || '1h';
 
@@ -79,7 +87,8 @@ export async function handlePredictPrice(ctx: Context): Promise<void> {
  */
 export async function handleSentimentImpact(ctx: Context): Promise<void> {
   try {
-    const args = ctx.message?.text?.split(' ').slice(1) || [];
+    const messageText = getMessageText(ctx);
+    const args = messageText?.split(' ').slice(1) || [];
     const tokenAddress = args[0];
 
     if (!tokenAddress) {
@@ -112,7 +121,7 @@ export async function handleSentimentImpact(ctx: Context): Promise<void> {
 
     const result = await sentimentCorrelationModel.analyzeCorrelation({
       current: sentimentFeatures,
-      currentPrice: analysis.price?.usd || 0,
+      currentPrice: analysis.pool.quoteReserve / analysis.pool.baseReserve || 0,
     });
 
     // Format response
@@ -145,7 +154,8 @@ export async function handleSentimentImpact(ctx: Context): Promise<void> {
  */
 export async function handleWhaleAlert(ctx: Context): Promise<void> {
   try {
-    const args = ctx.message?.text?.split(' ').slice(1) || [];
+    const messageText = getMessageText(ctx);
+    const args = messageText?.split(' ').slice(1) || [];
     const tokenAddress = args[0];
 
     if (!tokenAddress) {
@@ -271,7 +281,8 @@ export async function handleMLModels(ctx: Context): Promise<void> {
  */
 export async function handleMLExplain(ctx: Context): Promise<void> {
   try {
-    const args = ctx.message?.text?.split(' ').slice(1) || [];
+    const messageText = getMessageText(ctx);
+    const args = messageText?.split(' ').slice(1) || [];
     const tokenAddress = args[0];
 
     if (!tokenAddress) {
@@ -327,7 +338,8 @@ export async function handleMLExplain(ctx: Context): Promise<void> {
  */
 export async function handleMLTrain(ctx: Context): Promise<void> {
   try {
-    const args = ctx.message?.text?.split(' ').slice(1) || [];
+    const messageText = getMessageText(ctx);
+    const args = messageText?.split(' ').slice(1) || [];
     const modelType = args[0] as 'price_prediction' | 'sentiment_correlation' | 'whale_behavior' | 'rug_prediction';
     const adminKey = args[1];
 

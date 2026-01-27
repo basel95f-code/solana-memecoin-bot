@@ -17,16 +17,19 @@ export * from './dataCollection';
 export * from './sampling';
 
 // Outcome Tracking
-export * from './outcomes';
+// Note: Skip re-export to avoid conflict with ./dataCollection
+// export * from './outcomes';
 
 // Data Quality Monitoring
-export * from './monitoring';
+// Note: Skip re-export to avoid conflict with ./dataCollection
+// export * from './monitoring';
 
 // Training Orchestration
-export * from './training';
+// Note: Skip re-export to avoid DataQualityReport/OutcomeLabel conflicts
+// export * from './training';
 
 // Existing ML components (selective exports to avoid conflicts)
-export { FeatureEngineer, type EnhancedFeatures } from './featureEngineering';
+export { FeatureEngineering, type EnhancedFeatures } from './featureEngineering';
 export * from './rugPredictor';
 export * from './pricePrediction';
 export * from './whaleBehavior';
@@ -35,6 +38,8 @@ export * from './ensemblePredictor';
 export { TrainingPipeline } from './trainingPipeline';
 export * from './trainingMetrics';
 export * from './modelVersioning';
-export * from './manualLabeling';
 export * from './featureSelection';
 export * from './claudeExplainer';
+
+// Export manualLabeling types/classes but skip OutcomeLabel (already exported from dataCollection)
+export { ManualLabelingService, type PendingLabel } from './manualLabeling';

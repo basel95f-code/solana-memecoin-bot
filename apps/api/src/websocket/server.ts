@@ -284,6 +284,31 @@ export class RealtimeWebSocketServer {
   }
 
   /**
+   * Add alert (alias for broadcastAlert for compatibility)
+   */
+  public addAlert(data: any): void {
+    this.broadcastAlert(data);
+  }
+
+  /**
+   * Broadcast discovery (new token discovered)
+   */
+  public broadcastDiscovery(data: any): void {
+    this.broadcast({
+      type: 'discovery',
+      data,
+      timestamp: new Date().toISOString()
+    }, 'discoveries');
+  }
+
+  /**
+   * Add discovery (alias for broadcastDiscovery for compatibility)
+   */
+  public addDiscovery(data: any): void {
+    this.broadcastDiscovery(data);
+  }
+
+  /**
    * Start heartbeat to keep connections alive
    */
   private startHeartbeat(): void {

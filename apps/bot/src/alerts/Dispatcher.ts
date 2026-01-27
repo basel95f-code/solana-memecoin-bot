@@ -9,7 +9,7 @@ import { AlertManager } from '../services/alerts/AlertManager';
 import type { Alert, AlertType, AlertPriority } from '../services/alerts/types';
 import type { AlertRule, EvaluationResult } from './RuleEngine';
 
-export interface DispatchConfig {
+export interface DispatchConfig extends Record<string, unknown> {
   enableDeduplication?: boolean;
   enableBatching?: boolean;
   dedupWindowMs?: number;

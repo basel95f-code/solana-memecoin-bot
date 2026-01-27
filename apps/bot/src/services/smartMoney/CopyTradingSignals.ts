@@ -358,7 +358,7 @@ export class CopyTradingSignals extends EventEmitter {
    */
   updateConfig(config: Partial<SignalConfig>): void {
     this.config = { ...this.config, ...config };
-    logger.info('CopyTradingSignals', 'Configuration updated:', this.config);
+    logger.info('CopyTradingSignals', 'Configuration updated:', this.config as unknown as Record<string, unknown>);
   }
 
   /**

@@ -398,7 +398,7 @@ export class SmartMoneyLearner {
           if (balance < 0.01) {
             // Get current price to record exit
             const tokenData = await dexScreenerService.getTokenData(trade.token_mint);
-            const exitPrice = tokenData?.priceUsd || trade.entry_price;
+            const exitPrice = tokenData?.priceUsd ? Number(tokenData.priceUsd) : trade.entry_price;
 
             await this.closeTrade(trade.wallet_address, trade.token_mint, {
               exitPrice,

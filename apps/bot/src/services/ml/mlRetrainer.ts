@@ -404,7 +404,7 @@ class MLRetrainer {
         WHERE is_production = 0
         ORDER BY deactivated_at DESC
         LIMIT 1
-      `).get() as ModelVersion;
+      `).get() as unknown as ModelVersion;
 
       if (!previousModel) {
         throw new Error('No previous model to rollback to');
@@ -524,11 +524,11 @@ class MLRetrainer {
     try {
       const model1 = await database.prepare(`
         SELECT * FROM ml_model_versions WHERE version = ?
-      `).get(v1) as ModelVersion;
+      `).get(v1) as unknown as ModelVersion;
 
       const model2 = await database.prepare(`
         SELECT * FROM ml_model_versions WHERE version = ?
-      `).get(v2) as ModelVersion;
+      `).get(v2) as unknown as ModelVersion;
 
       if (!model1 || !model2) {
         throw new Error('One or both models not found');
@@ -573,7 +573,7 @@ class MLRetrainer {
         SELECT * FROM ml_model_versions
         WHERE is_production = 1
         LIMIT 1
-      `).get() as ModelVersion | null;
+      `).get() as unknown as ModelVersion | null;
 
     } catch (error) {
       logger.error('MLRetrainer', 'Error getting production model', error as Error);
@@ -604,14 +604,14 @@ class MLRetrainer {
     try {
       const model = await database.prepare(`
         SELECT * FROM ml_model_versions WHERE version = ?
-      `).get(version) as ModelVersion;
+      `).get(version) as unknown as ModelVersion;
 
       const previousModel = await database.prepare(`
         SELECT * FROM ml_model_versions
         WHERE trained_at < ?
         ORDER BY trained_at DESC
         LIMIT 1
-      `).get(model.trained_at) as ModelVersion | undefined;
+      `).get(model.trained_at) as unknown as ModelVersion | undefined;
 
       const performance = await this.getModelPerformance(version);
       const previousPerf = previousModel 

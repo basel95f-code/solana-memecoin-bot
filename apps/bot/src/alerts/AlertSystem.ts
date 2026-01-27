@@ -12,7 +12,7 @@ import { AlertManager } from '../services/alerts/AlertManager';
 import { TelegramChannel } from '../services/alerts/channels/TelegramChannel';
 import { DiscordChannel } from '../services/alerts/channels/DiscordChannel';
 import { EmailChannel, type EmailConfig } from '../services/alerts/channels/EmailChannel';
-import { WebSocketChannel } from '../services/alerts/channels/WebSocketChannel';
+import { WebSocketChannel, type WebSocketConfig } from '../services/alerts/channels/WebSocketChannel';
 import type { 
   AlertRule, 
   EvaluationContext, 
@@ -44,9 +44,8 @@ export interface AlertSystemConfig {
     bot: Telegraf;
     defaultChatId?: string;
   };
-  discord?: {
-    webhookUrl?: string;
-    username?: string;
+  discord?: DiscordConfig & {
+    webhookUrl: string;
   };
   email?: EmailConfig;
   websocket?: WebSocketConfig;

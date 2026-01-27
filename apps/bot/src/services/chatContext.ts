@@ -120,8 +120,7 @@ class ChatContextService {
    */
   async getGroupSettings(chatId: string): Promise<GroupSettings | null> {
     try {
-      const db = database.getDb();
-      const row = db.prepare(`
+      const row = database.prepare(`
         SELECT * FROM group_settings WHERE chat_id = ?
       `).get(chatId);
 
@@ -157,8 +156,7 @@ class ChatContextService {
         updatedAt: now,
       };
 
-      const db = database.getDb();
-      db.prepare(`
+      database.prepare(`
         INSERT INTO group_settings (
           chat_id, chat_type, chat_title,
           enable_token_alerts, enable_smart_money_alerts, enable_rug_warnings,
@@ -207,8 +205,7 @@ class ChatContextService {
 
       const updated = { ...current, ...updates, updatedAt: Math.floor(Date.now() / 1000) };
 
-      const db = database.getDb();
-      db.prepare(`
+      database.prepare(`
         UPDATE group_settings SET
           enable_token_alerts = ?,
           enable_smart_money_alerts = ?,
@@ -253,8 +250,7 @@ class ChatContextService {
    */
   async getUserSettings(userId: number): Promise<UserSettings> {
     try {
-      const db = database.getDb();
-      const row = db.prepare(`
+      const row = database.prepare(`
         SELECT * FROM user_settings WHERE user_id = ?
       `).get(userId);
 
@@ -284,8 +280,7 @@ class ChatContextService {
         updatedAt: now,
       };
 
-      const db = database.getDb();
-      db.prepare(`
+      database.prepare(`
         INSERT INTO user_settings (
           user_id, username,
           enable_token_alerts, enable_smart_money_alerts, enable_rug_warnings,
@@ -326,8 +321,7 @@ class ChatContextService {
       const current = await this.getUserSettings(userId);
       const updated = { ...current, ...updates, updatedAt: Math.floor(Date.now() / 1000) };
 
-      const db = database.getDb();
-      db.prepare(`
+      database.prepare(`
         UPDATE user_settings SET
           username = ?,
           enable_token_alerts = ?,

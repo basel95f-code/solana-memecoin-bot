@@ -8,7 +8,10 @@
 import { logger } from '../../utils/logger';
 import { database } from '../../database';
 import { smartMoneyTracker } from '../../services/smartMoney/tracker';
-import { sentimentAnalyzer } from '../../services/sentiment';
+import { SentimentTracker } from '../../services/sentiment';
+
+// Initialize sentiment tracker
+const sentimentAnalyzer = new SentimentTracker();
 import type { TokenSnapshot, MLFeatureVector } from './types';
 import type { DexScreenerPair, SmartMoneyActivity, MultiPlatformSentimentAnalysis } from '../../types';
 
@@ -118,14 +121,15 @@ export class FeatureExtractor {
       }
       
       // Extract sentiment data if requested
+      // TODO: Implement sentiment analysis method in SentimentTracker
       let sentimentData: MultiPlatformSentimentAnalysis | null = null;
-      if (includeSentiment) {
-        try {
-          sentimentData = await sentimentAnalyzer.analyze(mint, symbol);
-        } catch (e) {
-          // Continue without sentiment data
-        }
-      }
+      // if (includeSentiment) {
+      //   try {
+      //     sentimentData = await sentimentAnalyzer.getSentiment(mint);
+      //   } catch (e) {
+      //     // Continue without sentiment data
+      //   }
+      // }
       
       // Merge data sources (prioritize GMGN for real-time data)
       const mergedData = this.mergeDataSources(dexData, gmgnData);

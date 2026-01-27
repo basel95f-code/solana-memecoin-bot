@@ -34,7 +34,7 @@ async function setupAlertSystem() {
     discord: process.env.DISCORD_WEBHOOK_URL ? {
       webhookUrl: process.env.DISCORD_WEBHOOK_URL,
       username: process.env.DISCORD_WEBHOOK_USERNAME || 'Solana Bot',
-      avatarUrl: process.env.DISCORD_WEBHOOK_AVATAR_URL,
+      ...(process.env.DISCORD_WEBHOOK_AVATAR_URL && { avatarUrl: process.env.DISCORD_WEBHOOK_AVATAR_URL }),
     } : undefined,
 
     email: process.env.EMAIL_PROVIDER ? {

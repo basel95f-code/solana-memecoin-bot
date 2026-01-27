@@ -32,9 +32,8 @@ class GroupWatchlistService {
       const name = dexData?.baseToken.name || undefined;
 
       const now = Math.floor(Date.now() / 1000);
-      const db = database.getDb();
 
-      db.prepare(`
+      database.prepare(`
         INSERT INTO group_watchlist (
           chat_id, token_mint, symbol, name,
           added_by_user_id, added_by_username, added_at,
@@ -44,7 +43,7 @@ class GroupWatchlistService {
 
       logger.info('GroupWatchlist', `Added ${symbol} to watchlist for chat ${chatId} by user ${userId}`);
 
-      const result = db.prepare('SELECT last_insert_rowid() as id').get() as { id: number };
+      const result = database.prepare('SELECT last_insert_rowid() as id').get() as { id: number };
 
       return {
         id: result.id,
@@ -69,10 +68,8 @@ class GroupWatchlistService {
    */
   async removeFromGroupWatchlist(chatId: string, mint: string, userId: number): Promise<boolean> {
     try {
-      const db = database.getDb();
-
       // Check if user is the one who added it (for permission check)
-      const token = db.prepare(`
+      const token = database.prepare(`
         SELECT added_by_user_id FROM group_watchlist
         WHERE chat_id = ? AND token_mint = ?
       `).get(chatId, mint) as { added_by_user_id: number } | undefined;
@@ -82,7 +79,7 @@ class GroupWatchlistService {
       }
 
       // Delete the token
-      db.prepare(`
+      database.prepare(`
         DELETE FROM group_watchlist
         WHERE chat_id = ? AND token_mint = ?
       `).run(chatId, mint);
@@ -100,8 +97,7 @@ class GroupWatchlistService {
    */
   async getGroupWatchlist(chatId: string): Promise<GroupWatchlistToken[]> {
     try {
-      const db = database.getDb();
-      const rows = db.prepare(`
+            const rows = database.prepare(`
         SELECT * FROM group_watchlist
         WHERE chat_id = ?
         ORDER BY added_at DESC
@@ -119,8 +115,7 @@ class GroupWatchlistService {
    */
   async getHotlist(chatId: string, limit: number = 10): Promise<GroupWatchlistToken[]> {
     try {
-      const db = database.getDb();
-      const rows = db.prepare(`
+            const rows = database.prepare(`
         SELECT * FROM group_watchlist
         WHERE chat_id = ?
         ORDER BY alert_count DESC, last_alerted_at DESC
@@ -139,8 +134,7 @@ class GroupWatchlistService {
    */
   async isWatchedByGroup(chatId: string, mint: string): Promise<boolean> {
     try {
-      const db = database.getDb();
-      const result = db.prepare(`
+            const result = database.prepare(`
         SELECT COUNT(*) as count FROM group_watchlist
         WHERE chat_id = ? AND token_mint = ?
       `).get(chatId, mint) as { count: number };
@@ -157,10 +151,9 @@ class GroupWatchlistService {
    */
   async recordGroupAlert(chatId: string, mint: string): Promise<void> {
     try {
-      const db = database.getDb();
-      const now = Math.floor(Date.now() / 1000);
+            const now = Math.floor(Date.now() / 1000);
 
-      db.prepare(`
+      database.prepare(`
         UPDATE group_watchlist
         SET alert_count = alert_count + 1,
             last_alerted_at = ?
@@ -178,8 +171,7 @@ class GroupWatchlistService {
    */
   async getWatchedToken(chatId: string, mint: string): Promise<GroupWatchlistToken | null> {
     try {
-      const db = database.getDb();
-      const row = db.prepare(`
+            const row = database.prepare(`
         SELECT * FROM group_watchlist
         WHERE chat_id = ? AND token_mint = ?
       `).get(chatId, mint);
@@ -196,8 +188,7 @@ class GroupWatchlistService {
    */
   async getWatchlistCount(chatId: string): Promise<number> {
     try {
-      const db = database.getDb();
-      const result = db.prepare(`
+            const result = database.prepare(`
         SELECT COUNT(*) as count FROM group_watchlist
         WHERE chat_id = ?
       `).get(chatId) as { count: number };
@@ -214,17 +205,16 @@ class GroupWatchlistService {
    */
   async findToken(chatId: string, searchTerm: string): Promise<GroupWatchlistToken | null> {
     try {
-      const db = database.getDb();
-      
+            
       // Try exact mint match first
-      let row = db.prepare(`
+      let row = database.prepare(`
         SELECT * FROM group_watchlist
         WHERE chat_id = ? AND token_mint = ?
       `).get(chatId, searchTerm);
 
       // Try partial mint match
       if (!row) {
-        row = db.prepare(`
+        row = database.prepare(`
           SELECT * FROM group_watchlist
           WHERE chat_id = ? AND token_mint LIKE ?
           LIMIT 1
@@ -233,7 +223,7 @@ class GroupWatchlistService {
 
       // Try symbol match (case insensitive)
       if (!row) {
-        row = db.prepare(`
+        row = database.prepare(`
           SELECT * FROM group_watchlist
           WHERE chat_id = ? AND LOWER(symbol) = LOWER(?)
           LIMIT 1

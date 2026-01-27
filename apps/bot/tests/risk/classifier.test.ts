@@ -17,6 +17,7 @@ describe('Risk Classifier', () => {
     top20HoldersPercent: 45,
     largestHolderPercent: 8,
     whaleAddresses: ['whale1'],
+    whaleCount: 1,
     devWalletPercent: 8,
     isConcentrated: false,
     topHolders: [],

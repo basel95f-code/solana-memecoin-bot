@@ -214,11 +214,10 @@ class AlertRouterService {
       const settings = await chatContextService.getGroupSettings(chatId);
       if (!settings) return false;
 
-      const db = database.getDb();
       const oneHourAgo = Math.floor(Date.now() / 1000) - 3600;
 
       // Count alerts in last hour
-      const result = db.prepare(`
+      const result = database.prepare(`
         SELECT COUNT(*) as count
         FROM group_alert_throttle
         WHERE chat_id = ? AND sent_at > ?
@@ -242,10 +241,9 @@ class AlertRouterService {
    */
   private async isDuplicate(chatId: string, tokenMint: string, alertType: AlertType): Promise<boolean> {
     try {
-      const db = database.getDb();
       const fourHoursAgo = Math.floor(Date.now() / 1000) - (4 * 3600);
 
-      const result = db.prepare(`
+      const result = database.prepare(`
         SELECT COUNT(*) as count
         FROM group_alert_throttle
         WHERE chat_id = ? AND token_mint = ? AND alert_type = ? AND sent_at > ?
@@ -263,17 +261,16 @@ class AlertRouterService {
    */
   async recordAlert(chatId: string, metadata: AlertMetadata): Promise<void> {
     try {
-      const db = database.getDb();
       const now = Math.floor(Date.now() / 1000);
 
-      db.prepare(`
+      database.prepare(`
         INSERT OR REPLACE INTO group_alert_throttle (chat_id, token_mint, alert_type, sent_at)
         VALUES (?, ?, ?, ?)
       `).run(chatId, metadata.tokenMint, metadata.type, now);
 
       // Clean up old entries (older than 24h)
       const twentyFourHoursAgo = now - (24 * 3600);
-      db.prepare(`
+      database.prepare(`
         DELETE FROM group_alert_throttle WHERE sent_at < ?
       `).run(twentyFourHoursAgo);
 
@@ -287,8 +284,7 @@ class AlertRouterService {
    */
   private async getAllGroups(): Promise<GroupSettings[]> {
     try {
-      const db = database.getDb();
-      const rows = db.prepare(`
+      const rows = database.prepare(`
         SELECT * FROM group_settings
       `).all();
 
@@ -304,8 +300,7 @@ class AlertRouterService {
    */
   private async getAllUsersWithAlerts(): Promise<UserSettings[]> {
     try {
-      const db = database.getDb();
-      const rows = db.prepare(`
+      const rows = database.prepare(`
         SELECT * FROM user_settings
         WHERE enable_token_alerts = 1
            OR enable_smart_money_alerts = 1
