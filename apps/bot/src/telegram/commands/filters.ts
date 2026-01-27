@@ -1,7 +1,7 @@
 import type { Context, Telegraf } from 'telegraf';
 import { storageService } from '../../services/storage';
 import { filterProfileKeyboard, settingsKeyboard } from '../keyboards';
-import { formatSettings, formatFilterProfile, formatFilterStats, formatFilterAdjustment, formatPercent } from '../formatters';
+import { formatSettings, formatFilterProfile, formatPercent } from '../formatters';
 import type { FilterProfile, FilterSettings } from '../../types';
 
 // All available profiles organized by category
@@ -106,8 +106,8 @@ export function registerFilterCommands(bot: Telegraf): void {
         changes.push({ param: 'Min Token Age', old: `${Math.floor(oldFilters.minTokenAge / 60)}m`, new: `${Math.floor(newFilters.minTokenAge / 60)}m` });
       }
 
-      const formatted = formatFilterAdjustment('tighten', changes);
-      await ctx.replyWithHTML(formatted);
+      // TODO: Implement formatFilterAdjustment
+      await ctx.reply(`✅ Filters tightened: ${changes.length} changes`);
       return;
     }
 
@@ -133,15 +133,15 @@ export function registerFilterCommands(bot: Telegraf): void {
         changes.push({ param: 'Min Token Age', old: `${Math.floor(oldFilters.minTokenAge / 60)}m`, new: `${Math.floor(newFilters.minTokenAge / 60)}m` });
       }
 
-      const formatted = formatFilterAdjustment('loosen', changes);
-      await ctx.replyWithHTML(formatted);
+      // TODO: Implement formatFilterAdjustment
+      await ctx.reply(`✅ Filters loosened: ${changes.length} changes`);
       return;
     }
 
     if (subcommand === 'stats') {
       const perfData = storageService.getFilterPerformance(chatId);
-      const formatted = formatFilterStats(perfData);
-      await ctx.replyWithHTML(formatted);
+      // TODO: Implement formatFilterStats
+      await ctx.reply(`📊 Filter Performance:\nPassed: ${perfData.passed || 0}\nFiltered: ${perfData.filtered || 0}`);
       return;
     }
 
