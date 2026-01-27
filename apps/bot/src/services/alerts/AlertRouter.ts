@@ -5,7 +5,8 @@
  */
 
 import { logger } from '../../utils/logger';
-import type { Alert, AlertBatch, ChannelConfig, RoutingRule, RoutingResult, AlertPriority } from './types';
+import type { Alert, AlertBatch, ChannelConfig, RoutingRule, RoutingResult } from './types';
+import { AlertPriority } from './types';
 
 export class AlertRouter {
   private channels: Map<string, ChannelConfig> = new Map();
@@ -157,7 +158,7 @@ export class AlertRouter {
    * Compare priority levels
    */
   private comparePriority(a: AlertPriority, b: AlertPriority): number {
-    const priorities: AlertPriority[] = ['low', 'normal', 'high', 'critical'];
+    const priorities: AlertPriority[] = [AlertPriority.LOW, AlertPriority.NORMAL, AlertPriority.HIGH, AlertPriority.CRITICAL];
     return priorities.indexOf(a) - priorities.indexOf(b);
   }
 

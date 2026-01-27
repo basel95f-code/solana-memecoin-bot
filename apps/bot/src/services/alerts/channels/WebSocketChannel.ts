@@ -22,7 +22,7 @@ interface WebSocketMessage {
 }
 
 export class WebSocketChannel extends BaseChannel {
-  private wss: WebSocketServer | null = null;
+  private wss: InstanceType<typeof WebSocketServer> | null = null;
   private config: WebSocketConfig;
   private clients: Set<WebSocket> = new Set();
   private pingInterval: NodeJS.Timeout | null = null;

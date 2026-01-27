@@ -7,7 +7,8 @@
 import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../../utils/logger';
-import type { DeliveryRecord, DeliveryStatus, RetryConfig } from './types';
+import type { DeliveryRecord, RetryConfig } from './types';
+import { DeliveryStatus } from './types';
 
 export interface DeliveryStats {
   totalDeliveries: number;
@@ -71,7 +72,7 @@ export class DeliveryManager extends EventEmitter {
       id: uuidv4(),
       alertId,
       channelId,
-      status: 'pending',
+      status: DeliveryStatus.PENDING,
       retryCount: 0,
       sentAt: Date.now(),
     };
@@ -421,3 +422,4 @@ export class DeliveryManager extends EventEmitter {
     logger.warn('DeliveryManager', `Cleared all ${count} delivery records`);
   }
 }
+
