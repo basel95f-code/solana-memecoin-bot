@@ -293,7 +293,7 @@ async function listUserRules(ctx: Context) {
 
   text += '\n_Tap actions to manage rules_';
 
-  await ctx.replyWithMarkdown(text, { disable_web_page_preview: true });
+  await ctx.replyWithMarkdown(text, { link_preview_options: { is_disabled: true } });
 }
 
 // ============================================

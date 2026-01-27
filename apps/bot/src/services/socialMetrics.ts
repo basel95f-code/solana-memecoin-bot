@@ -104,7 +104,7 @@ export class SocialMetricsService {
     const mint = tokenInfo.mint;
 
     // Check cache first
-    const cached = await cacheManager.get<SocialGrowthMetrics>(CacheKey.socialGrowth(mint));
+    const cached = await cacheManager.get<SocialGrowthMetrics>(`social_growth:${mint}`);
     if (cached) {
       return cached;
     }
@@ -189,8 +189,8 @@ export class SocialMetricsService {
       lastUpdated: latest.timestamp,
     };
 
-    // Cache for 10 minutes
-    await cacheManager.set(CacheKey.socialGrowth(mint), metrics, CacheTTL.MEDIUM);
+    // Cache for 15 minutes
+    await cacheManager.set(`social_growth:${mint}`, metrics, CacheTTL.SOCIAL_DATA);
 
     logger.debug('SocialMetrics', `Social growth for ${mint}: score=${socialScore.toFixed(2)}`);
 

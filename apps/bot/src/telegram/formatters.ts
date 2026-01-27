@@ -1140,3 +1140,47 @@ export function formatPatternAnalysis(
 
   return lines.join('\n');
 }
+
+/**
+ * Format filter adjustment changes
+ */
+export function formatFilterAdjustment(action: 'tighten' | 'loosen', changes: Array<{ param: string; old: any; new: any }>): string {
+  const emoji = action === 'tighten' ? '??' : '??';
+  const actionText = action === 'tighten' ? 'Tightened' : 'Loosened';
+  
+  const lines = [
+    ${emoji} <b>Filters </b>,
+    '',
+  ];
+
+  for (const change of changes) {
+    lines.push(<b>:</b>  ? );
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Format filter performance stats
+ */
+export function formatFilterStats(perfData: any): string {
+  const lines = [
+    '?? <b>Filter Performance</b>',
+    '',
+    Tokens Passed: ,
+    Tokens Filtered: ,
+    Success Rate: ,
+    '',
+    'Recent Adjustments:',
+  ];
+
+  if (perfData.recentChanges && perfData.recentChanges.length > 0) {
+    for (const change of perfData.recentChanges.slice(0, 5)) {
+      lines.push(  •  at );
+    }
+  } else {
+    lines.push('  No recent changes');
+  }
+
+  return lines.join('\n');
+}
