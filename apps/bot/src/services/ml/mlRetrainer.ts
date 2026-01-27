@@ -296,7 +296,7 @@ class MLRetrainer {
         recall_score: metrics.recall_score,
         f1_score: metrics.f1_score,
         auc_score: metrics.auc_score,
-        training_loss: result.trainingLoss,
+        training_loss: result.trainLoss,
         validation_loss: result.validationLoss,
         confusion_matrix: JSON.stringify(metrics.confusion_matrix),
         is_active: 0,

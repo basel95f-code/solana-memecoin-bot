@@ -107,7 +107,7 @@ export async function analyzeDevWallet(
 /**
  * Find the original dev wallet by tracing the first token mint
  */
-async function findDevWallet(tokenMint: string): Promise<string | null> {
+export async function findDevWallet(tokenMint: string): Promise<string | null> {
   try {
     const connection = solanaService.getConnection();
     const mintPubkey = new PublicKey(tokenMint);

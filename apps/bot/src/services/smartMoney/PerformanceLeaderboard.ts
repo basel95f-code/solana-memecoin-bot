@@ -5,7 +5,8 @@
  */
 
 import { logger } from '../../utils/logger';
-import type { WalletProfile, WalletCategory } from './WalletProfiler';
+import type { WalletProfile } from './WalletProfiler';
+import { WalletCategory } from './WalletProfiler';
 
 export interface LeaderboardEntry {
   rank: number;
@@ -166,11 +167,11 @@ export class PerformanceLeaderboard {
    */
   private updateCategoryLeaderboards(entries: LeaderboardEntry[]): void {
     const categories: WalletCategory[] = [
-      'sniper',
-      'swing',
-      'hodler',
-      'scalper',
-      'whale',
+      WalletCategory.SNIPER,
+      WalletCategory.SWING_TRADER,
+      WalletCategory.HODLER,
+      WalletCategory.SCALPER,
+      WalletCategory.WHALE,
     ];
 
     for (const category of categories) {
@@ -281,11 +282,11 @@ export class PerformanceLeaderboard {
     return {
       totalWallets: this.globalLeaderboard.length,
       categoryBreakdown: {
-        sniper: this.getCategoryLeaderboard('sniper').length,
-        swing: this.getCategoryLeaderboard('swing').length,
-        hodler: this.getCategoryLeaderboard('hodler').length,
-        scalper: this.getCategoryLeaderboard('scalper').length,
-        whale: this.getCategoryLeaderboard('whale').length,
+        sniper: this.getCategoryLeaderboard(WalletCategory.SNIPER).length,
+        swing: this.getCategoryLeaderboard(WalletCategory.SWING_TRADER).length,
+        hodler: this.getCategoryLeaderboard(WalletCategory.HODLER).length,
+        scalper: this.getCategoryLeaderboard(WalletCategory.SCALPER).length,
+        whale: this.getCategoryLeaderboard(WalletCategory.WHALE).length,
       },
       topScore: this.globalLeaderboard[0]?.overallScore || 0,
       avgScore: this.globalLeaderboard.length > 0
