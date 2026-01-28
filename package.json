@@ -23,6 +23,7 @@
     "db:types": "cd supabase && npx supabase gen types typescript --local > ../packages/shared/src/types/supabase.ts"
   },
   "devDependencies": {
+    "pg": "^8.17.2",
     "turbo": "^2.0.0",
     "typescript": "^5.9.3"
   },

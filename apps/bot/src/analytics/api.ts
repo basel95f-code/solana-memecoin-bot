@@ -83,7 +83,7 @@ class AnalyticsAPI {
 
       return await patternAnalytics.getAllPatternPerformance();
     } catch (error) {
-      logger.error('AnalyticsAPI', 'Failed to get pattern performance', error);
+      logger.error('AnalyticsAPI', 'Failed to get pattern performance', error as Error);
       return [];
     }
   }
@@ -121,7 +121,7 @@ class AnalyticsAPI {
         worstTimes,
       };
     } catch (error) {
-      logger.error('AnalyticsAPI', 'Failed to get time-based insights', error);
+      logger.error('AnalyticsAPI', 'Failed to get time-based insights', error as Error);
       throw error;
     }
   }
@@ -150,7 +150,7 @@ class AnalyticsAPI {
         survivalRates,
       };
     } catch (error) {
-      logger.error('AnalyticsAPI', 'Failed to get lifecycle stats', error);
+      logger.error('AnalyticsAPI', 'Failed to get lifecycle stats', error as Error);
       throw error;
     }
   }
@@ -185,7 +185,7 @@ class AnalyticsAPI {
         summary,
       };
     } catch (error) {
-      logger.error('AnalyticsAPI', 'Failed to get risk score accuracy', error);
+      logger.error('AnalyticsAPI', 'Failed to get risk score accuracy', error as Error);
       throw error;
     }
   }
@@ -207,7 +207,7 @@ class AnalyticsAPI {
         combinations,
       };
     } catch (error) {
-      logger.error('AnalyticsAPI', 'Failed to get top performing signals', error);
+      logger.error('AnalyticsAPI', 'Failed to get top performing signals', error as Error);
       throw error;
     }
   }
@@ -274,7 +274,7 @@ class AnalyticsAPI {
         timestamp: Math.floor(Date.now() / 1000),
       };
     } catch (error) {
-      logger.error('AnalyticsAPI', 'Failed to get analytics summary', error);
+      logger.error('AnalyticsAPI', 'Failed to get analytics summary', error as Error);
       throw error;
     }
   }
@@ -337,7 +337,7 @@ class AnalyticsAPI {
         },
       };
     } catch (error) {
-      logger.error('AnalyticsAPI', 'Failed to get visualization data', error);
+      logger.error('AnalyticsAPI', 'Failed to get visualization data', error as Error);
       throw error;
     }
   }

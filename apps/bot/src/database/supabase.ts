@@ -71,6 +71,10 @@ export function getSupabaseAnonClient(): SupabaseClient {
 export async function testConnection(): Promise<boolean> {
   try {
     const client = getSupabaseClient();
+    if (!client) {
+      logger.error('Supabase', 'Client not initialized');
+      return false;
+    }
     const { error } = await client.from('sync_metadata').select('count').single();
 
     if (error) {
@@ -136,6 +140,9 @@ export async function healthCheck(): Promise<{
   try {
     const start = Date.now();
     const client = getSupabaseClient();
+    if (!client) {
+      return { healthy: false, error: 'Client not initialized' };
+    }
 
     const { error } = await client.from('sync_metadata').select('count').limit(1);
 
@@ -161,3 +168,6 @@ export async function healthCheck(): Promise<{
 }
 
 export default getSupabaseClient;
+
+// Convenience export for named import
+export const supabase = getSupabaseClient();

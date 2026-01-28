@@ -144,7 +144,11 @@ class MigrationService {
   private backupPath: string = '';
 
   constructor() {
-    this.supabase = getSupabaseClient();
+    const client = getSupabaseClient();
+    if (!client) {
+      throw new Error('Supabase client not initialized. Check your environment variables.');
+    }
+    this.supabase = client;
   }
 
   /**

@@ -540,30 +540,32 @@ export function formatSettings(settings: FilterSettings): string {
     lines.push(`Max: $${formatNumber(settings.maxLiquidity)}`);
   }
   lines.push(
-    ``,
-    `━━━ <b>HOLDERS</b> ━━━`,
-    `Max Top 10: ${settings.maxTop10Percent}%`,
-    settings.maxSingleHolderPercent ? `Max Single: ${settings.maxSingleHolderPercent}%` : null,
-    `Min Holders: ${settings.minHolders}`,
-    ``,
-    `━━━ <b>TOKEN AGE</b> ━━━`,
-    `Min Age: ${Math.floor(settings.minTokenAge / 60)}min`,
-    settings.maxTokenAge ? `Max Age: ${Math.floor(settings.maxTokenAge / 60)}min` : null,
-    ``,
-    `━━━ <b>MARKET CAP</b> ━━━`,
-    settings.minMcap ? `Min MCap: $${formatNumber(settings.minMcap)}` : `Min MCap: None`,
-    settings.maxMcap ? `Max MCap: $${formatNumber(settings.maxMcap)}` : `Max MCap: None`,
-    ``,
-    `━━━ <b>SCORES</b> ━━━`,
-    `Min Risk Score: ${settings.minRiskScore}`,
-    settings.minOpportunityScore ? `Min Opportunity: ${settings.minOpportunityScore}` : null,
-    ``,
-    `━━━ <b>REQUIREMENTS</b> ━━━`,
-    `Mint Revoked: ${settings.requireMintRevoked ? '✅' : '❌'}`,
-    `Freeze Revoked: ${settings.requireFreezeRevoked ? '✅' : '❌'}`,
-    `LP Burned: ${settings.requireLPBurned ? '✅' : '❌'}${settings.lpBurnedMinPercent ? ` (${settings.lpBurnedMinPercent}%+)` : ''}`,
-    `Has Socials: ${settings.requireSocials ? '✅' : '❌'}`,
-  ];
+    ...([
+      ``,
+      `━━━ <b>HOLDERS</b> ━━━`,
+      `Max Top 10: ${settings.maxTop10Percent}%`,
+      settings.maxSingleHolderPercent ? `Max Single: ${settings.maxSingleHolderPercent}%` : null,
+      `Min Holders: ${settings.minHolders}`,
+      ``,
+      `━━━ <b>TOKEN AGE</b> ━━━`,
+      `Min Age: ${Math.floor(settings.minTokenAge / 60)}min`,
+      settings.maxTokenAge ? `Max Age: ${Math.floor(settings.maxTokenAge / 60)}min` : null,
+      ``,
+      `━━━ <b>MARKET CAP</b> ━━━`,
+      settings.minMcap ? `Min MCap: $${formatNumber(settings.minMcap)}` : `Min MCap: None`,
+      settings.maxMcap ? `Max MCap: $${formatNumber(settings.maxMcap)}` : `Max MCap: None`,
+      ``,
+      `━━━ <b>SCORES</b> ━━━`,
+      `Min Risk Score: ${settings.minRiskScore}`,
+      settings.minOpportunityScore ? `Min Opportunity: ${settings.minOpportunityScore}` : null,
+      ``,
+      `━━━ <b>REQUIREMENTS</b> ━━━`,
+      `Mint Revoked: ${settings.requireMintRevoked ? '✅' : '❌'}`,
+      `Freeze Revoked: ${settings.requireFreezeRevoked ? '✅' : '❌'}`,
+      `LP Burned: ${settings.requireLPBurned ? '✅' : '❌'}${settings.lpBurnedMinPercent ? ` (${settings.lpBurnedMinPercent}%+)` : ''}`,
+      `Has Socials: ${settings.requireSocials ? '✅' : '❌'}`,
+    ].filter((line): line is string => line !== null))
+  );
 
   // Add Pump.fun specific if set
   if (settings.minBondingCurve || settings.maxBondingCurve) {

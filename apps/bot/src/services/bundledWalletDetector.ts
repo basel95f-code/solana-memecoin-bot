@@ -14,6 +14,7 @@ import { EventEmitter } from 'events';
 import { solanaService } from './solana';
 import type { HolderInfo } from '../types';
 import { logger } from '../utils/logger';
+import { getSupabaseClient } from '../database/supabase';
 
 export interface BundledWallet {
   address: string;
@@ -188,6 +189,11 @@ export class BundledWalletDetectorService extends EventEmitter {
     // Send alerts if suspicious
     if (suspicionLevel === 'critical' || suspicionLevel === 'high') {
       await this.sendAlerts(tokenMint, symbol, result);
+    }
+
+    // Save bundle detection results to Supabase
+    if (result.hasBundles) {
+      await this.saveBundlesToDatabase(tokenMint, result);
     }
 
     return result;
@@ -367,6 +373,83 @@ export class BundledWalletDetectorService extends EventEmitter {
       warnings: [],
       suspicionLevel: 'low',
     };
+  }
+
+  /**
+   * Save bundle detection results to Supabase
+   */
+  private async saveBundlesToDatabase(
+    tokenMint: string,
+    result: BundleDetectionResult
+  ): Promise<void> {
+    try {
+      const supabase = getSupabaseClient();
+      if (!supabase) {
+        logger.debug('BundledWalletDetector', 'Supabase not configured, skipping database save');
+        return;
+      }
+
+      // Save each bundle cluster
+      for (let i = 0; i < result.bundles.length; i++) {
+        const bundle = result.bundles[i];
+        const bundlePercent = bundle.reduce((sum, w) => sum + w.tokenPercent, 0);
+        
+        // Generate cluster ID (combination of token mint and bundle index)
+        const clusterId = `${tokenMint.slice(0, 8)}_${bundle[0].creationSlot}_${i}`;
+        
+        // Find common funder (if all wallets have same funding source)
+        const fundingSources = bundle.map(w => w.fundingSource).filter(Boolean);
+        const uniqueFunders = [...new Set(fundingSources)];
+        const commonFunder = uniqueFunders.length === 1 ? uniqueFunders[0]! : 'MULTIPLE';
+        
+        // Calculate timing patterns
+        const creationTimes = bundle.map(w => w.creationTimestamp).sort((a, b) => a - b);
+        const creationTimeSpan = (creationTimes[creationTimes.length - 1] - creationTimes[0]) / 1000; // seconds
+        
+        const now = Date.now();
+        const walletAges = bundle.map(w => (now - w.creationTimestamp) / (1000 * 60 * 60)); // hours
+        const avgWalletAge = walletAges.reduce((sum, age) => sum + age, 0) / walletAges.length;
+        
+        const walletsCreatedWithin1h = bundle.filter(w => now - w.creationTimestamp < 3600000).length;
+        
+        // Prepare data for insertion
+        const bundleData = {
+          token_mint: tokenMint,
+          cluster_id: clusterId,
+          wallets: bundle.map(w => w.address),
+          common_funder: commonFunder,
+          funder_label: null, // Could be enhanced with CEX detection later
+          wallet_count: bundle.length,
+          total_holdings: null, // Could be calculated if we have price data
+          total_percentage: bundlePercent,
+          creation_time_span: Math.floor(creationTimeSpan),
+          avg_wallet_age: avgWalletAge,
+          wallets_created_within_1h: walletsCreatedWithin1h,
+          has_coordinated_buys: false, // Could be enhanced with buy detection
+          coordinated_buy_count: 0,
+          fastest_coordinated_buy_seconds: null,
+          risk_score: result.riskScore,
+          is_suspicious: result.suspicionLevel === 'high' || result.suspicionLevel === 'critical',
+          suspicion_reasons: result.warnings,
+          detected_at: new Date().toISOString(),
+        };
+
+        // Upsert bundle flag (update if exists, insert if not)
+        const { error } = await supabase
+          .from('bundle_flags')
+          .upsert(bundleData, {
+            onConflict: 'token_mint,cluster_id',
+          });
+
+        if (error) {
+          logger.error('BundledWalletDetector', `Failed to save bundle to database: ${error.message}`);
+        } else {
+          logger.info('BundledWalletDetector', `Saved bundle ${clusterId} to database (${bundle.length} wallets, ${bundlePercent.toFixed(1)}%)`);
+        }
+      }
+    } catch (error) {
+      logger.silentError('BundledWalletDetector', 'Failed to save bundles to database', error as Error);
+    }
   }
 
   /**

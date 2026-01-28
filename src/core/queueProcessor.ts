@@ -201,17 +201,39 @@ export class QueueProcessor {
       if (analysis) {
         // Get ML prediction for rug probability
         const mlPrediction = await rugPredictor.predict({
+          // Liquidity metrics
           liquidityUsd: analysis.liquidity.totalLiquidityUsd,
-          riskScore: analysis.risk.score,
+          lpBurnedPercent: analysis.liquidity.lpBurnedPercent,
+          lpLockedPercent: analysis.liquidity.lpLockedPercent ?? 0,
+          lpLockDurationHours: analysis.liquidity.lpLockDuration ? analysis.liquidity.lpLockDuration / 3600 : 0,
+          // Holder distribution
           holderCount: analysis.holders.totalHolders,
           top10Percent: analysis.holders.top10HoldersPercent,
+          top20Percent: analysis.holders.top20HoldersPercent ?? analysis.holders.top10HoldersPercent * 1.3,
+          largestHolderPercent: analysis.holders.largestHolderPercent ?? analysis.holders.top10HoldersPercent / 3,
+          whaleCount: analysis.holders.whaleAddresses?.length ?? 0,
+          devWalletPercent: analysis.holders.devWalletPercent ?? 0,
+          // Contract safety
           mintRevoked: analysis.contract.mintAuthorityRevoked,
           freezeRevoked: analysis.contract.freezeAuthorityRevoked,
-          lpBurnedPercent: analysis.liquidity.lpBurnedPercent,
+          hasTransferFee: analysis.contract.hasTransferFee ?? false,
+          transferFeePercent: analysis.contract.transferFeePercent ?? 0,
+          // Social metrics
           hasSocials: analysis.social.hasTwitter || analysis.social.hasTelegram || analysis.social.hasWebsite,
+          twitterFollowers: analysis.social.twitterFollowers ?? 0,
+          telegramMembers: analysis.social.telegramMembers ?? 0,
+          hasMetadataImage: analysis.token.metadata?.image ? true : false,
+          // Smart money (default to 0 if not available)
+          smartBuys24h: analysis.smartMoney?.smartBuys24h ?? 0,
+          smartSells24h: analysis.smartMoney?.smartSells24h ?? 0,
+          netSmartMoney: analysis.smartMoney?.netSmartMoney ?? 0,
+          // Sentiment
+          sentimentScore: analysis.sentiment?.sentimentScore ?? 0,
+          // Token characteristics
           tokenAgeHours: analysis.pool.createdAt
             ? (Date.now() - new Date(analysis.pool.createdAt).getTime()) / 3600000
             : 0,
+          riskScore: analysis.risk.score,
         });
 
         // Save analysis to database (async, don't await)

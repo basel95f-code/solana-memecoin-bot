@@ -78,6 +78,7 @@ async function main() {
   console.log('\n5️⃣  Querying sync_metadata...');
   try {
     const client = getSupabaseClient();
+    if (!client) throw new Error('Client not initialized');
     const { data, error } = await client.from('sync_metadata').select('table_name, sync_status').limit(5);
 
     if (error) {
@@ -99,6 +100,7 @@ async function main() {
   for (const table of tables) {
     try {
       const client = getSupabaseClient();
+      if (!client) throw new Error('Client not initialized');
       const { count, error } = await client
         .from(table)
         .select('*', { count: 'exact', head: true });
@@ -117,6 +119,7 @@ async function main() {
   console.log('\n7️⃣  Testing write operation...');
   try {
     const client = getSupabaseClient();
+    if (!client) throw new Error('Client not initialized');
     const testMint = `test-${Date.now()}`;
 
     const { error: insertError } = await client.from('token_analysis').insert({

@@ -77,6 +77,8 @@ export interface TokenData {
   marketCap?: number;
   // Age
   ageHours?: number;
+  // Risk scores
+  riskScore?: number;
   // ML scores
   rugProbability?: number;
   mlConfidence?: number;
@@ -376,7 +378,7 @@ class PatternDetector {
       this.initialized = true;
       logger.info('PatternDetector', 'Initialized');
     } catch (error) {
-      logger.error('PatternDetector', 'Initialization failed', error);
+      logger.error('PatternDetector', 'Initialization failed', error as Error);
       throw error;
     }
   }
@@ -435,7 +437,7 @@ class PatternDetector {
       logger.info('PatternDetector', `Discovered and saved ${savedCount} new patterns`);
       return discoveredPatterns;
     } catch (error) {
-      logger.error('PatternDetector', 'Pattern discovery failed', error);
+      logger.error('PatternDetector', 'Pattern discovery failed', error as Error);
       return [];
     }
   }
@@ -625,7 +627,7 @@ class PatternDetector {
 
       return totalMatches > 0 ? correctPredictions / totalMatches : 0;
     } catch (error) {
-      logger.error('PatternDetector', 'Pattern validation failed', error);
+      logger.error('PatternDetector', 'Pattern validation failed', error as Error);
       return 0;
     }
   }
@@ -662,7 +664,7 @@ class PatternDetector {
 
       logger.info('PatternDetector', `Saved pattern: ${pattern.patternName}`);
     } catch (error) {
-      logger.error('PatternDetector', `Failed to save pattern: ${pattern.patternName}`, error);
+      logger.error('PatternDetector', `Failed to save pattern: ${pattern.patternName}`, error as Error);
       throw error;
     }
   }
@@ -858,7 +860,7 @@ class PatternDetector {
         })),
       };
     } catch (error) {
-      logger.error('PatternDetector', 'Failed to get pattern stats', error);
+      logger.error('PatternDetector', 'Failed to get pattern stats', error as Error);
       return null;
     }
   }
@@ -933,7 +935,7 @@ class PatternDetector {
 
       logger.info('PatternDetector', 'Pattern metrics updated');
     } catch (error) {
-      logger.error('PatternDetector', 'Failed to update pattern metrics', error);
+      logger.error('PatternDetector', 'Failed to update pattern metrics', error as Error);
     }
   }
 
@@ -972,7 +974,7 @@ class PatternDetector {
         similarityScore: s.score,
       }));
     } catch (error) {
-      logger.error('PatternDetector', 'Failed to find similar tokens', error);
+      logger.error('PatternDetector', 'Failed to find similar tokens', error as Error);
       return [];
     }
   }

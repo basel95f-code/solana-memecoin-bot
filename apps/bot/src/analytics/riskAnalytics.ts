@@ -146,7 +146,7 @@ class RiskAnalytics {
 
       return accuracyResults;
     } catch (error) {
-      logger.error('RiskAnalytics', 'Failed to get risk score accuracy', error);
+      logger.error('RiskAnalytics', 'Failed to get risk score accuracy', error as Error);
       return [];
     }
   }
@@ -193,7 +193,7 @@ class RiskAnalytics {
 
       return featureImportance;
     } catch (error) {
-      logger.error('RiskAnalytics', 'Failed to get feature importance', error);
+      logger.error('RiskAnalytics', 'Failed to get feature importance', error as Error);
       return [];
     }
   }
@@ -255,7 +255,7 @@ class RiskAnalytics {
 
       return distribution;
     } catch (error) {
-      logger.error('RiskAnalytics', 'Failed to get risk distribution', error);
+      logger.error('RiskAnalytics', 'Failed to get risk distribution', error as Error);
       return [];
     }
   }
@@ -338,7 +338,7 @@ class RiskAnalytics {
 
       return thresholds;
     } catch (error) {
-      logger.error('RiskAnalytics', 'Failed to get optimal thresholds', error);
+      logger.error('RiskAnalytics', 'Failed to get optimal thresholds', error as Error);
       return [];
     }
   }
@@ -391,7 +391,7 @@ class RiskAnalytics {
 
       return calibrationCurve;
     } catch (error) {
-      logger.error('RiskAnalytics', 'Failed to get calibration curve', error);
+      logger.error('RiskAnalytics', 'Failed to get calibration curve', error as Error);
       return [];
     }
   }
@@ -445,7 +445,7 @@ class RiskAnalytics {
         wellCalibratedRanges,
       };
     } catch (error) {
-      logger.error('RiskAnalytics', 'Failed to get risk validation summary', error);
+      logger.error('RiskAnalytics', 'Failed to get risk validation summary', error as Error);
       return {
         overallAccuracy: 0,
         avgCalibrationError: 0,
@@ -499,7 +499,7 @@ class RiskAnalytics {
 
       return Math.max(-1, Math.min(1, correlation)); // Clamp to [-1, 1]
     } catch (error) {
-      logger.silentError('RiskAnalytics', `Failed to calculate correlation for ${featureName}`, error);
+      logger.silentError('RiskAnalytics', `Failed to calculate correlation for ${featureName}`, error as Error);
       return 0;
     }
   }

@@ -54,13 +54,14 @@ async function analyzeTokenWithInsights(tokenData: TokenData) {
 
   // Step 4: Check risk score accuracy
   const riskData = await analyticsAPI.getRiskScoreAccuracy();
-  const riskLevel = tokenData.riskScore >= 70 ? 'LOW' :
-                   tokenData.riskScore >= 50 ? 'MEDIUM' :
-                   tokenData.riskScore >= 30 ? 'HIGH' : 'CRITICAL';
+  const riskScore = tokenData.riskScore ?? 50; // Default to 50 if undefined
+  const riskLevel = riskScore >= 70 ? 'LOW' :
+                   riskScore >= 50 ? 'MEDIUM' :
+                   riskScore >= 30 ? 'HIGH' : 'CRITICAL';
 
   const riskAccuracy = riskData.byLevel.find(r => r.riskLevel === riskLevel);
 
-  console.log(`\n🛡️ Risk Score: ${tokenData.riskScore} (${riskLevel})`);
+  console.log(`\n🛡️ Risk Score: ${riskScore} (${riskLevel})`);
   console.log(`   Historical Accuracy: ${riskAccuracy?.actualSuccessRate.toFixed(1)}%`);
 
   // Step 5: Make decision

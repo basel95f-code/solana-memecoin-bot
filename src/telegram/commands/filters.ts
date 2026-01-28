@@ -140,6 +140,14 @@ export function registerFilterCommands(bot: Telegraf): void {
 
     if (subcommand === 'stats') {
       const perfData = storageService.getFilterPerformance(chatId);
+      if (!perfData) {
+        await ctx.replyWithHTML(
+          `📊 <b>FILTER STATS</b>\n\n` +
+          `No performance data available yet.\n\n` +
+          `Start monitoring tokens to collect filter statistics.`
+        );
+        return;
+      }
       const formatted = formatFilterStats(perfData);
       await ctx.replyWithHTML(formatted);
       return;

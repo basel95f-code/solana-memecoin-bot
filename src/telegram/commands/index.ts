@@ -11,6 +11,7 @@ import { registerAdvancedCommands } from './advanced';
 import { registerBlacklistCommands } from './blacklist';
 import { registerWalletCommands } from './wallets';
 import { registerBacktestCommands } from './backtest';
+import { registerScamDetectionCommands } from './scamDetection';
 
 export function registerAllCommands(bot: Telegraf): void {
   // Register all command handlers
@@ -26,6 +27,7 @@ export function registerAllCommands(bot: Telegraf): void {
   registerBlacklistCommands(bot);
   registerWalletCommands(bot);
   registerBacktestCommands(bot);
+  registerScamDetectionCommands(bot);
 
   // Set up bot commands menu
   bot.telegram.setMyCommands([
@@ -94,6 +96,13 @@ export function registerAllCommands(bot: Telegraf): void {
     { command: 'newstrategy', description: 'Create custom strategy' },
     { command: 'viewstrategy', description: 'View strategy details' },
     { command: 'snapshots', description: 'Snapshot collection status' },
+    // Scam Detection
+    { command: 'bundle', description: '🚨 Detect wallet bundles (sybil attacks)' },
+    { command: 'funded', description: '💰 Trace wallet funding source' },
+    { command: 'early_wallets', description: '🏁 Show early pump.fun buyers' },
+    { command: 'twitter_reuse', description: '🐦 Check recycled Twitter accounts' },
+    { command: 'common_traders', description: '🔗 Find wallet overlap' },
+    { command: 'image_check', description: '🖼️ Detect logo reuse' },
   ]).catch(err => console.error('Failed to set bot commands:', err));
 
   console.log('All Telegram commands registered');

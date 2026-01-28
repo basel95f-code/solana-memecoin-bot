@@ -16,6 +16,7 @@ import { dexScreenerService } from './dexscreener';
 import { findDevWallet, analyzeDevSellHistory } from '../analysis/devWallet';
 import type { HolderInfo } from '../types';
 import { logger } from '../utils/logger';
+import { getSupabaseClient } from '../database/supabase';
 
 export interface DevWalletInfo {
   tokenMint: string;
@@ -144,6 +145,9 @@ export class DevWalletTrackerService extends EventEmitter {
 
       this.trackedDevs.set(tokenMint, info);
       logger.info('DevWalletTracker', `Tracking dev for ${symbol}: ${devAddress.slice(0, 8)}... (${initialHolding.toFixed(1)}%)`);
+      
+      // Save to database
+      await this.saveDevWalletToDatabase(devAddress, tokenMint, 'suspected', `Initial dev wallet for ${symbol}`);
     } catch (error) {
       logger.error('DevWalletTracker', `Failed to add ${symbol}`, error as Error);
     }
@@ -301,6 +305,14 @@ export class DevWalletTrackerService extends EventEmitter {
         this.emit('alert', alert);
         this.markAlertSent(tokenMint, 'complete_exit');
         logger.error('DevWalletTracker', `COMPLETE EXIT: ${info.symbol} dev exited`);
+        
+        // Flag as potential scammer
+        await this.saveDevWalletToDatabase(
+          info.devAddress,
+          tokenMint,
+          'known_scammer',
+          `Complete exit: sold ${info.totalSoldPercent.toFixed(1)}% of holdings for ${info.symbol}`
+        );
       }
     }
 
@@ -351,6 +363,97 @@ export class DevWalletTrackerService extends EventEmitter {
     }
 
     logger.debug('DevWalletTracker', `Cleanup: ${this.trackedDevs.size} tracked devs`);
+  }
+
+  /**
+   * Save or update dev wallet in Supabase database
+   */
+  private async saveDevWalletToDatabase(
+    walletAddress: string,
+    tokenMint: string,
+    classification: 'known_dev' | 'known_scammer' | 'insider' | 'suspected',
+    evidenceNote: string
+  ): Promise<void> {
+    try {
+      const supabase = getSupabaseClient();
+      if (!supabase) {
+        logger.debug('DevWalletTracker', 'Supabase not configured, skipping database save');
+        return;
+      }
+
+      // Check if wallet already exists
+      const { data: existing, error: fetchError } = await supabase
+        .from('known_dev_wallets')
+        .select('*')
+        .eq('wallet_address', walletAddress)
+        .single();
+
+      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = no rows found
+        logger.error('DevWalletTracker', `Error fetching dev wallet: ${fetchError.message}`);
+        return;
+      }
+
+      if (existing) {
+        // Update existing record
+        const associatedTokens = existing.associated_tokens || [];
+        if (!associatedTokens.includes(tokenMint)) {
+          associatedTokens.push(tokenMint);
+        }
+
+        // Increment rugged count if classification changed to known_scammer
+        const ruggedCount = classification === 'known_scammer' && existing.classification !== 'known_scammer'
+          ? (existing.rugged_token_count || 0) + 1
+          : existing.rugged_token_count || 0;
+
+        // Update reputation score (decrease if scammerClassifier, increase if successful)
+        let reputationScore = existing.reputation_score || 50;
+        if (classification === 'known_scammer') {
+          reputationScore = Math.max(0, reputationScore - 20);
+        }
+
+        const { error: updateError } = await supabase
+          .from('known_dev_wallets')
+          .update({
+            classification,
+            associated_tokens: associatedTokens,
+            rugged_token_count: ruggedCount,
+            reputation_score: reputationScore,
+            evidence_notes: `${existing.evidence_notes || ''}\n${new Date().toISOString()}: ${evidenceNote}`.trim(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('wallet_address', walletAddress);
+
+        if (updateError) {
+          logger.error('DevWalletTracker', `Error updating dev wallet: ${updateError.message}`);
+        } else {
+          logger.info('DevWalletTracker', `Updated dev wallet ${walletAddress.slice(0, 8)} in database`);
+        }
+      } else {
+        // Insert new record
+        const { error: insertError } = await supabase
+          .from('known_dev_wallets')
+          .insert({
+            wallet_address: walletAddress,
+            classification,
+            reputation_score: classification === 'known_scammer' ? 0 : 50,
+            associated_tokens: [tokenMint],
+            rugged_token_count: classification === 'known_scammer' ? 1 : 0,
+            successful_token_count: 0,
+            evidence_notes: `${new Date().toISOString()}: ${evidenceNote}`,
+            source: 'devWalletTracker',
+            is_flagged: true,
+            flagged_at: new Date().toISOString(),
+          });
+
+        if (insertError) {
+          logger.error('DevWalletTracker', `Error inserting dev wallet: ${insertError.message}`);
+        } else {
+          logger.info('DevWalletTracker', `Saved new dev wallet ${walletAddress.slice(0, 8)} to database`);
+        }
+      }
+    } catch (error) {
+      logger.silentError('DevWalletTracker', 'Failed to save dev wallet to database', error as Error);
+    }
   }
 
   /**

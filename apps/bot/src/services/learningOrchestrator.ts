@@ -151,7 +151,7 @@ class LearningOrchestrator {
       `SELECT * FROM token_analysis 
        WHERE analyzed_at > ? 
        AND analyzed_at < ?
-       AND mint NOT IN (SELECT token_mint FROM token_outcomes_v2_v2)
+       AND mint NOT IN (SELECT token_mint FROM token_outcomes_v2)
        LIMIT 50`,
       [cutoffTime - 24 * 60 * 60 * 1000, cutoffTime]
     );
@@ -246,7 +246,7 @@ class LearningOrchestrator {
    */
   private async recordOutcome(outcome: TokenOutcome): Promise<void> {
     database.run(
-      `INSERT OR IGNORE INTO token_outcomes_v2_v2 (
+      `INSERT OR IGNORE INTO token_outcomes_v2 (
         token_mint, symbol, discovered_at,
         initial_price, initial_liquidity, initial_risk_score, initial_rug_prob,
         outcome_type, price_change_24h, price_change_7d, final_price,

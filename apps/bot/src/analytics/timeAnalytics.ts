@@ -143,7 +143,7 @@ class TimeAnalytics {
 
       return hourlyPerformance;
     } catch (error) {
-      logger.error('TimeAnalytics', 'Failed to get hourly performance', error);
+      logger.error('TimeAnalytics', 'Failed to get hourly performance', error as Error);
       return [];
     }
   }
@@ -228,7 +228,7 @@ class TimeAnalytics {
 
       return dayPerformance;
     } catch (error) {
-      logger.error('TimeAnalytics', 'Failed to get day of week performance', error);
+      logger.error('TimeAnalytics', 'Failed to get day of week performance', error as Error);
       return [];
     }
   }
@@ -294,7 +294,7 @@ class TimeAnalytics {
 
       return analysis;
     } catch (error) {
-      logger.error('TimeAnalytics', 'Failed to get hold time analysis', error);
+      logger.error('TimeAnalytics', 'Failed to get hold time analysis', error as Error);
       return [];
     }
   }
@@ -367,7 +367,7 @@ class TimeAnalytics {
         distribution,
       };
     } catch (error) {
-      logger.error('TimeAnalytics', 'Failed to get time to pump analysis', error);
+      logger.error('TimeAnalytics', 'Failed to get time to pump analysis', error as Error);
       return {
         avgTimeToPump: 0,
         medianTimeToPump: 0,
@@ -440,7 +440,7 @@ class TimeAnalytics {
         },
       };
     } catch (error) {
-      logger.error('TimeAnalytics', 'Failed to get weekday/weekend comparison', error);
+      logger.error('TimeAnalytics', 'Failed to get weekday/weekend comparison', error as Error);
       return {
         weekday: { totalTrades: 0, winRate: 0, avgReturn: 0 },
         weekend: { totalTrades: 0, winRate: 0, avgReturn: 0 },
@@ -468,7 +468,7 @@ class TimeAnalytics {
 
       return significantHours.slice(0, topN);
     } catch (error) {
-      logger.error('TimeAnalytics', 'Failed to get best entry times', error);
+      logger.error('TimeAnalytics', 'Failed to get best entry times', error as Error);
       return [];
     }
   }
@@ -492,7 +492,7 @@ class TimeAnalytics {
 
       return significantHours.slice(0, topN);
     } catch (error) {
-      logger.error('TimeAnalytics', 'Failed to get worst entry times', error);
+      logger.error('TimeAnalytics', 'Failed to get worst entry times', error as Error);
       return [];
     }
   }

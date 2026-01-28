@@ -54,6 +54,16 @@ class SupabaseDatabaseService {
   }
 
   /**
+   * Get client with null check - throws if not initialized
+   */
+  private db(): SupabaseClient {
+    if (!this.client) {
+      throw new Error('Supabase client not initialized. Call initialize() first.');
+    }
+    return this.client;
+  }
+
+  /**
    * Initialize the database connection
    */
   async initialize(): Promise<void> {
@@ -63,7 +73,7 @@ class SupabaseDatabaseService {
       logger.info('Database', 'Initializing Supabase connection...');
 
       // Test connection
-      const { error } = await this.client.from('sync_metadata').select('count').limit(1);
+      const { error } = await this.db().from('sync_metadata').select('count').limit(1);
 
       if (error) {
         throw new Error(`Connection test failed: ${error.message}`);
@@ -82,7 +92,7 @@ class SupabaseDatabaseService {
    */
   async saveAnalysis(input: AnalysisInput): Promise<void> {
     try {
-      const { error } = await this.client.from('token_analysis').insert({
+      const { error } = await this.db().from('token_analysis').insert({
         mint: input.tokenMint,
         symbol: input.symbol,
         name: input.name,
@@ -117,7 +127,7 @@ class SupabaseDatabaseService {
    */
   async getRecentAnalyses(afterTimestamp: number, limit: number = 100): Promise<any[]> {
     try {
-      const { data, error } = await this.client
+      const { data, error } = await this.db()
         .from('token_analysis')
         .select('*')
         .gt('analyzed_at', unixToISO(afterTimestamp))
@@ -139,7 +149,7 @@ class SupabaseDatabaseService {
     try {
       const cutoff = new Date(Date.now() - withinSeconds * 1000).toISOString();
 
-      const { data, error } = await this.client
+      const { data, error } = await this.db()
         .from('token_analysis')
         .select('id')
         .eq('mint', mint)
@@ -173,7 +183,7 @@ class SupabaseDatabaseService {
     has_website: boolean;
   } | null> {
     try {
-      const { data, error } = await this.client
+      const { data, error } = await this.db()
         .from('token_analysis')
         .select('*')
         .eq('mint', mint)
@@ -209,7 +219,7 @@ class SupabaseDatabaseService {
    */
   async saveAlert(input: AlertInput): Promise<void> {
     try {
-      const { error } = await this.client.from('alert_history').insert({
+      const { error } = await this.db().from('alert_history').insert({
         mint: input.tokenMint,
         symbol: input.symbol,
         chat_id: input.chatId,
@@ -230,7 +240,7 @@ class SupabaseDatabaseService {
    */
   async getRecentAlerts(afterTimestamp: number, limit: number = 100): Promise<any[]> {
     try {
-      const { data, error } = await this.client
+      const { data, error } = await this.db()
         .from('alert_history')
         .select('*')
         .gt('sent_at', unixToISO(afterTimestamp))
@@ -257,7 +267,7 @@ class SupabaseDatabaseService {
     try {
       const cutoff = new Date(Date.now() - withinSeconds * 1000).toISOString();
 
-      const { data, error } = await this.client
+      const { data, error } = await this.db()
         .from('alert_history')
         .select('id')
         .eq('mint', mint)
@@ -279,7 +289,7 @@ class SupabaseDatabaseService {
    */
   async getMLTrainingData(limit: number = 10000): Promise<any[]> {
     try {
-      const { data, error } = await this.client
+      const { data, error } = await this.db()
         .from('token_analysis')
         .select(
           `
@@ -311,9 +321,9 @@ class SupabaseDatabaseService {
   }> {
     try {
       const [analysesRes, alertsRes, alertsTodayRes] = await Promise.all([
-        this.client.from('token_analysis').select('*', { count: 'exact', head: true }),
-        this.client.from('alert_history').select('*', { count: 'exact', head: true }),
-        this.client
+        this.db().from('token_analysis').select('*', { count: 'exact', head: true }),
+        this.db().from('alert_history').select('*', { count: 'exact', head: true }),
+        this.db()
           .from('alert_history')
           .select('*', { count: 'exact', head: true })
           .gt('sent_at', new Date(Date.now() - 86400000).toISOString()),
@@ -336,7 +346,7 @@ class SupabaseDatabaseService {
    */
   async getRecentDiscoveries(afterTimestamp: number, limit: number = 100): Promise<any[]> {
     try {
-      const { data, error } = await this.client
+      const { data, error } = await this.db()
         .from('pool_discovery')
         .select('*')
         .gt('discovered_at', unixToISO(afterTimestamp))
@@ -359,8 +369,8 @@ class SupabaseDatabaseService {
       const cutoff = new Date(Date.now() - keepDays * 24 * 60 * 60 * 1000).toISOString();
 
       await Promise.all([
-        this.client.from('watchlist_price_history').delete().lt('recorded_at', cutoff),
-        this.client
+        this.db().from('watchlist_price_history').delete().lt('recorded_at', cutoff),
+        this.db()
           .from('pool_discovery')
           .delete()
           .lt('discovered_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
@@ -381,7 +391,7 @@ class SupabaseDatabaseService {
    */
   async getTokensWithOutcomes(startDate: number, endDate: number): Promise<TokenWithOutcome[]> {
     try {
-      const { data, error } = await this.client
+      const { data, error } = await this.db()
         .from('token_outcomes')
         .select(
           `
@@ -435,7 +445,7 @@ class SupabaseDatabaseService {
    */
   async saveBacktestStrategy(strategy: BacktestStrategy): Promise<number> {
     try {
-      const { data, error } = await this.client
+      const { data, error } = await this.db()
         .from('backtest_strategies')
         .upsert({
           name: strategy.name,
@@ -463,7 +473,7 @@ class SupabaseDatabaseService {
    */
   async getBacktestStrategy(name: string): Promise<BacktestStrategy | null> {
     try {
-      const { data, error } = await this.client
+      const { data, error } = await this.db()
         .from('backtest_strategies')
         .select('*')
         .eq('name', name)
@@ -493,7 +503,7 @@ class SupabaseDatabaseService {
    */
   async getAllBacktestStrategies(): Promise<BacktestStrategy[]> {
     try {
-      const { data, error } = await this.client
+      const { data, error } = await this.db()
         .from('backtest_strategies')
         .select('*')
         .order('name', { ascending: true });
@@ -523,7 +533,7 @@ class SupabaseDatabaseService {
   async saveBacktestRun(results: BacktestResults, trades: BacktestTrade[]): Promise<number> {
     try {
       // Insert run
-      const { data: runData, error: runError } = await this.client
+      const { data: runData, error: runError } = await this.db()
         .from('backtest_runs')
         .insert({
           strategy_id: results.strategyId,
@@ -584,7 +594,7 @@ class SupabaseDatabaseService {
           entry_holders: trade.entryHolders,
         }));
 
-        const { error: tradesError } = await this.client.from('backtest_trades').insert(tradesData);
+        const { error: tradesError } = await this.db().from('backtest_trades').insert(tradesData);
 
         if (tradesError) throw tradesError;
       }
@@ -601,7 +611,7 @@ class SupabaseDatabaseService {
    */
   async deleteBacktestStrategy(name: string): Promise<void> {
     try {
-      const { error } = await this.client
+      const { error } = await this.db()
         .from('backtest_strategies')
         .delete()
         .eq('name', name)
@@ -641,7 +651,7 @@ class SupabaseDatabaseService {
     recordedAt: number;
   }): Promise<void> {
     try {
-      const { error } = await this.client.from('token_snapshots').upsert({
+      const { error } = await this.db().from('token_snapshots').upsert({
         mint: snapshot.mint,
         symbol: snapshot.symbol,
         price_usd: snapshot.priceUsd,
@@ -673,7 +683,7 @@ class SupabaseDatabaseService {
    */
   async getTokenSnapshots(mint: string, limit: number = 288): Promise<any[]> {
     try {
-      const { data, error } = await this.client
+      const { data, error } = await this.db()
         .from('token_snapshots')
         .select('*')
         .eq('mint', mint)
@@ -697,7 +707,7 @@ class SupabaseDatabaseService {
    */
   async addToSnapshotWatchList(mint: string, symbol?: string, expiresAt?: number): Promise<void> {
     try {
-      const { error } = await this.client.from('snapshot_watch_list').upsert({
+      const { error } = await this.db().from('snapshot_watch_list').upsert({
         mint,
         symbol,
         added_at: nowISO(),
@@ -716,7 +726,7 @@ class SupabaseDatabaseService {
    */
   async removeFromSnapshotWatchList(mint: string): Promise<void> {
     try {
-      const { error } = await this.client
+      const { error } = await this.db()
         .from('snapshot_watch_list')
         .update({ is_active: false })
         .eq('mint', mint);
@@ -732,7 +742,7 @@ class SupabaseDatabaseService {
    */
   async getSnapshotWatchList(): Promise<any[]> {
     try {
-      const { data, error } = await this.client
+      const { data, error } = await this.db()
         .from('snapshot_watch_list')
         .select('*')
         .eq('is_active', true);
@@ -758,14 +768,14 @@ class SupabaseDatabaseService {
   async updateSnapshotWatchEntry(mint: string): Promise<void> {
     try {
       // Use RPC function to increment count
-      const { error: rpcError } = await this.client.rpc('increment_snapshot_count', {
+      const { error: rpcError } = await this.db().rpc('increment_snapshot_count', {
         mint_param: mint,
       });
 
       if (rpcError) throw rpcError;
 
       // Update last snapshot time
-      const { error } = await this.client
+      const { error } = await this.db()
         .from('snapshot_watch_list')
         .update({
           last_snapshot_at: nowISO(),
@@ -783,7 +793,7 @@ class SupabaseDatabaseService {
    */
   async cleanupExpiredSnapshotWatches(now: number): Promise<void> {
     try {
-      const { error } = await this.client
+      const { error } = await this.db()
         .from('snapshot_watch_list')
         .update({ is_active: false })
         .not('expires_at', 'is', null)
@@ -800,7 +810,7 @@ class SupabaseDatabaseService {
    */
   async healthCheck() {
     try {
-      const { data, error } = await this.client.from('sync_metadata').select('count').limit(1);
+      const { data, error } = await this.db().from('sync_metadata').select('count').limit(1);
 
       if (error) {
         return {
@@ -854,7 +864,190 @@ class SupabaseDatabaseService {
    * Get database instance (for advanced operations)
    */
   getDb(): SupabaseClient {
-    return this.client;
+    return this.db();
+  }
+
+  // ============================================================================
+  // SCAM DETECTION - Save Methods
+  // ============================================================================
+
+  /**
+   * Save bundle detection results
+   */
+  async saveBundleFlag(data: {
+    tokenMint: string;
+    clusterId: string;
+    wallets: string[];
+    commonFunder: string;
+    funderLabel?: string;
+    walletCount: number;
+    totalHoldings?: number;
+    totalPercentage: number;
+    creationTimeSpan?: number;
+    avgWalletAge?: number;
+    walletsCreatedWithin1h?: number;
+    hasCoordinatedBuys?: boolean;
+    coordinatedBuyCount?: number;
+    fastestCoordinatedBuySeconds?: number;
+    riskScore: number;
+    isSuspicious: boolean;
+    suspicionReasons: string[];
+  }): Promise<void> {
+    try {
+      const { error } = await this.db().from('bundle_flags').upsert({
+        token_mint: data.tokenMint,
+        cluster_id: data.clusterId,
+        wallets: data.wallets,
+        common_funder: data.commonFunder,
+        funder_label: data.funderLabel,
+        wallet_count: data.walletCount,
+        total_holdings: data.totalHoldings,
+        total_percentage: data.totalPercentage,
+        creation_time_span: data.creationTimeSpan,
+        avg_wallet_age: data.avgWalletAge,
+        wallets_created_within_1h: data.walletsCreatedWithin1h || 0,
+        has_coordinated_buys: data.hasCoordinatedBuys || false,
+        coordinated_buy_count: data.coordinatedBuyCount || 0,
+        fastest_coordinated_buy_seconds: data.fastestCoordinatedBuySeconds,
+        risk_score: data.riskScore,
+        is_suspicious: data.isSuspicious,
+        suspicion_reasons: data.suspicionReasons,
+        detected_at: nowISO(),
+      }, { onConflict: 'token_mint,cluster_id' });
+
+      if (error) throw error;
+      logger.debug('Database', `Saved bundle flag for ${data.tokenMint}`);
+    } catch (error) {
+      logger.silentError('Database', 'Failed to save bundle flag', error as Error);
+    }
+  }
+
+  /**
+   * Save funding trace results
+   */
+  async saveFundingTrace(data: {
+    walletAddress: string;
+    initialFunder: string;
+    funderType: 'cex' | 'unknown' | 'dev_wallet' | 'faucet';
+    funderLabel?: string;
+    fundingAmount?: number;
+    fundingTimestamp?: Date;
+    walletAgeHours?: number;
+    isFreshWallet: boolean;
+    riskScore: number;
+    warnings: string[];
+  }): Promise<void> {
+    try {
+      const { error } = await this.db().from('funding_traces').upsert({
+        wallet_address: data.walletAddress,
+        initial_funder: data.initialFunder,
+        funder_type: data.funderType,
+        funder_label: data.funderLabel,
+        funding_amount: data.fundingAmount,
+        funding_timestamp: data.fundingTimestamp?.toISOString(),
+        wallet_age_hours: data.walletAgeHours,
+        is_fresh_wallet: data.isFreshWallet,
+        risk_score: data.riskScore,
+        warnings: data.warnings,
+        traced_at: nowISO(),
+      }, { onConflict: 'wallet_address' });
+
+      if (error) throw error;
+      logger.debug('Database', `Saved funding trace for ${data.walletAddress.slice(0, 8)}`);
+    } catch (error) {
+      logger.silentError('Database', 'Failed to save funding trace', error as Error);
+    }
+  }
+
+  /**
+   * Save known dev/scammer wallet
+   */
+  async saveKnownDevWallet(data: {
+    walletAddress: string;
+    classification: 'known_dev' | 'known_scammer' | 'insider' | 'suspected';
+    reputationScore: number;
+    associatedTokens?: string[];
+    ruggedTokenCount?: number;
+    successfulTokenCount?: number;
+    evidenceNotes?: string;
+    source?: string;
+  }): Promise<void> {
+    try {
+      const { error } = await this.db().from('known_dev_wallets').upsert({
+        wallet_address: data.walletAddress,
+        classification: data.classification,
+        reputation_score: data.reputationScore,
+        associated_tokens: data.associatedTokens || [],
+        rugged_token_count: data.ruggedTokenCount || 0,
+        successful_token_count: data.successfulTokenCount || 0,
+        evidence_notes: data.evidenceNotes,
+        source: data.source,
+        is_flagged: true,
+        flagged_at: nowISO(),
+      }, { onConflict: 'wallet_address' });
+
+      if (error) throw error;
+      logger.debug('Database', `Saved known dev wallet ${data.walletAddress.slice(0, 8)}`);
+    } catch (error) {
+      logger.silentError('Database', 'Failed to save known dev wallet', error as Error);
+    }
+  }
+
+  /**
+   * Save Twitter-token association
+   */
+  async saveTwitterToken(data: {
+    tokenMint: string;
+    twitterHandle: string;
+    accountCreatedAt?: Date;
+    accountAgeDays?: number;
+    wasRugged?: boolean;
+    rugDate?: Date;
+  }): Promise<void> {
+    try {
+      const { error } = await this.db().from('twitter_token_history').upsert({
+        token_mint: data.tokenMint,
+        twitter_handle: data.twitterHandle,
+        account_created_at: data.accountCreatedAt?.toISOString(),
+        account_age_days: data.accountAgeDays,
+        was_rugged: data.wasRugged || false,
+        rug_date: data.rugDate?.toISOString(),
+        observed_at: nowISO(),
+      }, { onConflict: 'token_mint,twitter_handle' });
+
+      if (error) throw error;
+      logger.debug('Database', `Saved Twitter token link: @${data.twitterHandle} → ${data.tokenMint.slice(0, 8)}`);
+    } catch (error) {
+      logger.silentError('Database', 'Failed to save Twitter token', error as Error);
+    }
+  }
+
+  /**
+   * Save token image hash
+   */
+  async saveTokenImage(data: {
+    tokenMint: string;
+    imageUrl: string;
+    imageHash: string;
+    hashAlgorithm?: string;
+    wasRugged?: boolean;
+    rugDate?: Date;
+  }): Promise<void> {
+    try {
+      const { error } = await this.db().from('token_images').upsert({
+        token_mint: data.tokenMint,
+        image_url: data.imageUrl,
+        image_hash: data.imageHash,
+        hash_algorithm: data.hashAlgorithm || 'dhash',
+        was_rugged: data.wasRugged || false,
+        rug_date: data.rugDate?.toISOString(),
+      }, { onConflict: 'token_mint' });
+
+      if (error) throw error;
+      logger.debug('Database', `Saved token image for ${data.tokenMint.slice(0, 8)}`);
+    } catch (error) {
+      logger.silentError('Database', 'Failed to save token image', error as Error);
+    }
   }
 
   /**

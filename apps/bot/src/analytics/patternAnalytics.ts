@@ -181,7 +181,7 @@ class PatternAnalytics {
         sampleSize: matches.length,
       };
     } catch (error) {
-      logger.error('PatternAnalytics', 'Failed to get pattern performance', error);
+      logger.error('PatternAnalytics', 'Failed to get pattern performance', error as Error);
       return null;
     }
   }
@@ -204,7 +204,7 @@ class PatternAnalytics {
 
       return metrics;
     } catch (error) {
-      logger.error('PatternAnalytics', 'Failed to get all pattern performance', error);
+      logger.error('PatternAnalytics', 'Failed to get all pattern performance', error as Error);
       return [];
     }
   }
@@ -286,7 +286,7 @@ class PatternAnalytics {
 
       return correlations;
     } catch (error) {
-      logger.error('PatternAnalytics', 'Failed to get pattern correlations', error);
+      logger.error('PatternAnalytics', 'Failed to get pattern correlations', error as Error);
       return [];
     }
   }
@@ -374,7 +374,7 @@ class PatternAnalytics {
 
       return combinations.slice(0, 20);
     } catch (error) {
-      logger.error('PatternAnalytics', 'Failed to get pattern combinations', error);
+      logger.error('PatternAnalytics', 'Failed to get pattern combinations', error as Error);
       return [];
     }
   }
@@ -426,7 +426,7 @@ class PatternAnalytics {
         totalMatches,
       };
     } catch (error) {
-      logger.error('PatternAnalytics', 'Failed to get pattern stats summary', error);
+      logger.error('PatternAnalytics', 'Failed to get pattern stats summary', error as Error);
       return {
         totalPatterns: 0,
         activePatterns: 0,

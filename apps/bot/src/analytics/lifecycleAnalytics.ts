@@ -156,7 +156,7 @@ class LifecycleAnalytics {
         medianPeakMultiplier: multiplierStats.median,
       };
     } catch (error) {
-      logger.error('LifecycleAnalytics', 'Failed to get lifecycle stats', error);
+      logger.error('LifecycleAnalytics', 'Failed to get lifecycle stats', error as Error);
       return this.getDefaultLifecycleStats();
     }
   }
@@ -273,7 +273,7 @@ class LifecycleAnalytics {
 
       return patterns;
     } catch (error) {
-      logger.error('LifecycleAnalytics', 'Failed to get liquidity patterns', error);
+      logger.error('LifecycleAnalytics', 'Failed to get liquidity patterns', error as Error);
       return [];
     }
   }
@@ -299,7 +299,7 @@ class LifecycleAnalytics {
         },
       };
     } catch (error) {
-      logger.error('LifecycleAnalytics', 'Failed to get holder behavior', error);
+      logger.error('LifecycleAnalytics', 'Failed to get holder behavior', error as Error);
       return null;
     }
   }
@@ -389,7 +389,7 @@ class LifecycleAnalytics {
         exitDistribution: createDistribution(exitTimes),
       };
     } catch (error) {
-      logger.error('LifecycleAnalytics', 'Failed to get smart money timing', error);
+      logger.error('LifecycleAnalytics', 'Failed to get smart money timing', error as Error);
       return {
         avgEntryTime: 0,
         avgExitTime: 0,
@@ -448,7 +448,7 @@ class LifecycleAnalytics {
         totalTokens: allTokens.length,
       };
     } catch (error) {
-      logger.error('LifecycleAnalytics', 'Failed to get survival rates', error);
+      logger.error('LifecycleAnalytics', 'Failed to get survival rates', error as Error);
       return { after24h: 0, after7d: 0, after30d: 0, totalTokens: 0 };
     }
   }
@@ -520,7 +520,7 @@ class LifecycleAnalytics {
         events,
       };
     } catch (error) {
-      logger.error('LifecycleAnalytics', 'Failed to get token lifecycle timeline', error);
+      logger.error('LifecycleAnalytics', 'Failed to get token lifecycle timeline', error as Error);
       return null;
     }
   }
